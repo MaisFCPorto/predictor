@@ -1,17 +1,9 @@
-# Dependências
-node_modules
-web/node_modules
-
-# Build output
-.next
-out
-dist
-
-# Ambiente
+node_modules/
+web/node_modules/
+api/node_modules/
 .env
-.env.local
-.env.*.local
-
-# Logs / SO
-*.log
+.env.*
+.vercel/
+.next/
+web/.next/
 .DS_Store

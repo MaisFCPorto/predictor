@@ -1,0 +1,20 @@
+{
+	"dependencies": {
+		"clsx": "^2.1.1",
+		"hono": "^4.10.0",
+		"react-hot-toast": "^2.6.0"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20251011.0",
+		"typescript": "^5.9.3"
+	},
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy",
+		"migrate:local": "wrangler d1 migrations apply predictor-db --local",
+		"migrate": "wrangler d1 migrations apply predictor-db --remote",
+		"seed": "wrangler d1 execute predictor-db --remote --file=seeds.sql",
+		"sql:local": "wrangler d1 execute predictor-db --local --command",
+		"sql": "wrangler d1 execute predictor-db --command"
+	}
+}

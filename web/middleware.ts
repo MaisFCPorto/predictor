@@ -3,13 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
 export async function middleware(req: NextRequest) {
-  // passa os headers para o Next poder reescrever cookies
+  // Pass-through + permite que o Supabase actualize cookies
   let res = NextResponse.next({ request: { headers: req.headers } })
 
   const url = new URL(req.url)
   const path = url.pathname
 
-  // rotas públicas/estáticas
+  // Só protegemos /admin; o resto passa
+  const isAdmin = path.startsWith('/admin')
   const isPublic =
     path === '/' ||
     path.startsWith('/auth') ||
@@ -18,10 +19,17 @@ export async function middleware(req: NextRequest) {
     path.startsWith('/assets') ||
     path.startsWith('/images')
 
-  if (isPublic) return res
+  if (!isAdmin || isPublic) {
+    // Headers de debug leves
+    res.headers.set('x-mw-scope', isAdmin ? 'admin' : 'public')
+    res.headers.set('x-mw-path', path)
+    return res
+  }
 
-  // ——— protecção só para /admin ———
-  if (!path.startsWith('/admin')) return res
+  // --- Debug: ver que cookies chegam ao middleware ---
+  const cookieNames = Array.from(req.cookies.getAll()).map(c => c.name)
+  const authCookie = cookieNames.find(n => n.includes('-auth-token')) || '(none)'
+  // ---------------------------------------------------
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,20 +49,27 @@ export async function middleware(req: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { session }, error } = await supabase.auth.getSession()
 
-  // sem sessão -> /auth
+  // Mais headers de debug
+  res.headers.set('x-mw-path', path)
+  res.headers.set('x-mw-cookie-auth', authCookie)
+  res.headers.set('x-mw-session', session ? '1' : '0')
+  if (error) res.headers.set('x-mw-error', String(error.message || error))
+
   if (!session) {
     const redirect = new URL('/auth', req.url)
-    redirect.searchParams.set('next', path) // para poderes voltar depois
-    return NextResponse.redirect(redirect)
+    redirect.searchParams.set('next', path)
+    const r = NextResponse.redirect(redirect)
+    // copiar os headers de debug para veres no 302 também
+    r.headers.set('x-mw-cookie-auth', authCookie)
+    r.headers.set('x-mw-session', '0')
+    return r
   }
 
-  // com sessão -> segue
   return res
 }
 
-// o middleware só corre em /admin/**
 export const config = {
   matcher: ['/admin/:path*'],
 }

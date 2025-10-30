@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import AdminGate from '../_components/AdminGate';
 
 const API = process.env.NEXT_PUBLIC_API_BASE!;
@@ -12,6 +12,7 @@ const adm = axios.create({
   headers: { 'x-admin-key': ADMIN_KEY },
 });
 
+/* -------------------- Tipos -------------------- */
 type Team = { id: string; name: string };
 type Competition = { id: string; code: string; name: string };
 
@@ -32,7 +33,7 @@ type Fx = {
   _as?: number | '';
 };
 
-// ---------- Datas ----------
+/* -------------------- Utils datas -------------------- */
 function toLocalDTValue(isoOrSqlUTC: string) {
   if (!isoOrSqlUTC) return '';
   const asISO = isoOrSqlUTC.includes('T') ? isoOrSqlUTC : isoOrSqlUTC.replace(' ', 'T') + 'Z';
@@ -59,6 +60,18 @@ function joinLocal(date: string, time: string) {
   if (!date || !time) return '';
   return `${date}T${time}`;
 }
+
+/* -------------------- Utils mensagens/erros -------------------- */
+function errorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const e = err as AxiosError<{ error?: string; message?: string }>;
+    return e.response?.data?.error ?? e.response?.data?.message ?? e.message;
+  }
+  if (err instanceof Error) return err.message;
+  return 'Ocorreu um erro';
+}
+
+/* =============================================================== */
 
 export default function AdminFixtures() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -100,31 +113,37 @@ export default function AdminFixtures() {
 
   const notify = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 1500); };
 
+  /* -------------------- Loaders -------------------- */
   async function loadTeams() {
-    const { data } = await adm.get('/api/admin/teams');
+    const { data } = await adm.get<Team[]>('/api/admin/teams');
     setTeams(data);
   }
   async function loadCompetitions() {
     try {
-      const { data } = await adm.get('/api/admin/competitions');
+      const { data } = await adm.get<Competition[]>('/api/admin/competitions');
       setCompetitions(data ?? []);
-    } catch { setCompetitions([]); }
+    } catch {
+      setCompetitions([]);
+    }
   }
   async function loadFixtures() {
     setLoading(true);
     try {
-      const { data } = await adm.get('/api/admin/fixtures');
-      const list: Fx[] = (data ?? []).map((x: any) => ({
+      const { data } = await adm.get<Fx[]>('/api/admin/fixtures');
+      const list: Fx[] = (data ?? []).map((x: Fx) => ({
         ...x,
         _hs: x.home_score ?? '',
         _as: x.away_score ?? '',
       }));
       setFixtures(list);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => { loadTeams(); loadCompetitions(); loadFixtures(); }, []);
+  useEffect(() => { void loadTeams(); void loadCompetitions(); void loadFixtures(); }, []);
 
+  /* -------------------- Mutations -------------------- */
   async function updateField(id: string, patch: Partial<Fx>) {
     await adm.patch(`/api/admin/fixtures/${id}`, patch);
     notify('Atualizado ✅');
@@ -132,17 +151,20 @@ export default function AdminFixtures() {
   }
   async function finishFixture(id: string, hs: number, as: number) {
     await adm.patch(`/api/admin/fixtures/${id}/result`, { home_score: Number(hs || 0), away_score: Number(as || 0) });
-    notify('Fechado ✅'); await loadFixtures();
+    notify('Fechado ✅');
+    await loadFixtures();
   }
   async function reopenFixture(id: string) {
     await adm.patch(`/api/admin/fixtures/${id}/reopen`, {});
-    notify('Reaberto ✅'); await loadFixtures();
+    notify('Reaberto ✅');
+    await loadFixtures();
   }
   async function deleteFixture(id: string) {
     const ok = prompt('Para confirmar a eliminação escreve: APAGAR');
     if (ok !== 'APAGAR') return;
     await adm.delete(`/api/admin/fixtures/${id}`);
-    notify('Apagado ✅'); await loadFixtures();
+    notify('Apagado ✅');
+    await loadFixtures();
   }
 
   async function createFixture() {
@@ -155,15 +177,18 @@ export default function AdminFixtures() {
 
       const kickoff_at = fromLocalDTValue(kickoff_local);
 
-      // 👇 FIX: enviar matchday_id enquanto a tabela ainda o exige (usa md1 por defeito)
+      // 👇 Enquanto a API exige matchday_id, envia md1 por defeito
       const matchday_id = 'md1';
 
       await adm.post('/api/admin/fixtures', {
-        matchday_id, // <--- essencial para não dar missing_matchday_id na API
+        matchday_id,
         competition_id: competition_id || null,
         round_label: round_label ? round_label.toUpperCase().slice(0, 3) : null,
         leg_number: leg_number ? Number(leg_number) : null,
-        home_team_id, away_team_id, kickoff_at, status,
+        home_team_id,
+        away_team_id,
+        kickoff_at,
+        status,
       });
 
       notify('Criado ✅');
@@ -177,12 +202,14 @@ export default function AdminFixtures() {
         status: 'SCHEDULED',
       });
       await loadFixtures();
-    } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Falha a criar jogo';
-      alert(msg);
-    } finally { setCreating(false); }
+    } catch (e: unknown) {
+      alert(errorMessage(e) || 'Falha a criar jogo');
+    } finally {
+      setCreating(false);
+    }
   }
 
+  /* -------------------- Filtro de pesquisa -------------------- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return fixtures;
@@ -194,6 +221,7 @@ export default function AdminFixtures() {
     );
   }, [fixtures, query]);
 
+  /* -------------------- Render -------------------- */
   return (
     <AdminGate>
       <main className="max-w-6xl mx-auto p-6 space-y-4">
@@ -215,8 +243,6 @@ export default function AdminFixtures() {
         {/* Criação */}
         <div className="rounded-2xl border border-white/10 p-3">
           <div className="grid grid-cols-12 gap-2 items-center">
-            
-
             {/* Comp */}
             <div className="col-span-2">
               <label className="text-xs opacity-70">Comp</label>
@@ -302,7 +328,7 @@ export default function AdminFixtures() {
                     <label className="text-xs opacity-70">Hora</label>
                     <input
                       type="time"
-                      step="60"
+                      step={60}
                       className="w-full rounded border border-white/10 bg-black/20 px-2 py-1"
                       value={time}
                       onChange={(e) =>
@@ -347,7 +373,6 @@ export default function AdminFixtures() {
             <table className="min-w-full text-sm">
               <thead className="bg-white/5">
                 <tr>
-                  {/* coluna ID removida do header */}
                   <th className="p-2 text-left">Comp</th>
                   <th className="p-2 text-left">Ronda</th>
                   <th className="p-2 text-left">Mão</th>
@@ -371,8 +396,6 @@ export default function AdminFixtures() {
 
                   return (
                     <tr key={f.id} className="border-t border-white/10 hover:bg-white/5">
-                      {/* coluna ID removida na tabela */}
-
                       {/* Comp */}
                       <td className="p-2 w-20">
                         <select
@@ -456,7 +479,7 @@ export default function AdminFixtures() {
                           />
                           <input
                             type="time"
-                            step="60"
+                            step={60}
                             defaultValue={local.time}
                             disabled={isFinished}
                             className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
@@ -481,7 +504,7 @@ export default function AdminFixtures() {
                             const v = e.target.value as Fx['status'];
                             if (v === 'FINISHED') {
                               const hs = f._hs, as = f._as;
-                              if (!(f._hs !== '' && f._as !== '' && !Number.isNaN(Number(f._hs)) && !Number.isNaN(Number(f._as)))) {
+                              if (!resultOK) {
                                 e.currentTarget.value = f.status;
                                 alert('Para fechar um jogo tens de preencher H e A.');
                                 return;
@@ -489,7 +512,7 @@ export default function AdminFixtures() {
                               await finishFixture(f.id, Number(hs), Number(as));
                               return;
                             }
-                            await updateField(f.id, { status: v as any });
+                            await updateField(f.id, { status: v });
                           }}
                         >
                           <option value="SCHEDULED">SCHEDULED</option>

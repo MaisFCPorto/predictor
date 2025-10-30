@@ -390,6 +390,18 @@ app.patch('/api/admin/fixtures/:id/reopen', async (c) => {
   return c.json({ ok: true });
 });
 
+// GET /api/users/:id/role  -> devolve { role: 'admin' | 'user' | null }
+app.get('/api/users/:id/role', async (c) => {
+  const userId = c.req.param('id');
+  if (!userId) return c.json({ role: null }, 400);
+
+  const row = await c.env.DB
+    .prepare(`SELECT role FROM users WHERE id = ? LIMIT 1`)
+    .bind(userId)
+    .first<{ role: string | null }>();
+
+  return c.json({ role: row?.role ?? null });
+});
 // ----------------------------------------------------
 // Exporta App
 // ----------------------------------------------------

@@ -2088,6 +2088,12 @@ app.patch("/api/admin/fixtures/:id/reopen", async (c) => {
   );
   return c.json({ ok: true });
 });
+app.get("/api/users/:id/role", async (c) => {
+  const userId = c.req.param("id");
+  if (!userId) return c.json({ role: null }, 400);
+  const row = await c.env.DB.prepare(`SELECT role FROM users WHERE id = ? LIMIT 1`).bind(userId).first();
+  return c.json({ role: row?.role ?? null });
+});
 var src_default = app;
 
 // ../../../.nvm/versions/node/v22.18.0/lib/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts

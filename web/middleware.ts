@@ -10,13 +10,11 @@ export async function middleware(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
+        get: (name: string) => req.cookies.get(name)?.value,
+        set: (name: string, value: string, options: CookieOptions) => {
           res.cookies.set(name, value, { ...options });
         },
-        remove(name: string, options: CookieOptions) {
+        remove: (name: string, options: CookieOptions) => {
           res.cookies.set(name, '', { ...options, maxAge: 0 });
         },
       },
@@ -24,37 +22,29 @@ export async function middleware(req: NextRequest) {
   );
 
   const { data: { session } } = await supabase.auth.getSession();
+  const path = new URL(req.url).pathname;
 
-  const url = new URL(req.url);
-  const path = url.pathname;
+  // permite público + assets
+  const PUBLIC = ['/', '/auth', '/favicon.ico'];
+  const isPublic = PUBLIC.some(p => path === p || path.startsWith(p))
+    || path.startsWith('/_next')
+    || path.startsWith('/assets')
+    || path.startsWith('/images')
+    || path.startsWith('/api'); // as tuas APIs públicas
 
-  // Rotas públicas (não exigem sessão)
-  const PUBLIC = new Set([
-    '/',             // <— root é público para mostrar a landing
-    '/auth',         // inclui /auth e /auth/callback
-    '/api',          // se tens APIs públicas, mantém; senão remove
-    '/favicon.ico',
-  ]);
-
-  // permite também assets internos do Next/Turbopack
-  if (
-    path.startsWith('/_next') ||
-    path.startsWith('/assets') ||
-    path.startsWith('/images') ||
-    path.startsWith('/api') ||
-    Array.from(PUBLIC).some(p => path === p || path.startsWith(p))
-  ) {
-    // se JÁ tem sessão e tentou ir a / ou /auth*, manda para /jogos
+  if (isPublic) {
     if (session && (path === '/' || path.startsWith('/auth'))) {
       return NextResponse.redirect(new URL('/jogos', req.url));
     }
     return res;
   }
 
-  // A partir daqui é privado -> sem sessão volta para / (landing)
-  if (!session) {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
+  // para tudo o resto precisa de sessão
+  if (!session) return NextResponse.redirect(new URL('/', req.url));
 
   return res;
 }
+
+export const config = {
+  matcher: ['/((?!.*\\.).*)'], // aplica-se a páginas
+};

@@ -3,6 +3,9 @@ import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { rankings } from './routes/rankings';
 import { adminCompetitions } from './routes/admin/competitions';
+import { corsMiddleware } from './cors'; 
+import { auth } from './routes/auth';
+import { admin } from './routes/admin';
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -17,6 +20,9 @@ type Env = {
 // App + CORS “à prova de bala”
 // ----------------------------------------------------
 const app = new Hono<{ Bindings: Env }>();
+
+// CORS em TODAS as rotas
+app.use('*', corsMiddleware);
 
 app.use(
   '*',
@@ -83,6 +89,8 @@ const isLocked = (kickoffISO: string, nowMs: number, lockMs: number) => {
 // ----------------------------------------------------
 app.route('/api/rankings', rankings);
 app.route('/api/admin/competitions', adminCompetitions);
+app.route('/api/auth', auth);
+app.route('/api/admin', admin);
 
 // ----------------------------------------------------
 // PUBLIC: Fixtures list

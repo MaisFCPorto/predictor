@@ -2094,6 +2094,12 @@ app.get("/api/users/:id/role", async (c) => {
   const row = await c.env.DB.prepare(`SELECT role FROM users WHERE id = ? LIMIT 1`).bind(userId).first();
   return c.json({ role: row?.role ?? null });
 });
+app.get("/api/users/role/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!id) return c.json({ error: "missing_user" }, 400);
+  const row = await c.env.DB.prepare(`SELECT role FROM users WHERE id = ? LIMIT 1`).bind(id).first();
+  return c.json({ role: row?.role ?? "user" });
+});
 var src_default = app;
 
 // ../../../.nvm/versions/node/v22.18.0/lib/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts

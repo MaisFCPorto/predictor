@@ -402,6 +402,18 @@ app.get('/api/users/:id/role', async (c) => {
 
   return c.json({ role: row?.role ?? null });
 });
+
+app.get('/api/users/role/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!id) return c.json({ error: 'missing_user' }, 400);
+
+  const row = await c.env.DB
+    .prepare(`SELECT role FROM users WHERE id = ? LIMIT 1`)
+    .bind(id)
+    .first<{ role: string | null }>();
+
+  return c.json({ role: row?.role ?? 'user' });
+});
 // ----------------------------------------------------
 // Exporta App
 // ----------------------------------------------------

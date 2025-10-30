@@ -20,4 +20,4 @@ database_id = "d5c31b11-0f4d-45d4-837d-d5cea7a81321"
 [env.production.vars]
 ADMIN_KEY = "VelhaGuarda12"
 LOCK_MINUTES_BEFORE = "5"
-
+SUPABASE_URL = "https://predictorporto.supabase.co"

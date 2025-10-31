@@ -12,6 +12,21 @@ const adm = axios.create({
   headers: { 'x-admin-key': ADMIN_KEY },
 });
 
+adm.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const status = error?.response?.status;
+    if (status === 401) {
+      alert('Sessão expirada ou em falta. Faz login novamente.');
+      // opcional: window.location.href = '/auth';
+    }
+    if (status === 403) {
+      alert('Acesso negado (precisas de ser admin).');
+    }
+    return Promise.reject(error);
+  }
+);
+
 /* -------------------- Tipos -------------------- */
 type Team = { id: string; name: string };
 type Competition = { id: string; code: string; name: string };
@@ -129,13 +144,13 @@ export default function AdminFixtures() {
   async function loadFixtures() {
     setLoading(true);
     try {
-      const { data } = await adm.get<Fx[]>('/api/admin/fixtures');
-      const list: Fx[] = (data ?? []).map((x: Fx) => ({
-        ...x,
-        _hs: x.home_score ?? '',
-        _as: x.away_score ?? '',
-      }));
+      const { data } = await adm.get('/api/admin/fixtures');
+      const list: Fx[] = (data ?? []).map((x: any) => ({ ...x, _hs: x.home_score ?? '', _as: x.away_score ?? '' }));
       setFixtures(list);
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || 'Falha a carregar jogos (podes não ter permissões).';
+      alert(msg);
+      setFixtures([]);
     } finally {
       setLoading(false);
     }

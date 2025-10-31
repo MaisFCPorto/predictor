@@ -38,45 +38,28 @@ async function forward(req: NextRequest, path: string[]) {
   });
 }
 
-// ==== Handlers com tipo inline ====
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { path: string[] } },
-) {
-  return forward(req, params.path);
+// ---- Handlers (sem tipos no 2.º argumento) ----
+export async function GET(req: NextRequest, ctx: any) {
+  const path = Array.isArray(ctx?.params?.path) ? ctx.params.path : [];
+  return forward(req, path);
 }
-
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { path: string[] } },
-) {
-  return forward(req, params.path);
+export async function POST(req: NextRequest, ctx: any) {
+  const path = Array.isArray(ctx?.params?.path) ? ctx.params.path : [];
+  return forward(req, path);
 }
-
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { path: string[] } },
-) {
-  return forward(req, params.path);
+export async function PUT(req: NextRequest, ctx: any) {
+  const path = Array.isArray(ctx?.params?.path) ? ctx.params.path : [];
+  return forward(req, path);
 }
-
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { path: string[] } },
-) {
-  return forward(req, params.path);
+export async function PATCH(req: NextRequest, ctx: any) {
+  const path = Array.isArray(ctx?.params?.path) ? ctx.params.path : [];
+  return forward(req, path);
 }
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { path: string[] } },
-) {
-  return forward(req, params.path);
+export async function DELETE(req: NextRequest, ctx: any) {
+  const path = Array.isArray(ctx?.params?.path) ? ctx.params.path : [];
+  return forward(req, path);
 }
-
-export async function OPTIONS(
-  req: NextRequest,
-  { params }: { params: { path: string[] } },
-) {
-  return forward(req, params.path);
+export async function OPTIONS(req: NextRequest, ctx: any) {
+  const path = Array.isArray(ctx?.params?.path) ? ctx.params.path : [];
+  return forward(req, path);
 }

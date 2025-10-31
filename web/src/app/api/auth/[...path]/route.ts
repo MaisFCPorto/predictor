@@ -13,16 +13,28 @@ function targetUrl(req: NextRequest, path: string[]) {
 }
 
 async function getSupabaseAccessToken(req: NextRequest) {
-  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON, {
-    cookies: {
-      get: (name: string) => req.cookies.get(name)?.value,
-      set: (_n: string, _v: string, _o: CookieOptions) => {},
-      remove: (_n: string, _o: CookieOptions) => {},
-    },
-  });
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token || null;
-}
+    // Captura todos os cookies da request
+    const allCookies: Record<string, string> = {};
+    req.cookies.getAll().forEach((c) => {
+      allCookies[c.name] = c.value;
+    });
+  
+    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON, {
+      cookies: {
+        get: (name: string) => allCookies[name],
+        set: () => {},
+        remove: () => {},
+      },
+    });
+  
+    try {
+      const { data } = await supabase.auth.getSession();
+      return { token: data.session?.access_token || null, err: null };
+    } catch (err: any) {
+      return { token: null, err: err.message };
+    }
+  }
+  
 
 async function forward(req: NextRequest, path: string[]) {
   const url = targetUrl(req, path);

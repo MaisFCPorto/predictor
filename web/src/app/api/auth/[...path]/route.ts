@@ -1,34 +1,35 @@
 // web/src/app/api/auth/[...path]/route.ts
 import type { NextRequest } from 'next/server';
 
-export const dynamic = 'force-dynamic'; // evitar cache do Next em prod
+export const dynamic = 'force-dynamic';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
-function targetUrl(req: NextRequest, pathSegs: string[]) {
-  const path = pathSegs?.join('/') ?? '';
+
+// cria a URL de destino no worker
+function targetUrl(req: NextRequest, path: string[]) {
   const qs = req.nextUrl.search || '';
-  return `${API_BASE}/api/auth/${path}${qs}`;
+  return `${API_BASE}/api/auth/${path.join('/')}${qs}`;
 }
 
-async function proxy(req: NextRequest, ctx: { params: { path?: string[] } }) {
-  const url = targetUrl(req, ctx.params.path ?? []);
+// função utilitária para fazer o proxy
+async function forward(req: NextRequest, path: string[]) {
+  const url = targetUrl(req, path);
 
-  // 🔧 CORREÇÃO: criar Headers explícitos (evita "init.headers is possibly undefined")
+  // construir headers explícitos (Headers, não HeadersInit)
   const headers = new Headers(req.headers);
-  headers.delete('host');                 // não enviar host do Vercel
+  headers.delete('host');
   headers.set('cache-control', 'no-store');
 
   const init: RequestInit = {
     method: req.method,
     headers,
-    // body só quando faz sentido
     body: ['GET', 'HEAD'].includes(req.method) ? undefined : await req.arrayBuffer(),
     redirect: 'manual',
   };
 
   const upstream = await fetch(url, init);
 
-  // Copiar headers relevantes (inclui múltiplos Set-Cookie)
+  // copiar headers relevantes (inclui múltiplos Set-Cookie)
   const resHeaders = new Headers();
   upstream.headers.forEach((v, k) => {
     if (k === 'content-encoding' || k === 'transfer-encoding') return;
@@ -42,10 +43,24 @@ async function proxy(req: NextRequest, ctx: { params: { path?: string[] } }) {
   });
 }
 
-// Exportar handlers para todos os métodos suportados
-export const GET = proxy;
-export const POST = proxy;
-export const PUT = proxy;
-export const PATCH = proxy;
-export const DELETE = proxy;
-export const OPTIONS = proxy;
+// Handlers — notar o tipo do 2º argumento
+type Ctx = { params: { path: string[] } };
+
+export async function GET(req: NextRequest, { params }: Ctx) {
+  return forward(req, params.path);
+}
+export async function POST(req: NextRequest, { params }: Ctx) {
+  return forward(req, params.path);
+}
+export async function PUT(req: NextRequest, { params }: Ctx) {
+  return forward(req, params.path);
+}
+export async function PATCH(req: NextRequest, { params }: Ctx) {
+  return forward(req, params.path);
+}
+export async function DELETE(req: NextRequest, { params }: Ctx) {
+  return forward(req, params.path);
+}
+export async function OPTIONS(req: NextRequest, { params }: Ctx) {
+  return forward(req, params.path);
+}

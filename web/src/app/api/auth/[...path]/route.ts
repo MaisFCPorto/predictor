@@ -1,4 +1,3 @@
-// web/src/app/api/auth/[...path]/route.ts
 import type { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -39,23 +38,45 @@ async function forward(req: NextRequest, path: string[]) {
   });
 }
 
-type Ctx = { params: { path: string[] } };
+// ==== Handlers com tipo inline ====
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { path: string[] } },
+) {
+  return forward(req, params.path);
+}
 
-export async function GET(req: NextRequest, { params }: Ctx) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { path: string[] } },
+) {
   return forward(req, params.path);
 }
-export async function POST(req: NextRequest, { params }: Ctx) {
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { path: string[] } },
+) {
   return forward(req, params.path);
 }
-export async function PUT(req: NextRequest, { params }: Ctx) {
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { path: string[] } },
+) {
   return forward(req, params.path);
 }
-export async function PATCH(req: NextRequest, { params }: Ctx) {
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { path: string[] } },
+) {
   return forward(req, params.path);
 }
-export async function DELETE(req: NextRequest, { params }: Ctx) {
-  return forward(req, params.path);
-}
-export async function OPTIONS(req: NextRequest, { params }: Ctx) {
+
+export async function OPTIONS(
+  req: NextRequest,
+  { params }: { params: { path: string[] } },
+) {
   return forward(req, params.path);
 }

@@ -1,12 +1,27 @@
 import type { NextRequest } from 'next/server';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 export const dynamic = 'force-dynamic';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 function targetUrl(req: NextRequest, path: string[]) {
   const qs = req.nextUrl.search || '';
   return `${API_BASE}/api/auth/${path.join('/')}${qs}`;
+}
+
+async function getSupabaseAccessToken(req: NextRequest) {
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON, {
+    cookies: {
+      get: (name: string) => req.cookies.get(name)?.value,
+      set: (_n: string, _v: string, _o: CookieOptions) => {},
+      remove: (_n: string, _o: CookieOptions) => {},
+    },
+  });
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token || null;
 }
 
 async function forward(req: NextRequest, path: string[]) {
@@ -15,6 +30,12 @@ async function forward(req: NextRequest, path: string[]) {
   const headers = new Headers(req.headers);
   headers.delete('host');
   headers.set('cache-control', 'no-store');
+
+  // ---> injeta Authorization a partir dos cookies do Supabase
+  if (!headers.has('authorization')) {
+    const token = await getSupabaseAccessToken(req);
+    if (token) headers.set('authorization', `Bearer ${token}`);
+  }
 
   const init: RequestInit = {
     method: req.method,
@@ -38,7 +59,6 @@ async function forward(req: NextRequest, path: string[]) {
   });
 }
 
-// ---- Handlers (sem tipos no 2.º argumento) ----
 export async function GET(req: NextRequest, ctx: any) {
   const path = Array.isArray(ctx?.params?.path) ? ctx.params.path : [];
   return forward(req, path);

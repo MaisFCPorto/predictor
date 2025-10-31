@@ -124,10 +124,10 @@ export default function FixtureCard({
         <button
           disabled={locked || saving}
           className={clsx(
-            'rounded-full px-4 py-2 text-sm font-medium',
+            'rounded-full px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-sky-400/60',
             locked || saving
-              ? 'bg-white/5 text-white/50 cursor-not-allowed'
-              : 'bg-white/10 hover:bg-white/15 text-white'
+              ? 'bg-white/5 text-white/50 cursor-not-allowed opacity-70'
+              : 'bg-white/10 hover:bg-white/15 text-white active:bg-white/20'
           )}
           onClick={() => onSave(id, 0, 0)}
         >

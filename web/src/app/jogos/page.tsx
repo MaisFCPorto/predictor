@@ -83,14 +83,17 @@ export default function JogosPage() {
   }
 
   return (
-    <main className="p-10 ">
+    <main>
       <Toaster position="top-center" />
 
-      <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-       <h1 className="text-2xl font-bold">Jogos em aberto</h1>
+      <div className="mx-auto max-w-5xl space-y-6 px-2 sm:px-4 py-2 sm:py-4">
+        <header className="mb-2">
+          <h1 className="text-2xl font-bold">Jogos em aberto</h1>
+          <p className="mt-1 text-sm text-white/70">Submete os teus palpites antes do fecho.</p>
+        </header>
 
         {error && (
-          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100/90">
             {error}
           </div>
         )}
@@ -102,7 +105,9 @@ export default function JogosPage() {
             ))}
           </div>
         ) : fixtures.length === 0 ? (
-          <div className="opacity-70">Sem jogos disponíveis.</div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-white/80">
+            Sem jogos disponíveis.
+          </div>
         ) : (
           <div className="space-y-4">
             {fixtures.map((f) => (
@@ -116,15 +121,11 @@ export default function JogosPage() {
                 home_crest={f.home_crest}
                 away_crest={f.away_crest}
                 competition_code={f.competition_code}
-  round_label={f.round_label}
-  leg={f.leg}
+                round_label={f.round_label}
+                leg={f.leg}
                 // locks
                 is_locked={f.is_locked || f.status === 'FINISHED'}
                 lock_at_utc={f.lock_at_utc}
-                // se o teu FixtureCard já mostra pill/leg/round, passa estes também
-                // competition_code={f.competition_code}
-                // round_label={f.round_label}
-                // leg_number={f.leg_number}
                 onSave={onSave}
                 saving={savingId === f.id}
               />

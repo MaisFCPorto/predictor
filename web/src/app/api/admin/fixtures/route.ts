@@ -1,45 +1,32 @@
-// web/src/app/api/admin/fixtures/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
-const ADMIN = process.env.ADMIN_KEY!;
+export async function GET() {
+  try {
+    const base = process.env.NEXT_PUBLIC_API_URL;
+    const adminKey = process.env.ADMIN_KEY;
 
-// Reencaminha QUALQUER método para o Worker, acrescentando o X-Admin-Key.
-// Mantém query string, body e content-type. Sem cache.
-async function forward(req: NextRequest) {
-  const url = new URL(req.url);
-  const target = `${API}/api/admin/fixtures${url.search}`;
+    if (!base || !adminKey) {
+      return NextResponse.json(
+        { error: 'Server misconfig: NEXT_PUBLIC_API_URL or ADMIN_KEY missing' },
+        { status: 500 }
+      );
+    }
 
-  const init: RequestInit = {
-    method: req.method,
-    headers: {
-      'X-Admin-Key': ADMIN,
-      // content-type só quando há body; o fetch copia o restante se precisares
-      ...(req.headers.get('content-type')
-        ? { 'content-type': req.headers.get('content-type')! }
-        : {}),
-    },
-    cache: 'no-store',
-  };
+    const res = await fetch(`${base}/api/admin/fixtures`, {
+      headers: { 'X-Admin-Key': adminKey },
+      cache: 'no-store',
+    });
 
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    const body = await req.text();
-    init.body = body;
+    // Repassa status/erro do Worker para ser visível no browser
+    const text = await res.text();
+    const body = (() => { try { return JSON.parse(text); } catch { return text; } })();
+
+    return NextResponse.json(body as any, { status: res.status });
+  } catch (e: any) {
+    console.error('GET /api/admin/fixtures failed:', e?.message || e);
+    return NextResponse.json(
+      { error: e?.message || 'internal error' },
+      { status: 500 }
+    );
   }
-
-  const res = await fetch(target, init);
-
-  const text = await res.text();
-  return new NextResponse(text, {
-    status: res.status,
-    headers: {
-      'content-type': res.headers.get('content-type') ?? 'application/json',
-    },
-  });
 }
-
-export const GET = forward;
-export const POST = forward;
-export const PUT = forward;
-export const PATCH = forward;
-export const DELETE = forward;

@@ -9,63 +9,29 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
   const [debug, setDebug] = useState<{ where?: string; status?: number; msg?: string; role?: string | null }>({});
 
   useEffect(() => {
-    let cancelled = false;
-
+    let active = true;
     (async () => {
       try {
-        // Pergunta SEMPRE ao teu backend (ou ao proxy local) e envia cookies do browser
-        const r = await fetch('/api/auth/me', {
-          method: 'GET',
-          credentials: 'include',        // <— ESSENCIAL em produção
-          cache: 'no-store',
-          headers: { 'cache-control': 'no-store' },
-        });
-
-        if (r.status === 401) {
-          if (!cancelled) {
-            setDebug({ where: '/api/auth/me', status: 401, msg: 'unauthorized (no session)' });
-            setState('no-session');
-          }
-          return;
-        }
-
-        if (r.status === 403) {
-          if (!cancelled) {
-            setDebug({ where: '/api/auth/me', status: 403, msg: 'forbidden' });
-            setState('denied');
-          }
-          return;
-        }
-
-        if (!r.ok) {
-          if (!cancelled) {
-            setDebug({ where: '/api/auth/me', status: r.status, msg: 'unexpected status' });
-            setState('denied');
-          }
-          return;
-        }
-
-        const j = await r.json().catch(() => ({}));
-        const role =
-          (j?.role ?? j?.user?.role ?? j?.data?.role ?? null) as string | null;
-
-        setDebug({ where: '/api/auth/me', status: r.status, role: role ?? null });
-
-        if (role && String(role).toLowerCase() === 'admin') {
-          if (!cancelled) setState('allowed');
+        setState('checking');
+        const res = await fetch('/api/admin/check', { cache: 'no-store' });
+        if (!active) return;
+  
+        if (res.status === 200) {
+          setState('allowed'); // admin
+        } else if (res.status === 401) {
+          setState('no-session'); // pede login
+        } else if (res.status === 403) {
+          setState('denied'); // não é admin
         } else {
-          if (!cancelled) setState('denied');
-        }
-      } catch (e: any) {
-        if (!cancelled) {
-          setDebug({ where: 'client', msg: e?.message ?? 'network error' });
           setState('denied');
         }
+      } catch {
+        if (active) setState('denied');
       }
     })();
-
-    return () => { cancelled = true; };
+    return () => { active = false; };
   }, []);
+  
 
   if (state === 'checking') return <main className="p-6">A verificar permissões…</main>;
 

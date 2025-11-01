@@ -91,6 +91,7 @@ app.route('/api/rankings', rankings);
 app.route('/api/admin/competitions', adminCompetitions);
 app.route('/api/auth', auth);
 app.route('/api/admin', admin);
+app.route('/', admin);
 
 // ----------------------------------------------------
 // PUBLIC: Fixtures list

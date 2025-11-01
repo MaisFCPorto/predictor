@@ -271,7 +271,7 @@ export default function AdminFixtures() {
                 onChange={(e) => setNewFx(v => ({ ...v, competition_id: e.target.value }))}
               >
                 <option value="">—</option>
-                {competitions.map(c => <option key={c.id} value={c.id}>{c.code}</option>)}
+                {competitions.map(c => <option key={c.id} value={c.code}>{c.code}</option>)}
               </select>
             </div>
 
@@ -424,7 +424,7 @@ export default function AdminFixtures() {
                           onChange={(e) => updateField(f.id, { competition_id: e.target.value || null })}
                         >
                           <option value="">—</option>
-                          {competitions.map(c => <option key={c.id} value={c.id}>{c.code}</option>)}
+                          {competitions.map(c => <option key={c.id} value={c.code}>{c.code}</option>)}
                         </select>
                       </td>
 

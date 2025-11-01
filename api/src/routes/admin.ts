@@ -1,9 +1,31 @@
-// apps/api/src/routes/admin.ts
-import { Hono } from 'hono';
-type Env = { DB: D1Database };
-export const admin = new Hono<{ Bindings: Env }>();
+// predictor-porto/api/src/routes/admin.ts
+import { Hono } from 'hono'
 
-// health
-admin.get('/api/admin/health', (c) => c.json({ ok: true }));
+type Env = {
+  DB: D1Database
+  ADMIN_KEY: string
+}
 
-// Se já tinhas endpoints reais, copia-os para aqui.
+// Middleware: exige header x-admin-key (chave guardada no Worker)
+const requireAdminKey: import('hono').MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
+  const key = c.req.header('x-admin-key')
+  if (!key || key !== c.env.ADMIN_KEY) return c.json({ error: 'forbidden' }, 403)
+  await next()
+}
+
+// Exporta um router Hono (não a app global)
+export const admin = new Hono<{ Bindings: Env }>()
+
+admin.get('/health', (c) => c.json({ ok: true }))
+
+admin.get('/role', requireAdminKey, async (c) => {
+  const email = c.req.query('email')
+  if (!email) return c.json({ error: 'email required' }, 400)
+
+  const row = await c.env.DB
+    .prepare('SELECT role FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ role: string }>()
+
+  return c.json({ role: row?.role ?? 'user' })
+})

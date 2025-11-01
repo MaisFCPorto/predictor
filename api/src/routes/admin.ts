@@ -29,3 +29,18 @@ admin.get('/role', requireAdminKey, async (c) => {
 
   return c.json({ role: row?.role ?? 'user' })
 })
+// --- NOVO: lista de equipas
+admin.get('/api/admin/teams', requireAdminKey, async (c) => {
+    const { results } = await c.env.DB
+      .prepare(`SELECT id, name FROM teams ORDER BY name`)
+      .all();
+    return c.json(results);
+  });
+  
+  // --- NOVO: lista de competições
+  admin.get('/api/admin/competitions', requireAdminKey, async (c) => {
+    const { results } = await c.env.DB
+      .prepare(`SELECT id, code, name FROM competitions ORDER BY name`)
+      .all();
+    return c.json(results);
+  });

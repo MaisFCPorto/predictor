@@ -1,14 +1,13 @@
-// Next.js App Router
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
-export const dynamic = 'force-dynamic';   // nunca cache
-export const revalidate = 0;              // nunca revalidate
+const API = process.env.NEXT_PUBLIC_API_URL!;
+const ADMIN_KEY = process.env.ADMIN_KEY!;
 
-async function readSupabaseAccessToken(): Promise<string | null> {
-  const jar = await cookies();                           // lê cookies do request
-  const supa = jar.getAll().find(c =>
-    c.name.startsWith('sb-') && c.name.endsWith('-auth-token')
+async function readTokenFromSupabaseCookie(): Promise<string | null> {
+  const jar = await cookies();
+  const supa = jar.getAll().find(
+    (c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'),
   );
   if (!supa?.value) return null;
   try {
@@ -21,20 +20,27 @@ async function readSupabaseAccessToken(): Promise<string | null> {
 }
 
 export async function GET(req: NextRequest) {
-  // 1) token: Authorization: Bearer ... ou cookie do supabase
+  // 0) sanity
+  if (!API || !ADMIN_KEY) {
+    return NextResponse.json(
+      { error: 'Server misconfig: NEXT_PUBLIC_API_URL or ADMIN_KEY missing' },
+      { status: 500 },
+    );
+  }
+
+  // 1) Bearer OU cookie Supabase
   const auth = req.headers.get('authorization');
-  const token = auth?.toLowerCase().startsWith('bearer ')
-    ? auth.slice(7).trim()
-    : await readSupabaseAccessToken();
+  let token =
+    auth?.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : await readTokenFromSupabaseCookie();
 
   if (!token) {
     return NextResponse.json(
       { where: '/api/admin/check', status: 401, msg: 'missing token' },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
-  // 2) pergunta ao supabase quem é o user
+  // 2) Quem é o user no Supabase?
   const meRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/user`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -47,7 +53,7 @@ export async function GET(req: NextRequest) {
     const body = await meRes.text();
     return NextResponse.json(
       { where: '/api/admin/check', status: meRes.status, msg: body || 'auth error' },
-      { status: meRes.status }
+      { status: meRes.status },
     );
   }
 
@@ -56,32 +62,32 @@ export async function GET(req: NextRequest) {
   if (!email) {
     return NextResponse.json(
       { where: '/api/admin/check', status: 400, msg: 'user has no email' },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  // 3) pede o role ao Worker (Cloudflare → D1)
-  const url = `${process.env.NEXT_PUBLIC_API_URL}/api/admin/role?email=${encodeURIComponent(email)}`;
-  const roleRes = await fetch(url, {
-    headers: { 'X-Admin-Key': process.env.ADMIN_KEY! },
-    cache: 'no-store',
-  });
+  // 3) Pergunta ao Worker o role
+  const roleRes = await fetch(
+    `${API.replace(/\/$/, '')}/api/admin/role?email=${encodeURIComponent(email)}`,
+    {
+      headers: { 'x-admin-key': ADMIN_KEY },
+      cache: 'no-store',
+    },
+  );
 
   if (!roleRes.ok) {
-    const body = await roleRes.text();
+    const msg = await roleRes.text();
     return NextResponse.json(
-      { where: '/api/admin/check', status: roleRes.status, msg: body || 'role lookup error' },
-      { status: roleRes.status }
+      { where: '/api/admin/check', status: roleRes.status, msg: msg || 'role lookup error' },
+      { status: roleRes.status },
     );
   }
 
   const data = await roleRes.json(); // { role: 'admin' | 'user' | ... }
-  const role = data?.role ?? 'user';
-
-  if (role !== 'admin') {
+  if (data?.role !== 'admin') {
     return NextResponse.json(
-      { where: '/api/admin/check', status: 403, msg: 'forbidden', role },
-      { status: 403 }
+      { where: '/api/admin/check', status: 403, msg: 'forbidden' },
+      { status: 403 },
     );
   }
 

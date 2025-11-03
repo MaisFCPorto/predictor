@@ -3273,6 +3273,14 @@ admin.get("/role", requireAdminKey, async (c) => {
   const row = await c.env.DB.prepare("SELECT role FROM users WHERE email = ?").bind(email).first();
   return c.json({ role: row?.role ?? "user" });
 });
+admin.get("/api/admin/teams", requireAdminKey, async (c) => {
+  const { results } = await c.env.DB.prepare(`SELECT id, name FROM teams ORDER BY name`).all();
+  return c.json(results);
+});
+admin.get("/api/admin/competitions", requireAdminKey, async (c) => {
+  const { results } = await c.env.DB.prepare(`SELECT id, code, name FROM competitions ORDER BY name`).all();
+  return c.json(results);
+});
 
 // src/index.ts
 var app = new Hono2();
@@ -3327,6 +3335,7 @@ app.route("/api/rankings", rankings);
 app.route("/api/admin/competitions", adminCompetitions);
 app.route("/api/auth", auth);
 app.route("/api/admin", admin);
+app.route("/", admin);
 async function listFixtures(c, matchdayId) {
   const lockMs = getLockMs(c);
   const now = Date.now();

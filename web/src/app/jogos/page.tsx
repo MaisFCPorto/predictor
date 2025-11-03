@@ -9,25 +9,21 @@ import toast, { Toaster } from 'react-hot-toast';
 
 type FixtureDTO = {
   id: string;
-  kickoff_at: string;            // UTC
+  kickoff_at: string;                // UTC
   status: 'SCHEDULED' | 'FINISHED' | string;
   home_team_name: string;
   away_team_name: string;
   home_crest: string | null;
   away_crest: string | null;
-
   // novos
   competition_id: string | null;
-  competition_code: string | null;  // p/ pill (LP/LE/TP/TL…)
-  round_label: string | null;       // J1, QF, SF, F, M1…
+  competition_code: string | null;   // LP/LE/TP/TL…
+  round_label: string | null;        // J1, QF, SF, F, M1…
   leg: number | null;
-
   // lock calculado pela API
   is_locked: boolean;
   lock_at_utc?: string | null;
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
 export default function JogosPage() {
   const [loading, setLoading] = useState(true);
@@ -35,7 +31,23 @@ export default function JogosPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // carrega jogos abertos (novo endpoint) com fallback
+  // helper para garantir que só tentamos ler JSON quando o response for JSON
+  async function fetchJson(url: string) {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      // se vier HTML (erro do Worker), lança erro legível
+      throw new Error(`(${res.status}) ${res.statusText}${text ? ` — ${text.slice(0, 180)}…` : ''}`);
+    }
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Resposta não-JSON: ${text.slice(0, 180)}…`);
+    }
+    return res.json();
+  }
+
+  // carrega jogos abertos via proxy do Next
   useEffect(() => {
     let abort = false;
     (async () => {
@@ -43,26 +55,27 @@ export default function JogosPage() {
         setLoading(true);
         setError(null);
 
-        // 1) tenta o novo
-        let res = await fetch(`${API_BASE}/api/fixtures/open`, { cache: 'no-store' });
-        if (res.status === 404) {
-          // 2) fallback para o antigo (se ainda existirem md1)
-          res = await fetch(`${API_BASE}/api/matchdays/md1/fixtures`, { cache: 'no-store' });
-        }
-        if (!res.ok) {
-          const txt = await res.text().catch(() => '');
-          throw new Error(`(${res.status}) ${res.statusText} ${txt}`.trim());
-        }
-        const list: FixtureDTO[] = await res.json();
+        // 1) novo endpoint (via proxy Next)
+        //    -> web/src/app/api/public/fixtures/open/route.ts (proxy para o Worker)
+        let list: FixtureDTO[] = await fetchJson('/api/public/fixtures/open');
 
-        if (!abort) setFixtures(list.filter(f => f.status === 'SCHEDULED')); // garante só abertos
+        // 2) fallback para endpoint antigo (se ainda existirem md1)
+        if (!Array.isArray(list) || list.length === 0) {
+          list = await fetchJson('/api/public/matchdays/md1/fixtures');
+        }
+
+        if (!abort) {
+          setFixtures(list.filter((f) => f.status === 'SCHEDULED'));
+        }
       } catch (e: any) {
         if (!abort) setError(e?.message ?? 'Erro a carregar jogos');
       } finally {
         if (!abort) setLoading(false);
       }
     })();
-    return () => { abort = true; };
+    return () => {
+      abort = true;
+    };
   }, []);
 
   // guardar palpite
@@ -87,7 +100,7 @@ export default function JogosPage() {
       <Toaster position="top-center" />
 
       <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-       <h1 className="text-2xl font-bold">Jogos em aberto</h1>
+        <h1 className="text-2xl font-bold">Jogos em aberto</h1>
 
         {error && (
           <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm">
@@ -116,15 +129,10 @@ export default function JogosPage() {
                 home_crest={f.home_crest}
                 away_crest={f.away_crest}
                 competition_code={f.competition_code}
-  round_label={f.round_label}
-  leg={f.leg}
-                // locks
+                round_label={f.round_label}
+                leg={f.leg}
                 is_locked={f.is_locked || f.status === 'FINISHED'}
                 lock_at_utc={f.lock_at_utc}
-                // se o teu FixtureCard já mostra pill/leg/round, passa estes também
-                // competition_code={f.competition_code}
-                // round_label={f.round_label}
-                // leg_number={f.leg_number}
                 onSave={onSave}
                 saving={savingId === f.id}
               />

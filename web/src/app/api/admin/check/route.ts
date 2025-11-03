@@ -105,6 +105,16 @@ export async function GET(req: NextRequest) {
     );
   }
 
+// bypass por env para debugging
+const allow = (process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map(s => s.trim().toLowerCase())
+  .filter(Boolean);
+
+if (allow.includes(email.toLowerCase())) {
+  return NextResponse.json({ ok: true, role: 'admin', email, bypass: 'env-allowlist' });
+}
+
   if (role !== 'admin') {
     return NextResponse.json(
       {

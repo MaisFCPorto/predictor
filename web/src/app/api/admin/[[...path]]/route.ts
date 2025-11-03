@@ -1,66 +1,71 @@
-// web/src/app/api/admin/[[...path]]/route.ts
+// src/app/api/admin/[[...path]]/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+
+// garante que corre no server e sem cache
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.API_BASE ||
-  '';
+const UPSTREAM = process.env.API_BASE /* ex.: https://predictor-porto-api.pred... */;
 
-const ADMIN_KEY =
-  process.env.ADMIN_KEY ||
-  process.env.API_ADMIN_KEY ||
-  '';
+function buildTarget(req: NextRequest) {
+  // remove o prefixo /api/admin para construir a rota no worker
+  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, '');
+  const qs = req.nextUrl.search; // inclui '?...'
+  return `${UPSTREAM}/api/${rest}${qs}`;
+}
 
-async function forward(req: Request, pathSegs: string[]) {
-  if (!API_BASE || !ADMIN_KEY) {
-    return new Response(
-      JSON.stringify({ error: 'Server misconfig: NEXT_PUBLIC_API_URL or ADMIN_KEY missing' }),
-      { status: 500, headers: { 'content-type': 'application/json' } }
+// replica método, headers e body do cliente
+async function forward(req: NextRequest) {
+  if (!UPSTREAM) {
+    return NextResponse.json(
+      { error: 'Server misconfig: API_BASE missing' },
+      { status: 500 }
     );
   }
 
-  const target = `${API_BASE.replace(/\/+$/, '')}/api/${['admin', ...pathSegs].join('/')}`;
+  const target = buildTarget(req);
 
-  // clona request mantendo método/body/headers e cookies do browser
+  // copiar headers de forma segura
+  const outgoing = new Headers(req.headers);
+  outgoing.set('cache-control', 'no-store');
+
+  // **chave só no servidor** (NUNCA no client)
+  const adminKey = process.env.ADMIN_KEY;
+  if (adminKey) outgoing.set('x-admin-key', adminKey);
+
   const init: RequestInit = {
     method: req.method,
-    headers: new Headers(req.headers),
-    body: ['GET', 'HEAD'].includes(req.method) ? undefined : await req.clone().arrayBuffer(),
+    headers: outgoing,
+    // só certos métodos têm body
+    body:
+      req.method === 'GET' || req.method === 'HEAD'
+        ? undefined
+        : (await req.blob()) as any,
+    redirect: 'manual',
+    // não caches no fetch do node
+    cache: 'no-store',
   };
-
-  // força no-cache e injecta a admin key
-  (init.headers as Headers).set('cache-control', 'no-store');
-  (init.headers as Headers).set('x-admin-key', ADMIN_KEY);
 
   const upstream = await fetch(target, init);
 
+  // reenvia status + headers + body tal e qual
   const resHeaders = new Headers();
-  for (const [k, v] of upstream.headers) resHeaders.set(k, v);
-  // garante content-type json em erros da API
-  if (!resHeaders.get('content-type')) resHeaders.set('content-type', 'application/json');
+  upstream.headers.forEach((v, k) => {
+    // evita propagarmos cabeçalhos problemáticos
+    if (k.toLowerCase() !== 'content-encoding') resHeaders.set(k, v);
+  });
 
-  return new Response(upstream.body, {
+  const body = await upstream.arrayBuffer();
+  return new NextResponse(body, {
     status: upstream.status,
+    statusText: upstream.statusText,
     headers: resHeaders,
   });
 }
 
-// ⚠️ sem tipagem no 2.º argumento para agradar ao verificador do Next
-export async function GET(req: Request, ctx: any) {
-  return forward(req, ctx?.params?.path ?? []);
-}
-export async function POST(req: Request, ctx: any) {
-  return forward(req, ctx?.params?.path ?? []);
-}
-export async function PATCH(req: Request, ctx: any) {
-  return forward(req, ctx?.params?.path ?? []);
-}
-export async function PUT(req: Request, ctx: any) {
-  return forward(req, ctx?.params?.path ?? []);
-}
-export async function DELETE(req: Request, ctx: any) {
-  return forward(req, ctx?.params?.path ?? []);
-}
-export async function OPTIONS(req: Request, ctx: any) {
-  return forward(req, ctx?.params?.path ?? []);
-}
+// 👉 NÃO tipar o 2.º argumento (evita o erro do build)
+export async function GET(req: NextRequest, _ctx: any)   { return forward(req); }
+export async function POST(req: NextRequest, _ctx: any)  { return forward(req); }
+export async function PATCH(req: NextRequest, _ctx: any) { return forward(req); }
+export async function PUT(req: NextRequest, _ctx: any)    { return forward(req); }
+export async function DELETE(req: NextRequest, _ctx: any) { return forward(req); }

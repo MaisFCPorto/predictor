@@ -9,25 +9,62 @@ import toast, { Toaster } from 'react-hot-toast';
 
 type FixtureDTO = {
   id: string;
-  kickoff_at: string;            // UTC
+  kickoff_at: string; // UTC
   status: 'SCHEDULED' | 'FINISHED' | string;
   home_team_name: string;
   away_team_name: string;
   home_crest: string | null;
   away_crest: string | null;
-
-  // novos
   competition_id: string | null;
-  competition_code: string | null;  // p/ pill (LP/LE/TP/TL…)
-  round_label: string | null;       // J1, QF, SF, F, M1…
+  competition_code: string | null; // LP/LE/TP/TL…
+  round_label: string | null;      // J1, QF, SF, F, M1…
   leg: number | null;
-
-  // lock calculado pela API
   is_locked: boolean;
   lock_at_utc?: string | null;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+const BASE = process.env.NEXT_PUBLIC_API_BASE || '';
+
+async function fetchJsonOrThrow(url: string) {
+  const res = await fetch(url, { cache: 'no-store' });
+  const text = await res.text().catch(() => '');
+
+  if (!res.ok) {
+    // devolve só o início do HTML para evitar a parede de texto
+    const preview = text ? ` — ${text.slice(0, 180)}…` : '';
+    throw new Error(`(${res.status}) ${res.statusText}${preview}`);
+  }
+
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    const preview = text ? text.slice(0, 180) : '';
+    throw new Error(`Resposta não-JSON: ${preview}…`);
+  }
+
+  return JSON.parse(text);
+}
+
+async function tryEndpoints(): Promise<FixtureDTO[]> {
+  const candidates = [
+    '/api/fixtures/open',
+    BASE ? `${BASE}/api/fixtures/open` : null,
+    '/api/matchdays/md1/fixtures',
+    BASE ? `${BASE}/api/matchdays/md1/fixtures` : null,
+  ].filter(Boolean) as string[];
+
+  const errors: string[] = [];
+  for (const url of candidates) {
+    try {
+      const json = await fetchJsonOrThrow(url);
+      if (Array.isArray(json)) return json;
+      // se não for array, tenta o próximo
+      errors.push(`${url} → não devolveu lista`);
+    } catch (e: any) {
+      errors.push(`${url} → ${e?.message ?? e}`);
+    }
+  }
+  throw new Error(errors.join('\n'));
+}
 
 export default function JogosPage() {
   const [loading, setLoading] = useState(true);
@@ -65,7 +102,6 @@ export default function JogosPage() {
     return () => { abort = true; };
   }, []);
 
-  // guardar palpite
   async function onSave(fixtureId: string, home: number, away: number) {
     try {
       setSavingId(fixtureId);
@@ -89,11 +125,14 @@ export default function JogosPage() {
   return (
     <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-10">
       <Toaster position="top-center" />
+      <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+        <h1 className="text-2xl font-bold">Jogos em aberto</h1>
+
 
       <div className="mx-auto w-full max-w-none space-y-10">
         {/* Error banner */}
         {error && (
-          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm whitespace-pre-wrap">
             {error}
           </div>
         )}
@@ -101,9 +140,7 @@ export default function JogosPage() {
         {/* Loading skeletons */}
         {loading && (
           <div className="space-y-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <FixtureSkeleton key={i} />
-            ))}
+            {Array.from({ length: 4 }).map((_, i) => <FixtureSkeleton key={i} />)}
           </div>
         )}
 

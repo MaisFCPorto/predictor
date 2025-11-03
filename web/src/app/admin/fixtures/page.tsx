@@ -4,12 +4,17 @@ import { useEffect, useMemo, useState } from 'react';
 import axios, { AxiosError } from 'axios';
 import AdminGate from '../_components/AdminGate';
 
-const API = process.env.NEXT_PUBLIC_API_BASE!;
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY ?? '';
-
+/**
+ * IMPORTANTE
+ * ----------
+ * Este cliente usa apenas rotas relativas do Next:
+ *   /api/admin/fixtures, /api/admin/teams, /api/admin/competitions, ...
+ * O nosso proxy (no servidor do Next) acrescenta a X-Admin-Key e fala com o Worker.
+ * Não uses NEXT_PUBLIC_ADMIN_KEY aqui (nunca exponhas a secret no browser).
+ */
 const adm = axios.create({
-  baseURL: API,
-  headers: { 'x-admin-key': ADMIN_KEY },
+  // baseURL vazio => todos os pedidos são relativos ao mesmo host (Next)
+  baseURL: '',
 });
 
 adm.interceptors.response.use(
@@ -18,7 +23,6 @@ adm.interceptors.response.use(
     const status = error?.response?.status;
     if (status === 401) {
       alert('Sessão expirada ou em falta. Faz login novamente.');
-      // opcional: window.location.href = '/auth';
     }
     if (status === 403) {
       alert('Acesso negado (precisas de ser admin).');
@@ -130,12 +134,12 @@ export default function AdminFixtures() {
 
   /* -------------------- Loaders -------------------- */
   async function loadTeams() {
-    const { data } = await adm.get<Team[]>('/api/admin/teams');
+    const { data } = await adm.get<Team[]>('/api/admin/teams', { headers: { 'cache-control': 'no-store' } });
     setTeams(data);
   }
   async function loadCompetitions() {
     try {
-      const { data } = await adm.get<Competition[]>('/api/admin/competitions');
+      const { data } = await adm.get<Competition[]>('/api/admin/competitions', { headers: { 'cache-control': 'no-store' } });
       setCompetitions(data ?? []);
     } catch {
       setCompetitions([]);
@@ -144,7 +148,7 @@ export default function AdminFixtures() {
   async function loadFixtures() {
     setLoading(true);
     try {
-      const { data } = await adm.get('/api/admin/fixtures');
+      const { data } = await adm.get('/api/admin/fixtures', { headers: { 'cache-control': 'no-store' } });
       const list: Fx[] = (data ?? []).map((x: any) => ({ ...x, _hs: x.home_score ?? '', _as: x.away_score ?? '' }));
       setFixtures(list);
     } catch (e: any) {
@@ -267,7 +271,7 @@ export default function AdminFixtures() {
                 onChange={(e) => setNewFx(v => ({ ...v, competition_id: e.target.value }))}
               >
                 <option value="">—</option>
-                {competitions.map(c => <option key={c.id} value={c.id}>{c.code}</option>)}
+                {competitions.map(c => <option key={c.id} value={c.code}>{c.code}</option>)}
               </select>
             </div>
 
@@ -420,7 +424,7 @@ export default function AdminFixtures() {
                           onChange={(e) => updateField(f.id, { competition_id: e.target.value || null })}
                         >
                           <option value="">—</option>
-                          {competitions.map(c => <option key={c.id} value={c.id}>{c.code}</option>)}
+                          {competitions.map(c => <option key={c.id} value={c.code}>{c.code}</option>)}
                         </select>
                       </td>
 

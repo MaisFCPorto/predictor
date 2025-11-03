@@ -7,10 +7,9 @@ export const revalidate = 0;
 const API = process.env.NEXT_PUBLIC_API_URL!;
 const ADMIN_KEY = process.env.ADMIN_KEY!;
 
-// Constrói URL final no Worker: /api/<resto>
 function upstreamUrl(restPath: string) {
   const base = API.replace(/\/+$/, '');
-  const path = restPath.replace(/^\/+/, ''); // sem barras no início
+  const path = restPath.replace(/^\/+/, '');
   return `${base}/api/${path}`;
 }
 
@@ -23,19 +22,13 @@ async function forward(req: NextRequest, restPath: string) {
   }
 
   const url = upstreamUrl(restPath);
-
-  // Clona headers e passa apenas os relevantes
-  const headers: Record<string, string> = {
-    'X-Admin-Key': ADMIN_KEY,
-  };
-  // Propaga cookies (se for preciso para o Worker)
-  const cookie = req.headers.get('cookie');
-  if (cookie) headers['cookie'] = cookie;
-
-  // Body só para métodos com body
   const method = req.method.toUpperCase();
   const hasBody = method === 'POST' || method === 'PATCH' || method === 'PUT';
   const body = hasBody ? await req.text() : undefined;
+
+  const headers: Record<string, string> = { 'X-Admin-Key': ADMIN_KEY };
+  const cookie = req.headers.get('cookie');
+  if (cookie) headers.cookie = cookie;
 
   const res = await fetch(url, {
     method,
@@ -47,10 +40,7 @@ async function forward(req: NextRequest, restPath: string) {
     cache: 'no-store',
   });
 
-  // Reencaminha resposta tal-e-qual (status e body)
   const text = await res.text();
-
-  // Tenta JSON; se falhar, devolve texto
   try {
     return NextResponse.json(JSON.parse(text), { status: res.status });
   } catch {
@@ -58,24 +48,23 @@ async function forward(req: NextRequest, restPath: string) {
   }
 }
 
-// Qualquer método → encaminha
-export async function GET(req: NextRequest, ctx: { params: { path?: string[] } }) {
-  const rest = (ctx.params.path ?? []).join('/');
+export async function GET(req: NextRequest, { params }: { params: { path: string[] } }) {
+  const rest = (params?.path ?? []).join('/');
   return forward(req, rest);
 }
-export async function POST(req: NextRequest, ctx: { params: { path?: string[] } }) {
-  const rest = (ctx.params.path ?? []).join('/');
+export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) {
+  const rest = (params?.path ?? []).join('/');
   return forward(req, rest);
 }
-export async function PATCH(req: NextRequest, ctx: { params: { path?: string[] } }) {
-  const rest = (ctx.params.path ?? []).join('/');
+export async function PATCH(req: NextRequest, { params }: { params: { path: string[] } }) {
+  const rest = (params?.path ?? []).join('/');
   return forward(req, rest);
 }
-export async function PUT(req: NextRequest, ctx: { params: { path?: string[] } }) {
-  const rest = (ctx.params.path ?? []).join('/');
+export async function PUT(req: NextRequest, { params }: { params: { path: string[] } }) {
+  const rest = (params?.path ?? []).join('/');
   return forward(req, rest);
 }
-export async function DELETE(req: NextRequest, ctx: { params: { path?: string[] } }) {
-  const rest = (ctx.params.path ?? []).join('/');
+export async function DELETE(req: NextRequest, { params }: { params: { path: string[] } }) {
+  const rest = (params?.path ?? []).join('/');
   return forward(req, rest);
 }

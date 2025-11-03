@@ -1,15 +1,20 @@
+// web/src/app/api/admin/check/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
-const ADMIN_KEY = process.env.ADMIN_KEY!;
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-async function readTokenFromSupabaseCookie(): Promise<string | null> {
+type CookieLike = { name: string; value: string };
+
+// ⬇️ torna async e usa await cookies()
+async function readSupabaseAccessToken(): Promise<string | null> {
   const jar = await cookies();
-  const supa = jar.getAll().find(
-    (c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'),
+  const supa = (jar.getAll() as CookieLike[]).find(
+    c => c.name.startsWith('sb-') && c.name.endsWith('-auth-token')
   );
   if (!supa?.value) return null;
+
   try {
     const json = Buffer.from(supa.value.replace(/^base64-/, ''), 'base64').toString('utf8');
     const obj = JSON.parse(json);
@@ -20,27 +25,21 @@ async function readTokenFromSupabaseCookie(): Promise<string | null> {
 }
 
 export async function GET(req: NextRequest) {
-  // 0) sanity
-  if (!API || !ADMIN_KEY) {
-    return NextResponse.json(
-      { error: 'Server misconfig: NEXT_PUBLIC_API_URL or ADMIN_KEY missing' },
-      { status: 500 },
-    );
-  }
-
-  // 1) Bearer OU cookie Supabase
+  // 1) Authorization header OU cookie do Supabase (agora com await)
   const auth = req.headers.get('authorization');
-  let token =
-    auth?.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : await readTokenFromSupabaseCookie();
+  const token =
+    auth?.toLowerCase().startsWith('bearer ')
+      ? auth.slice(7).trim()
+      : await readSupabaseAccessToken();
 
   if (!token) {
     return NextResponse.json(
       { where: '/api/admin/check', status: 401, msg: 'missing token' },
-      { status: 401 },
+      { status: 401 }
     );
   }
 
-  // 2) Quem é o user no Supabase?
+  // 2) Supabase: /auth/v1/user
   const meRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/user`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -53,41 +52,42 @@ export async function GET(req: NextRequest) {
     const body = await meRes.text();
     return NextResponse.json(
       { where: '/api/admin/check', status: meRes.status, msg: body || 'auth error' },
-      { status: meRes.status },
+      { status: meRes.status }
     );
   }
 
-  const me = await meRes.json();
-  const email: string | undefined = me?.email;
+  const me = (await meRes.json()) as { email?: string };
+  const email = me?.email;
   if (!email) {
     return NextResponse.json(
       { where: '/api/admin/check', status: 400, msg: 'user has no email' },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
-  // 3) Pergunta ao Worker o role
-  const roleRes = await fetch(
-    `${API.replace(/\/$/, '')}/api/admin/role?email=${encodeURIComponent(email)}`,
-    {
-      headers: { 'x-admin-key': ADMIN_KEY },
-      cache: 'no-store',
-    },
-  );
+  // 3) Worker (D1): role por e-mail
+  const url = `${process.env.NEXT_PUBLIC_API_URL}/api/admin/role?email=${encodeURIComponent(
+    email
+  )}`;
+  const roleRes = await fetch(url, {
+    headers: { 'X-Admin-Key': process.env.ADMIN_KEY! },
+    cache: 'no-store',
+  });
 
   if (!roleRes.ok) {
-    const msg = await roleRes.text();
+    const body = await roleRes.text();
     return NextResponse.json(
-      { where: '/api/admin/check', status: roleRes.status, msg: msg || 'role lookup error' },
-      { status: roleRes.status },
+      { where: '/api/admin/check', status: roleRes.status, msg: body || 'role lookup error' },
+      { status: roleRes.status }
     );
   }
 
-  const data = await roleRes.json(); // { role: 'admin' | 'user' | ... }
-  if (data?.role !== 'admin') {
+  const data = (await roleRes.json()) as { role?: string };
+  const role = data?.role ?? 'user';
+  if (role !== 'admin') {
     return NextResponse.json(
-      { where: '/api/admin/check', status: 403, msg: 'forbidden' },
-      { status: 403 },
+      { where: '/api/admin/check', status: 403, msg: { error: 'forbidden' } },
+      { status: 403 }
     );
   }
 

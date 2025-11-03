@@ -1,80 +1,81 @@
+// web/src/app/api/admin/[...path]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
-// Lê o token da cookie do Supabase (caso o Worker o venha a usar no futuro)
-async function readSupabaseAccessToken(): Promise<string | null> {
-  const jar = await cookies();
-  const supa = jar.getAll().find(c => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'));
-  if (!supa?.value) return null;
-  try {
-    const json = Buffer.from(supa.value.replace(/^base64-/, ''), 'base64').toString('utf8');
-    const obj = JSON.parse(json);
-    return obj?.access_token ?? null;
-  } catch {
-    return null;
-  }
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const API = process.env.NEXT_PUBLIC_API_URL!;
+const ADMIN_KEY = process.env.ADMIN_KEY!;
+
+// Constrói URL final no Worker: /api/<resto>
+function upstreamUrl(restPath: string) {
+  const base = API.replace(/\/+$/, '');
+  const path = restPath.replace(/^\/+/, ''); // sem barras no início
+  return `${base}/api/${path}`;
 }
 
-const API = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL; // usa a que tiveres definida
-const ADMIN_KEY = process.env.ADMIN_KEY!; // SECRET no Vercel (não pública)
-
-async function proxy(req: NextRequest) {
+async function forward(req: NextRequest, restPath: string) {
   if (!API || !ADMIN_KEY) {
     return NextResponse.json(
-      { where: 'proxy', error: 'missing API_URL or ADMIN_KEY envs' },
-      { status: 500 }
+      { error: 'Server misconfig: NEXT_PUBLIC_API_URL or ADMIN_KEY missing' },
+      { status: 500 },
     );
   }
 
-  const path = req.nextUrl.pathname.replace(/^\/api\/admin\//, ''); // e.g. "fixtures"
-  const url = `${API}/api/${path}${req.nextUrl.search ?? ''}`;
+  const url = upstreamUrl(restPath);
 
-  // replica método e body
-  const init: RequestInit = {
-    method: req.method,
-    headers: {
-      'X-Admin-Key': ADMIN_KEY,
-      // passa o Authorization do utilizador se existir (pode ser útil no Worker)
-      ...(req.headers.get('authorization') ? { authorization: req.headers.get('authorization')! } : {}),
-    },
-    cache: 'no-store',
+  // Clona headers e passa apenas os relevantes
+  const headers: Record<string, string> = {
+    'X-Admin-Key': ADMIN_KEY,
   };
+  // Propaga cookies (se for preciso para o Worker)
+  const cookie = req.headers.get('cookie');
+  if (cookie) headers['cookie'] = cookie;
 
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    const body = await req.arrayBuffer();
-    init.body = body;
-    // garante content-type se o browser enviou
-    const ct = req.headers.get('content-type');
-    if (ct) (init.headers as any)['content-type'] = ct;
-  }
+  // Body só para métodos com body
+  const method = req.method.toUpperCase();
+  const hasBody = method === 'POST' || method === 'PATCH' || method === 'PUT';
+  const body = hasBody ? await req.text() : undefined;
 
-  // Opcional: se quiseres mesmo enviar o token de Supabase ao Worker
-  const access = await readSupabaseAccessToken();
-  if (access && !(init.headers as any).authorization) {
-    (init.headers as any).authorization = `Bearer ${access}`;
-  }
-
-  const upstream = await fetch(url, init);
-
-  // devolve o erro original para debug (em vez de esconder)
-  if (!upstream.ok) {
-    const text = await upstream.text();
-    return NextResponse.json(
-      { where: 'upstream', status: upstream.status, error: text || upstream.statusText },
-      { status: upstream.status }
-    );
-  }
-
-  // sucesso: passa JSON tal-qual
-  const data = await upstream.text();
-  return new NextResponse(data, {
-    status: 200,
-    headers: { 'content-type': upstream.headers.get('content-type') || 'application/json', 'cache-control': 'no-store' },
+  const res = await fetch(url, {
+    method,
+    headers: {
+      ...headers,
+      ...(hasBody ? { 'content-type': req.headers.get('content-type') || 'application/json' } : {}),
+    },
+    body,
+    cache: 'no-store',
   });
+
+  // Reencaminha resposta tal-e-qual (status e body)
+  const text = await res.text();
+
+  // Tenta JSON; se falhar, devolve texto
+  try {
+    return NextResponse.json(JSON.parse(text), { status: res.status });
+  } catch {
+    return new NextResponse(text, { status: res.status });
+  }
 }
 
-export const GET = proxy;
-export const POST = proxy;
-export const PATCH = proxy;
-export const PUT = proxy;
-export const DELETE = proxy;
+// Qualquer método → encaminha
+export async function GET(req: NextRequest, ctx: { params: { path?: string[] } }) {
+  const rest = (ctx.params.path ?? []).join('/');
+  return forward(req, rest);
+}
+export async function POST(req: NextRequest, ctx: { params: { path?: string[] } }) {
+  const rest = (ctx.params.path ?? []).join('/');
+  return forward(req, rest);
+}
+export async function PATCH(req: NextRequest, ctx: { params: { path?: string[] } }) {
+  const rest = (ctx.params.path ?? []).join('/');
+  return forward(req, rest);
+}
+export async function PUT(req: NextRequest, ctx: { params: { path?: string[] } }) {
+  const rest = (ctx.params.path ?? []).join('/');
+  return forward(req, rest);
+}
+export async function DELETE(req: NextRequest, ctx: { params: { path?: string[] } }) {
+  const rest = (ctx.params.path ?? []).join('/');
+  return forward(req, rest);
+}

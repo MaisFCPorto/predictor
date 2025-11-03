@@ -8,10 +8,10 @@ export const dynamic = 'force-dynamic';
 const UPSTREAM = process.env.API_BASE /* ex.: https://predictor-porto-api.pred... */;
 
 function buildTarget(req: NextRequest) {
-  // remove o prefixo /api/admin para construir a rota no worker
   const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, '');
   const qs = req.nextUrl.search; // inclui '?...'
-  return `${UPSTREAM}/api/${rest}${qs}`;
+  //  🔧 mantemos o segmento /admin no upstream
+  return `${UPSTREAM}/api/admin/${rest}${qs}`;
 }
 
 // replica método, headers e body do cliente

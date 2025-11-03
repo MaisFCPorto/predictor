@@ -9,21 +9,62 @@ import toast, { Toaster } from 'react-hot-toast';
 
 type FixtureDTO = {
   id: string;
-  kickoff_at: string;                // UTC
+  kickoff_at: string; // UTC
   status: 'SCHEDULED' | 'FINISHED' | string;
   home_team_name: string;
   away_team_name: string;
   home_crest: string | null;
   away_crest: string | null;
-  // novos
   competition_id: string | null;
-  competition_code: string | null;   // LP/LE/TP/TL…
-  round_label: string | null;        // J1, QF, SF, F, M1…
+  competition_code: string | null; // LP/LE/TP/TL…
+  round_label: string | null;      // J1, QF, SF, F, M1…
   leg: number | null;
-  // lock calculado pela API
   is_locked: boolean;
   lock_at_utc?: string | null;
 };
+
+const BASE = process.env.NEXT_PUBLIC_API_BASE || '';
+
+async function fetchJsonOrThrow(url: string) {
+  const res = await fetch(url, { cache: 'no-store' });
+  const text = await res.text().catch(() => '');
+
+  if (!res.ok) {
+    // devolve só o início do HTML para evitar a parede de texto
+    const preview = text ? ` — ${text.slice(0, 180)}…` : '';
+    throw new Error(`(${res.status}) ${res.statusText}${preview}`);
+  }
+
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    const preview = text ? text.slice(0, 180) : '';
+    throw new Error(`Resposta não-JSON: ${preview}…`);
+  }
+
+  return JSON.parse(text);
+}
+
+async function tryEndpoints(): Promise<FixtureDTO[]> {
+  const candidates = [
+    '/api/fixtures/open',
+    BASE ? `${BASE}/api/fixtures/open` : null,
+    '/api/matchdays/md1/fixtures',
+    BASE ? `${BASE}/api/matchdays/md1/fixtures` : null,
+  ].filter(Boolean) as string[];
+
+  const errors: string[] = [];
+  for (const url of candidates) {
+    try {
+      const json = await fetchJsonOrThrow(url);
+      if (Array.isArray(json)) return json;
+      // se não for array, tenta o próximo
+      errors.push(`${url} → não devolveu lista`);
+    } catch (e: any) {
+      errors.push(`${url} → ${e?.message ?? e}`);
+    }
+  }
+  throw new Error(errors.join('\n'));
+}
 
 export default function JogosPage() {
   const [loading, setLoading] = useState(true);
@@ -31,23 +72,6 @@ export default function JogosPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // helper para garantir que só tentamos ler JSON quando o response for JSON
-  async function fetchJson(url: string) {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      // se vier HTML (erro do Worker), lança erro legível
-      throw new Error(`(${res.status}) ${res.statusText}${text ? ` — ${text.slice(0, 180)}…` : ''}`);
-    }
-    const ct = res.headers.get('content-type') || '';
-    if (!ct.includes('application/json')) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Resposta não-JSON: ${text.slice(0, 180)}…`);
-    }
-    return res.json();
-  }
-
-  // carrega jogos abertos via proxy do Next
   useEffect(() => {
     let abort = false;
     (async () => {
@@ -55,17 +79,10 @@ export default function JogosPage() {
         setLoading(true);
         setError(null);
 
-        // 1) novo endpoint (via proxy do Next)
-        //    -> /api/fixtures/open (o teu Next encaminha para o Worker)
-        let list: FixtureDTO[] = await fetchJson('/api/fixtures/open');
-
-        // 2) fallback para endpoint antigo (se ainda existirem md1)
-        if (!Array.isArray(list) || list.length === 0) {
-          list = await fetchJson('/api/matchdays/md1/fixtures');
-        }
-
+        const list = await tryEndpoints();
         if (!abort) {
-          setFixtures(list.filter((f) => f.status === 'SCHEDULED'));
+          // garante só jogos agendados
+          setFixtures(list.filter(f => f.status === 'SCHEDULED'));
         }
       } catch (e: any) {
         if (!abort) setError(e?.message ?? 'Erro a carregar jogos');
@@ -73,12 +90,9 @@ export default function JogosPage() {
         if (!abort) setLoading(false);
       }
     })();
-    return () => {
-      abort = true;
-    };
+    return () => { abort = true; };
   }, []);
 
-  // guardar palpite
   async function onSave(fixtureId: string, home: number, away: number) {
     try {
       setSavingId(fixtureId);
@@ -98,27 +112,24 @@ export default function JogosPage() {
   return (
     <main className="p-10 ">
       <Toaster position="top-center" />
-
       <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
         <h1 className="text-2xl font-bold">Jogos em aberto</h1>
 
         {error && (
-          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm whitespace-pre-wrap">
             {error}
           </div>
         )}
 
         {loading ? (
           <div className="space-y-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <FixtureSkeleton key={i} />
-            ))}
+            {Array.from({ length: 4 }).map((_, i) => <FixtureSkeleton key={i} />)}
           </div>
         ) : fixtures.length === 0 ? (
           <div className="opacity-70">Sem jogos disponíveis.</div>
         ) : (
           <div className="space-y-4">
-            {fixtures.map((f) => (
+            {fixtures.map(f => (
               <FixtureCard
                 key={f.id}
                 id={f.id}

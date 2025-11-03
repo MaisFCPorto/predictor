@@ -6,11 +6,11 @@ import Link from 'next/link';
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt">
-      <body className="min-h-screen bg-[url('/bg.svg')] bg-no-repeat bg-cover bg-fixed bg-center text-white ">
+      <body className="min-h-screen bg-[#0a1e7a] bg-no-repeat bg-cover bg-fixed bg-center text-white ">
         <header className="nav-glass  sticky top-0 z-50">
           <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 bg-no-repeat bg-cover bg-fixed">
             <Link href="/" className="font-semibold tracking-tight">
-              Predictor
+              +Predictor
             </Link>
             <nav className="flex gap-6 text-sm">
               <Link href="/jogos" className="hover:text-white/90">Jogos</Link>

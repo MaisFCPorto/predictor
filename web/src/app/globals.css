@@ -7,7 +7,7 @@
 /* ---------- Theme tokens (Navy) ---------- */
 :root {
   /* fundo geral e cartões */
-  --bg:       linear-gradient(200deg, #00088E 20%, #0015FF 80%);
+  --bg:       linear-gradient(200deg, #010436 25%, #032da1 75%);
   --card:     #10182b;  /* cartão */
   --muted:    #1a2440;  /* barras/divisores, hover leve */
   /* texto */
@@ -82,7 +82,7 @@ body::before {
 
 /* NAV – leve translucência */
 .nav-glass {
-  background-color: #00088E; /* ~ navy */
+  background-color: #010436; /* ~ navy */
   backdrop-filter: saturate(140%) blur(8px);
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }

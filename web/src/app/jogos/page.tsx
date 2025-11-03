@@ -35,7 +35,7 @@ export default function JogosPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // carrega jogos abertos (novo endpoint) com fallback
+  // carrega jogos (novo endpoint) com fallback
   useEffect(() => {
     let abort = false;
     (async () => {
@@ -55,7 +55,7 @@ export default function JogosPage() {
         }
         const list: FixtureDTO[] = await res.json();
 
-        if (!abort) setFixtures(list.filter(f => f.status === 'SCHEDULED')); // garante só abertos
+        if (!abort) setFixtures(list); // keep all fixtures; we'll split below
       } catch (e: any) {
         if (!abort) setError(e?.message ?? 'Erro a carregar jogos');
       } finally {
@@ -82,54 +82,94 @@ export default function JogosPage() {
     }
   }
 
+  // split fixtures
+  const openFixtures = fixtures.filter(f => f.status === 'SCHEDULED' && !f.is_locked);
+  const lockedFixtures = fixtures.filter(f => f.is_locked || f.status === 'FINISHED');
+
   return (
-    <main className="p-10 ">
+    <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-10">
       <Toaster position="top-center" />
 
-      <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-       <h1 className="text-2xl font-bold">Jogos em aberto</h1>
-
+      <div className="mx-auto w-full max-w-none space-y-10">
+        {/* Error banner */}
         {error && (
           <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm">
             {error}
           </div>
         )}
 
-        {loading ? (
+        {/* Loading skeletons */}
+        {loading && (
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <FixtureSkeleton key={i} />
             ))}
           </div>
-        ) : fixtures.length === 0 ? (
-          <div className="opacity-70">Sem jogos disponíveis.</div>
-        ) : (
-          <div className="space-y-4">
-            {fixtures.map((f) => (
-              <FixtureCard
-                key={f.id}
-                id={f.id}
-                kickoff_at={f.kickoff_at}
-                status={f.status}
-                home_team_name={f.home_team_name}
-                away_team_name={f.away_team_name}
-                home_crest={f.home_crest}
-                away_crest={f.away_crest}
-                competition_code={f.competition_code}
-  round_label={f.round_label}
-  leg={f.leg}
-                // locks
-                is_locked={f.is_locked || f.status === 'FINISHED'}
-                lock_at_utc={f.lock_at_utc}
-                // se o teu FixtureCard já mostra pill/leg/round, passa estes também
-                // competition_code={f.competition_code}
-                // round_label={f.round_label}
-                // leg_number={f.leg_number}
-                onSave={onSave}
-                saving={savingId === f.id}
-              />
-            ))}
-          </div>
+        )}
+
+        {/* Open fixtures */}
+        {!loading && (
+          <section>
+            <h2 className="text-2xl font-bold mb-4">Jogos em aberto</h2>
+            {openFixtures.length === 0 ? (
+              <div className="opacity-70">Sem jogos abertos.</div>
+            ) : (
+              <div className="space-y-4">
+                {openFixtures.map((f) => (
+                  <FixtureCard
+                    key={f.id}
+                    id={f.id}
+                    kickoff_at={f.kickoff_at}
+                    status={f.status}
+                    home_team_name={f.home_team_name}
+                    away_team_name={f.away_team_name}
+                    home_crest={f.home_crest}
+                    away_crest={f.away_crest}
+                    competition_code={f.competition_code}
+                    round_label={f.round_label}
+                    leg={f.leg}
+                    is_locked={f.is_locked || f.status === 'FINISHED'}
+                    lock_at_utc={f.lock_at_utc}
+                    onSave={onSave}
+                    saving={savingId === f.id}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Locked fixtures */}
+        {!loading && (
+          <section>
+            <h2 className="text-2xl font-bold mb-4">Jogos passados</h2>
+            {lockedFixtures.length === 0 ? (
+              <div className="opacity-70">Sem jogos passados.</div>
+            ) : (
+              <div className="space-y-4">
+                {lockedFixtures.map((f) => (
+                  <FixtureCard
+                    key={f.id}
+                    id={f.id}
+                    kickoff_at={f.kickoff_at}
+                    status={f.status}
+                    home_team_name={f.home_team_name}
+                    away_team_name={f.away_team_name}
+                    home_crest={f.home_crest}
+                    away_crest={f.away_crest}
+                    competition_code={f.competition_code}
+                    round_label={f.round_label}
+                    leg={f.leg}
+                    is_locked={f.is_locked || f.status === 'FINISHED'}
+                    lock_at_utc={f.lock_at_utc}
+                    onSave={onSave}
+                    saving={savingId === f.id}
+                    variant="past"
+                  />
+                ))}
+              </div>
+            )}
+          </section>
         )}
       </div>
     </main>

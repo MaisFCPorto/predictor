@@ -1,7 +1,7 @@
 // components/FixtureCard.tsx
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import clsx from 'clsx';
 import { compName, compAccent, compSubtle, roundText } from './competitions';
 
@@ -20,6 +20,7 @@ type Props = {
   leg?: number | null;
   onSave: (id: string, h: number, a: number) => Promise<void> | void;
   saving?: boolean;
+  variant?: 'default' | 'past';
 };
 
 function formatLocalDate(isoUTC: string) {
@@ -38,29 +39,187 @@ export default function FixtureCard({
   competition_code, round_label,
   is_locked, lock_at_utc,
   onSave, saving,
+  variant = 'default',
 }: Props) {
   const dateTxt = useMemo(() => formatLocalDate(kickoff_at), [kickoff_at]);
   const comp = compName(competition_code);
   const rnd = roundText(round_label);
+
+  // two-line helpers
+  const [compL1, compL2] = useMemo(() => {
+    if (!comp) return [null, null] as [string | null, string | null];
+    const name = comp.trim();
+    const i = name.lastIndexOf(' ');
+    if (i > 0) return [name.slice(0, i), name.slice(i + 1)];
+    return [name, null];
+  }, [comp]);
+  const weekdayStr = useMemo(() => new Intl.DateTimeFormat('pt-PT', { weekday: 'long' }).format(new Date(kickoff_at)), [kickoff_at]);
+  const timeStr = useMemo(() => {
+    const d = new Date(kickoff_at);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}h${mm}`;
+  }, [kickoff_at]);
+  // one-line mobile: "Terça, 20:00"
+  const weekdayOne = useMemo(() => {
+    const w = weekdayStr.replace(/-feira/i, '');
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }, [weekdayStr]);
+  const timeColon = useMemo(() => {
+    const d = new Date(kickoff_at);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }, [kickoff_at]);
+  const dateOneLine = `${weekdayOne}, ${timeColon}`;
   const accent = compAccent(competition_code) ?? '#1e293b';
   const subtle = compSubtle(competition_code) ?? 'transparent';
   const locked = is_locked || status === 'FINISHED';
+
+  // countdown to lock
+  const [remaining, setRemaining] = useState<string | null>(null);
+  const [remainMs, setRemainMs] = useState<number | null>(null);
+  function formatRemaining(ms: number) {
+    if (ms <= 0) return '0s';
+    const total = Math.floor(ms / 1000);
+    const d = Math.floor(total / 86400);
+    const h = Math.floor((total % 86400) / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const parts = [] as string[];
+    if (d > 0) parts.push(`${d}d`);
+    parts.push(`${h}h`, `${m}m`, `${s}s`);
+    return parts.join(' ');
+  }
+  function formatCompactRemaining(ms: number) {
+    if (ms <= 0) return '0s';
+    const total = Math.floor(ms / 1000);
+    const d = Math.floor(total / 86400);
+    const h = Math.floor((total % 86400) / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m ${s}s`;
+  }
+  function urgencyClass(ms: number) {
+    if (ms <= 3600_000) return 'bg-red-400/15 text-red-100';
+    if (ms <= 86_400_000) return 'bg-amber-400/15 text-amber-100';
+    return 'bg-white/5 text-gray-200';
+  }
+  useEffect(() => {
+    if (!lock_at_utc || variant === 'past' || locked) {
+      setRemaining(null);
+      setRemainMs(null);
+      return;
+    }
+    const update = () => {
+      const ms = new Date(lock_at_utc).getTime() - Date.now();
+      setRemainMs(ms);
+      setRemaining(formatRemaining(ms));
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [lock_at_utc, variant, locked]);
+
+  const nowLocked = locked || (variant !== 'past' && (remainMs ?? 1) <= 0);
+  const [home, setHome] = useState<number | ''>('');
+  const [away, setAway] = useState<number | ''>('');
+  const canSave = !nowLocked && home !== '' && away !== '';
+
+  const watermarkUrl = useMemo(() => {
+    switch (competition_code) {
+      case 'TP':
+        return 'https://r2.thesportsdb.com/images/media/league/badge/hyy7lq1593011553.png';
+      case 'LE':
+        return 'https://img.uefa.com/imgml/uefacom/uel/2024/logos/uel_logotype_fc_dark.svg';
+      case 'LP':
+        return 'https://upload.wikimedia.org/wikipedia/commons/5/5a/S%C3%ADmbolo_da_Liga_Portuguesa_de_Futebol_Profissional.png';
+      case 'TL':
+        return 'https://www.ligaportugal.pt/backoffice/assets/ic_allianzcup_cbcb5ca1e0.png';
+      default:
+        return null;
+    }
+  }, [competition_code]);
 
   return (
     <div
       className={clsx(
         // ⇩⇩⇩ AQUI: sem vw para não “ultrapassar” o viewport
-        'relative -mx-5 w-[calc(100%+3.5rem)] sm:mx-auto sm:w-full max-w-[1100px]',
-        'rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-5 md:p-6',
+        'relative w-full',
+        'rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8',
+        variant !== 'past' ? 'pb-8' : 'pb-8',
         'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden'
       )}
     >
-      {/* Cabeçalho */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      {/* Watermark by competition (TP, LE, LP, TL) */}
+      {watermarkUrl && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0 opacity-5 bg-center bg-contain bg-no-repeat"
+          style={{
+            backgroundImage: `url('${watermarkUrl}')`,
+            filter: 'grayscale(1) brightness(0) invert(1)',
+            transform: 'rotate(-8deg) scale(1.02)',
+            transformOrigin: 'center',
+          }}
+        />
+      )}
+      {/* Cabeçalho mobile (Option D): ícone competição à esquerda, data centrada, badge à direita */}
+      <div className="md:hidden relative flex items-center justify-center">
+        {/* Trophy icon (white) on the left if competition exists */}
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 pl-1">
+          {comp && (
+            <svg
+              className="h-5 w-5 text-white/80"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M6 4h12v2a4 4 0 01-4 4h-4a4 4 0 01-4-4V4z" />
+              <path d="M18 6h2a2 2 0 01-2 2" />
+              <path d="M6 6H4a2 2 0 002 2" />
+              <path d="M8 10v2a4 4 0 004 4 4 4 0 004-4v-2" />
+              <path d="M12 20v-2" />
+            </svg>
+          )}
+        </div>
+        {/* Centered one-line date */}
+        <div className="text-center text-sm text-white/90 capitalize px-14 truncate">{dateOneLine}</div>
+        {/* Right compact badge */}
+        <div className="absolute right-0 top-1/2 -translate-y-1/2 pr-1">
+          <span
+            className={clsx(
+              'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] leading-none',
+              variant === 'past' || nowLocked
+                ? 'bg-white/5 text-gray-200'
+                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER)
+            )}
+          >
+            {variant === 'past' || nowLocked ? (
+              'Bloqueado'
+            ) : (
+              <>
+                <svg className="inline h-3 w-3 mr-1 align-[-2px] opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+                </svg>
+                <span className="tabular-nums">{remainMs != null ? formatCompactRemaining(remainMs) : '0s'}</span>
+              </>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {/* Cabeçalho desktop (3 zonas: esquerda pill competição, centro data, direita estado/contador) */}
+      <div className="hidden md:grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+        {/* Esquerda: competição */}
+        <div className="min-w-0 justify-self-start">
           {comp && (
             <span
-              className="inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1 text-[12px] font-medium leading-none"
+              className="inline-flex max-w-full items-center justify-center text-center gap-2 rounded-full px-3 py-1 text-[12px] font-medium leading-none"
               style={{
                 background:
                   subtle === 'transparent'
@@ -76,25 +235,46 @@ export default function FixtureCard({
           )}
         </div>
 
-        <div className="shrink-0">
-          <span className="rounded-full bg-white/5 px-3 py-1 text-[12px] leading-none text-gray-200">
-            {locked ? 'Bloqueado' : lock_at_utc ? 'Fecha em' : 'Agendado'}
-            {lock_at_utc && (
-              <span className="ml-2 tabular-nums text-white/80">
-                {new Date(lock_at_utc).toLocaleTimeString('pt-PT', { hour12: false })}
-              </span>
+        {/* Centro: data/hora (duas linhas) */}
+        <div className="justify-self-center text-center">
+          <div className="text-sm md:text-base text-white/90 capitalize leading-tight">
+            <div>{weekdayStr}</div>
+            <div>{timeStr}</div>
+          </div>
+          {/* Mobile: o estado/contador está na linha acima; nada aqui */}
+        </div>
+
+        {/* Direita: estado/contador só em desktop */}
+        <div className="justify-self-end hidden md:block">
+          <span
+            className={clsx(
+              'rounded-full px-3 py-1 text-[12px] leading-none',
+              variant === 'past' || nowLocked
+                ? 'bg-white/5 text-gray-200'
+                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER)
+            )}
+          >
+            {variant === 'past' || nowLocked ? (
+              'Bloqueado'
+            ) : (
+              <>
+                <span className="mr-1">Fecha em</span>
+                {/* clock icon */}
+                <svg className="inline h-3.5 w-3.5 mr-1 align-[-2px] opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+                </svg>
+                <span className="tabular-nums" aria-live="polite">
+                  {remaining}
+                </span>
+              </>
             )}
           </span>
         </div>
       </div>
 
-      {/* Data centrada */}
-      <div className="mt-3 text-center text-sm md:text-base text-white/90 capitalize">
-        {dateTxt}
-      </div>
-
       {/* Layout principal */}
-      <div className={clsx('mt-6 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap')}>
+      <div className={clsx('mt-6 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap mb-8')}>
         {/* HOME */}
         <div className="flex flex-col items-center w-[25%] min-w-[60px]">
           <Crest src={home_crest} alt={home_team_name} />
@@ -104,10 +284,51 @@ export default function FixtureCard({
         </div>
 
         {/* SCORE */}
-        <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4 w-[45%]">
-          <ScoreBox disabled={locked} />
-          <span className="opacity-60 text-white text-xl sm:text-2xl">–</span>
-          <ScoreBox disabled={locked} />
+        <div className="relative flex items-center justify-center w-[45%]">
+          <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4">
+            <ScoreBox
+              disabled={nowLocked}
+              value={home}
+              onChange={(v) => setHome(v)}
+            />
+            <span className="opacity-60 text-white text-xl sm:text-2xl">–</span>
+            <ScoreBox
+              disabled={locked}
+              value={away}
+              onChange={(v) => setAway(v)}
+            />
+          </div>
+          {/* Save icon on wider screens (inside the score container) */}
+          {variant !== 'past' && (
+            <button
+              type="button"
+              disabled={!canSave || !!saving}
+              className={clsx(
+                'hidden md:flex absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 items-center justify-center w-10 h-10 rounded-full transition',
+                !canSave ? 'md:hidden' : '', // hide icon unless both inputs are filled
+                saving
+                  ? 'bg-white/5 text-white/40 cursor-not-allowed'
+                  : 'bg-white/10 hover:bg-white/15 text-white'
+              )}
+              onClick={() => {
+                if (typeof home === 'number' && typeof away === 'number') {
+                  onSave(id, home, away);
+                }
+              }}
+              title="Guardar palpite"
+            >
+              {saving ? (
+                <svg className="animate-spin h-5 w-5 text-white/60" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              ) : (
+                <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+                </svg>
+              )}
+            </button>
+          )}
         </div>
 
         {/* AWAY */}
@@ -119,28 +340,28 @@ export default function FixtureCard({
         </div>
       </div>
 
-      {/* Botão */}
-      <div className="mt-6 flex items-center gap-3 justify-start">
-        <button
-          disabled={locked || saving}
-          className={clsx(
-            'rounded-full px-4 py-2 text-sm font-medium',
-            locked || saving
-              ? 'bg-white/5 text-white/50 cursor-not-allowed'
-              : 'bg-white/10 hover:bg-white/15 text-white'
-          )}
-          onClick={() => onSave(id, 0, 0)}
-        >
-          {locked ? 'Bloqueado' : saving ? 'A guardar…' : 'Guardar'}
-        </button>
-      </div>
+      {/* Mobile Guardar button centered below score */}
+      {variant !== 'past' && (
+        <div className="md:hidden flex justify-center mt-1">
+          <button
+            disabled={!canSave || !!saving}
+            className={clsx(
+              'rounded-full px-4 py-2 text-sm font-medium',
+              !canSave || saving
+                ? 'bg-white/5 text-white/50 cursor-not-allowed'
+                : 'bg-white/10 hover:bg-white/15 text-white'
+            )}
+            onClick={() => {
+              if (typeof home === 'number' && typeof away === 'number') {
+                onSave(id, home, away);
+              }
+            }}
+          >
+            {locked ? 'Bloqueado' : saving ? 'A guardar…' : 'Guardar'}
+          </button>
+        </div>
+      )}
 
-      {/* Marca d’água Betano */}
-      <img
-        src="https://www.betano.pt/assets/images/header-logos/logo__betano.svg"
-        alt="Betano"
-        className="absolute bottom-3 left-1/2 -translate-x-1/2 w-20 sm:w-24  pointer-events-none select-none"
-      />
     </div>
   );
 }
@@ -150,12 +371,12 @@ export default function FixtureCard({
 function Crest({ src, alt }: { src?: string | null; alt: string }) {
   return (
     <div className="flex-shrink-0">
-      <div className="h-10 sm:h-12 md:h-14 px-1.5 sm:px-2 flex items-center justify-center">
+      <div className="h-12 sm:h-14 md:h-16 px-1.5 sm:px-2 flex items-center justify-center">
         {src ? (
           <img
             src={src}
             alt={alt}
-            className="block max-h-full w-auto max-w-[64px] sm:max-w-[72px] md:max-w-[84px] object-contain"
+            className="block max-h-full w-auto max-w-[80px] sm:max-w-[96px] md:max-w-[112px] object-contain"
             loading="lazy"
             decoding="async"
           />
@@ -167,18 +388,25 @@ function Crest({ src, alt }: { src?: string | null; alt: string }) {
   );
 }
 
-function ScoreBox({ disabled }: { disabled?: boolean }) {
+function ScoreBox({ disabled, value, onChange }: { disabled?: boolean; value: number | ''; onChange: (v: number | '') => void }) {
   return (
     <input
       type="number"
       min={0}
       step={1}
+      value={value}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (v === '') return onChange('');
+        const n = Number(v);
+        if (Number.isFinite(n) && n >= 0 && n <= 99) onChange(n);
+      }}
       className={clsx(
-        'no-spinner text-center tabular-nums rounded-2xl border',
+        'no-spinner text-center tabular-nums rounded-2xl border placeholder:text-white/70',
         'h-12 w-12 text-xl sm:h-14 sm:w-14 sm:text-2xl md:h-16 md:w-16 md:text-3xl',
         disabled
           ? 'border-white/10 bg-white/[0.09] text-white/40'
-          : 'border-white/15 bg-white/[0.09] hover:bg-white/[0.06] focus:outline-none focus:ring-2 focus:ring-white/20'
+          : 'border-white/20 bg-[#010436] text-white hover:bg-[#010436] focus:outline-none focus:ring-2 focus:ring-white/20'
       )}
       disabled={disabled}
       placeholder="0"

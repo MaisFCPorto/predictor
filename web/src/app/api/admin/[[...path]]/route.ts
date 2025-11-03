@@ -30,7 +30,8 @@ async function forward(req: NextRequest) {
   outgoing.set('cache-control', 'no-store');
 
   // **chave só no servidor** (NUNCA no client)
-  const adminKey = process.env.ADMIN_KEY;
+  const adminKey = process.env.API_ADMIN_KEY || process.env.ADMIN_KEY;
+
   if (adminKey) outgoing.set('x-admin-key', adminKey);
 
   const init: RequestInit = {

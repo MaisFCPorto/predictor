@@ -55,13 +55,13 @@ export default function JogosPage() {
         setLoading(true);
         setError(null);
 
-        // 1) novo endpoint (via proxy Next)
-        //    -> web/src/app/api/public/fixtures/open/route.ts (proxy para o Worker)
-        let list: FixtureDTO[] = await fetchJson('/api/public/fixtures/open');
+        // 1) novo endpoint (via proxy do Next)
+        //    -> /api/fixtures/open (o teu Next encaminha para o Worker)
+        let list: FixtureDTO[] = await fetchJson('/api/fixtures/open');
 
         // 2) fallback para endpoint antigo (se ainda existirem md1)
         if (!Array.isArray(list) || list.length === 0) {
-          list = await fetchJson('/api/public/matchdays/md1/fixtures');
+          list = await fetchJson('/api/matchdays/md1/fixtures');
         }
 
         if (!abort) {

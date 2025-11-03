@@ -1,4 +1,3 @@
-// web/src/app/api/admin/[...path]/route.ts
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -9,8 +8,8 @@ const ADMIN_KEY = process.env.ADMIN_KEY!;
 
 function upstreamUrl(restPath: string) {
   const base = API?.replace(/\/+$/, '') ?? '';
-  const path = restPath.replace(/^\/+/, '');
-  return `${base}/api/${path}`;
+  const path = (restPath || '').replace(/^\/+/, '');
+  return `${base}/api/${path}`;           // ex: https://.../api/teams
 }
 
 async function forward(req: Request, restPath: string) {
@@ -23,7 +22,7 @@ async function forward(req: Request, restPath: string) {
 
   const url = upstreamUrl(restPath);
   const method = req.method.toUpperCase();
-  const hasBody = method === 'POST' || method === 'PATCH' || method === 'PUT';
+  const hasBody = /^(POST|PUT|PATCH)$/i.test(method);
   const body = hasBody ? await req.text() : undefined;
 
   const headers: Record<string, string> = { 'X-Admin-Key': ADMIN_KEY };
@@ -48,23 +47,14 @@ async function forward(req: Request, restPath: string) {
   }
 }
 
-export async function GET(req: Request, ctx: any) {
-  const rest = (ctx?.params?.path ?? []).join('/');
-  return forward(req, rest);
+function seg(ctx: any) {
+  // para [[...path]] pode ser undefined
+  const arr = (ctx?.params?.path ?? []) as string[];
+  return arr.join('/');
 }
-export async function POST(req: Request, ctx: any) {
-  const rest = (ctx?.params?.path ?? []).join('/');
-  return forward(req, rest);
-}
-export async function PATCH(req: Request, ctx: any) {
-  const rest = (ctx?.params?.path ?? []).join('/');
-  return forward(req, rest);
-}
-export async function PUT(req: Request, ctx: any) {
-  const rest = (ctx?.params?.path ?? []).join('/');
-  return forward(req, rest);
-}
-export async function DELETE(req: Request, ctx: any) {
-  const rest = (ctx?.params?.path ?? []).join('/');
-  return forward(req, rest);
-}
+
+export async function GET(req: Request, ctx: any)    { return forward(req, seg(ctx)); }
+export async function POST(req: Request, ctx: any)   { return forward(req, seg(ctx)); }
+export async function PATCH(req: Request, ctx: any)  { return forward(req, seg(ctx)); }
+export async function PUT(req: Request, ctx: any)    { return forward(req, seg(ctx)); }
+export async function DELETE(req: Request, ctx: any) { return forward(req, seg(ctx)); }

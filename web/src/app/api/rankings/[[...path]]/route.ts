@@ -1,47 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Usa o URL do teu Worker (tem de existir em Vercel)
 const UPSTREAM = process.env.API_BASE || process.env.NEXT_PUBLIC_API_URL_BASE;
 
 function buildTarget(req: NextRequest) {
   const rest = req.nextUrl.pathname.replace(/^\/api\/rankings\/?/, '');
-  const qs = req.nextUrl.search; // inclui ?...
+  const qs = req.nextUrl.search || '';
   return `${UPSTREAM}/api/rankings/${rest}${qs}`;
 }
 
 async function forward(req: NextRequest) {
-  if (!UPSTREAM) {
-    return NextResponse.json({ error: 'Server misconfig: API_BASE missing' }, { status: 500 });
-  }
-  const target = buildTarget(req);
-
-  const outgoing = new Headers(req.headers);
-  outgoing.set('cache-control', 'no-store'); // evita cache
+  if (!UPSTREAM) return NextResponse.json({ error: 'API_BASE missing' }, { status: 500 });
 
   const init: RequestInit = {
     method: req.method,
-    headers: outgoing,
+    headers: req.headers,
     body: req.method === 'GET' || req.method === 'HEAD' ? undefined : (await req.blob()) as any,
-    redirect: 'manual',
     cache: 'no-store',
+    redirect: 'manual',
   };
 
-  const upstream = await fetch(target, init);
-
-  const resHeaders = new Headers();
-  upstream.headers.forEach((v, k) => {
-    if (k.toLowerCase() !== 'content-encoding') resHeaders.set(k, v);
-  });
-
+  const upstream = await fetch(buildTarget(req), init);
   const body = await upstream.arrayBuffer();
-  return new NextResponse(body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: resHeaders,
-  });
+  const headers = new Headers();
+  upstream.headers.forEach((v, k) => { if (k !== 'content-encoding') headers.set(k, v); });
+  return new NextResponse(body, { status: upstream.status, statusText: upstream.statusText, headers });
 }
 
 export async function GET(req: NextRequest, _ctx: any)    { return forward(req); }

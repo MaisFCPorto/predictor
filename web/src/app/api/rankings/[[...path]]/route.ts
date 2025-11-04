@@ -1,45 +1,49 @@
 // web/src/app/api/rankings/[[...path]]/route.ts
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const UPSTREAM = process.env.API_BASE; // ex: https://predictor-porto-api.predictorporto.workers.dev
+const UPSTREAM = process.env.API_BASE || process.env.NEXT_PUBLIC_API_URL_BASE;
 
 function buildTarget(req: NextRequest) {
+  // tira o prefixo /api para espelhar no Worker
   const rest = req.nextUrl.pathname.replace(/^\/api\/rankings\/?/, '');
   const qs = req.nextUrl.search || '';
-  return `${UPSTREAM}/api/rankings/${rest}${qs}`;
+  const base = `${UPSTREAM}/api/rankings`;
+  return rest ? `${base}/${rest}${qs}` : `${base}${qs}`;
 }
 
 async function forward(req: NextRequest) {
   if (!UPSTREAM) {
-    return new Response(JSON.stringify({ error: 'Server misconfig: API_BASE missing' }),
-      { status: 500, headers: { 'content-type': 'application/json' } });
+    return NextResponse.json({ error: 'API_BASE missing' }, { status: 500 });
   }
 
-  const target = buildTarget(req);
-  const headers = new Headers(req.headers);
-  headers.set('cache-control', 'no-store'); // nunca cache
+  const url = buildTarget(req);
+  try {
+    const r = await fetch(url, { cache: 'no-store', headers: { accept: 'application/json' } });
 
-  const init: RequestInit = {
-    method: req.method,
-    headers,
-    body: (req.method === 'GET' || req.method === 'HEAD') ? undefined : await req.blob(),
-    redirect: 'manual',
-    cache: 'no-store',
-  };
+    const buf = await r.arrayBuffer();
+    const h = new Headers();
+    r.headers.forEach((v, k) => { if (k.toLowerCase() !== 'content-encoding') h.set(k, v); });
 
-  const upstream = await fetch(target, init);
-  const resHeaders = new Headers();
-  upstream.headers.forEach((v, k) => { if (k.toLowerCase() !== 'content-encoding') resHeaders.set(k, v); });
-  const body = await upstream.arrayBuffer();
-
-  return new Response(body, { status: upstream.status, statusText: upstream.statusText, headers: resHeaders });
+    // devolve algum contexto se o upstream não devolver JSON
+    const isJson = (h.get('content-type') || '').includes('application/json');
+    if (!r.ok || !isJson) {
+      const snippet = Buffer.from(buf).toString('utf8').slice(0, 200);
+      return NextResponse.json(
+        { where: '/api/rankings/*', upstream: url, status: r.status, contentType: h.get('content-type'), snippet },
+        { status: r.status }
+      );
+    }
+    return new NextResponse(buf, { status: r.status, headers: h });
+  } catch (e: any) {
+    return NextResponse.json({ where: '/api/rankings/*', upstream: url, error: String(e?.message || e) }, { status: 500 });
+  }
 }
 
-export async function GET(req: NextRequest, _ctx: any)    { return forward(req); }
-export async function POST(req: NextRequest, _ctx: any)   { return forward(req); }
-export async function PUT(req: NextRequest, _ctx: any)    { return forward(req); }
-export async function PATCH(req: NextRequest, _ctx: any)  { return forward(req); }
-export async function DELETE(req: NextRequest, _ctx: any) { return forward(req); }
+export async function GET(req: NextRequest)    { return forward(req); }
+export async function POST(req: NextRequest)   { return forward(req); }
+export async function PATCH(req: NextRequest)  { return forward(req); }
+export async function PUT(req: NextRequest)    { return forward(req); }
+export async function DELETE(req: NextRequest) { return forward(req); }

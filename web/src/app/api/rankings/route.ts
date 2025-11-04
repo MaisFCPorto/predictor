@@ -1,51 +1,45 @@
-// web/src/app/api/rankings/route.ts
-import type { NextRequest } from 'next/server';
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const UPSTREAM = process.env.API_BASE!;
+import { NextRequest, NextResponse } from 'next/server';
 
-function targetBase(req: NextRequest) {
-  const qs = req.nextUrl.search || '';
-  return `${UPSTREAM}/api/rankings${qs}`;
-}
+const UPSTREAM = process.env.API_BASE || process.env.NEXT_PUBLIC_API_BASE;
 
-async function forward(req: NextRequest) {
+export async function GET(req: NextRequest) {
   if (!UPSTREAM) {
-    return new Response(JSON.stringify({ error: 'Server misconfig: API_BASE missing' }), {
-      status: 500,
-      headers: { 'content-type': 'application/json' },
-    });
+    return NextResponse.json({ error: 'API_BASE missing' }, { status: 500 });
   }
 
-  const headers = new Headers(req.headers);
-  headers.set('cache-control', 'no-store');
+  try {
+    const url = `${UPSTREAM}/api/rankings${req.nextUrl.search || ''}`;
+    const r = await fetch(url, {
+      cache: 'no-store',
+      headers: { accept: 'application/json' },
+    });
 
-  const init: RequestInit = {
-    method: req.method,
-    headers,
-    body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.blob(),
-    redirect: 'manual',
-    cache: 'no-store',
-  };
+    // lê o conteúdo como texto e força JSON se possível
+    const contentType = r.headers.get('content-type') || '';
+    const buf = await r.arrayBuffer();
+    const txt = Buffer.from(buf).toString('utf8');
 
-  const upstream = await fetch(targetBase(req), init);
-  const resHeaders = new Headers();
-  upstream.headers.forEach((v, k) => {
-    if (k.toLowerCase() !== 'content-encoding') resHeaders.set(k, v);
-  });
+    if (!r.ok) {
+      return NextResponse.json({ status: r.status, error: txt.slice(0, 200) }, { status: r.status });
+    }
 
-  const body = await upstream.arrayBuffer();
-  return new Response(body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: resHeaders,
-  });
+    if (!contentType.includes('application/json')) {
+      // tenta fazer parse manual do texto
+      try {
+        const data = JSON.parse(txt);
+        return NextResponse.json(data, { status: 200 });
+      } catch {
+        return NextResponse.json({ error: 'Invalid JSON', preview: txt.slice(0, 200) }, { status: 500 });
+      }
+    }
+
+    // devolve JSON decodificado
+    const json = JSON.parse(txt);
+    return NextResponse.json(json, { status: 200 });
+  } catch (e: any) {
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
+  }
 }
-
-export async function GET(req: NextRequest, _ctx: any)    { return forward(req); }
-export async function POST(req: NextRequest, _ctx: any)   { return forward(req); }
-export async function PUT(req: NextRequest, _ctx: any)    { return forward(req); }
-export async function PATCH(req: NextRequest, _ctx: any)  { return forward(req); }
-export async function DELETE(req: NextRequest, _ctx: any) { return forward(req); }

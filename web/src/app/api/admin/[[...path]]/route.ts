@@ -1,15 +1,14 @@
-// src/app/api/admin/[[...path]]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const UPSTREAM = process.env.API_BASE; // ex.: https://predictor-porto-api.predictorporto.workers.dev
+const UPSTREAM = process.env.API_BASE; // https://predictor-porto-api.predictorporto.workers.dev
 
 function buildTarget(req: NextRequest) {
-  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, ''); // strip /api/admin
+  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, '');
   const qs = req.nextUrl.search || '';
-  return `${UPSTREAM}/api/${rest}${qs}`;
+  return `${UPSTREAM}/api/admin/${rest}${qs}`;
 }
 
 async function forward(req: NextRequest) {
@@ -22,7 +21,7 @@ async function forward(req: NextRequest) {
   const outgoing = new Headers(req.headers);
   outgoing.set('cache-control', 'no-store');
 
-  // usa API_ADMIN_KEY ou ADMIN_KEY do Vercel
+  // envia a chave (Vercel) para o Worker
   const adminKey = (process.env.API_ADMIN_KEY || process.env.ADMIN_KEY || '').trim();
   if (adminKey) outgoing.set('x-admin-key', adminKey);
 
@@ -49,7 +48,6 @@ async function forward(req: NextRequest) {
   });
 }
 
-// **não tipar o 2.º argumento**
 export async function GET(req: NextRequest, _ctx: any)   { return forward(req); }
 export async function POST(req: NextRequest, _ctx: any)  { return forward(req); }
 export async function PATCH(req: NextRequest, _ctx: any) { return forward(req); }

@@ -1,14 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
-
+// Roda no server, sem cache
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const UPSTREAM = process.env.API_BASE; // https://predictor-porto-api.predictorporto.workers.dev
+import { NextRequest, NextResponse } from 'next/server';
+
+const UPSTREAM = process.env.API_BASE; // ex.: https://predictor-porto-api.predictorporto.workers.dev
 
 function buildTarget(req: NextRequest) {
+  // tira o prefixo /api/admin e reencaminha para /api/<resto>
   const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, '');
   const qs = req.nextUrl.search || '';
-  return `${UPSTREAM}/api/admin/${rest}${qs}`;
+  return `${UPSTREAM}/api/${rest}${qs}`;
 }
 
 async function forward(req: NextRequest) {
@@ -18,38 +20,39 @@ async function forward(req: NextRequest) {
 
   const target = buildTarget(req);
 
-  const outgoing = new Headers(req.headers);
-  outgoing.set('cache-control', 'no-store');
+  const headers = new Headers(req.headers);
+  headers.set('cache-control', 'no-store');
 
-  // envia a chave (Vercel) para o Worker
+  // chave só no servidor
   const adminKey = (process.env.API_ADMIN_KEY || process.env.ADMIN_KEY || '').trim();
-  if (adminKey) outgoing.set('x-admin-key', adminKey);
+  if (adminKey) headers.set('x-admin-key', adminKey);
 
   const init: RequestInit = {
     method: req.method,
-    headers: outgoing,
-    body: req.method === 'GET' || req.method === 'HEAD' ? undefined : (await req.blob()) as any,
+    headers,
+    body: (req.method === 'GET' || req.method === 'HEAD') ? undefined : await req.blob(),
     redirect: 'manual',
     cache: 'no-store',
   };
 
   const upstream = await fetch(target, init);
 
-  const resHeaders = new Headers();
+  const outHeaders = new Headers();
   upstream.headers.forEach((v, k) => {
-    if (k.toLowerCase() !== 'content-encoding') resHeaders.set(k, v);
+    if (k.toLowerCase() !== 'content-encoding') outHeaders.set(k, v);
   });
 
   const body = await upstream.arrayBuffer();
   return new NextResponse(body, {
     status: upstream.status,
     statusText: upstream.statusText,
-    headers: resHeaders,
+    headers: outHeaders,
   });
 }
 
-export async function GET(req: NextRequest, _ctx: any)   { return forward(req); }
-export async function POST(req: NextRequest, _ctx: any)  { return forward(req); }
-export async function PATCH(req: NextRequest, _ctx: any) { return forward(req); }
-export async function PUT(req: NextRequest, _ctx: any)   { return forward(req); }
-export async function DELETE(req: NextRequest, _ctx: any){ return forward(req); }
+// NÃO tipar o 2º arg para evitar erros na build
+export async function GET(req: NextRequest, _ctx: any)    { return forward(req); }
+export async function POST(req: NextRequest, _ctx: any)   { return forward(req); }
+export async function PATCH(req: NextRequest, _ctx: any)  { return forward(req); }
+export async function PUT(req: NextRequest, _ctx: any)    { return forward(req); }
+export async function DELETE(req: NextRequest, _ctx: any) { return forward(req); }

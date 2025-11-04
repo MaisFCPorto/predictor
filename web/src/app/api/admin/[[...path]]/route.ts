@@ -1,16 +1,15 @@
-// Roda no servidor e sem cache
+// src/app/api/admin/[[...path]]/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
+const UPSTREAM = process.env.API_BASE; // ex.: https://predictor-porto-api.predictorporto.workers.dev
 
-const UPSTREAM = process.env.API_BASE!; // ex.: https://predictor-porto-api.predictorporto.workers.dev
-
-function buildTarget(u: URL) {
-  // Mantém /admin — só retiramos o prefixo /api do Next
-  const qs = u.search ?? '';
-  const pathWithoutApi = u.pathname.replace(/^\/api/, ''); // "/admin/competitions"
-  return `${UPSTREAM}/api${pathWithoutApi}${qs}`;          // "…/api/admin/competitions"
+function buildTarget(req: NextRequest) {
+  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, ''); // strip /api/admin
+  const qs = req.nextUrl.search || '';
+  return `${UPSTREAM}/api/${rest}${qs}`;
 }
 
 async function forward(req: NextRequest) {
@@ -18,12 +17,14 @@ async function forward(req: NextRequest) {
     return NextResponse.json({ error: 'Server misconfig: API_BASE missing' }, { status: 500 });
   }
 
-  const adminKey = (process.env.API_ADMIN_KEY ?? process.env.ADMIN_KEY ?? '').trim();
+  const target = buildTarget(req);
 
-  // Copiamos headers do cliente e forçamos no-store
   const outgoing = new Headers(req.headers);
   outgoing.set('cache-control', 'no-store');
-  if (adminKey) outgoing.set('x-admin-key', adminKey); // chave só no servidor
+
+  // usa API_ADMIN_KEY ou ADMIN_KEY do Vercel
+  const adminKey = (process.env.API_ADMIN_KEY || process.env.ADMIN_KEY || '').trim();
+  if (adminKey) outgoing.set('x-admin-key', adminKey);
 
   const init: RequestInit = {
     method: req.method,
@@ -33,21 +34,24 @@ async function forward(req: NextRequest) {
     cache: 'no-store',
   };
 
-  const upstream = await fetch(buildTarget(req.nextUrl), init);
+  const upstream = await fetch(target, init);
 
-  const headers = new Headers(upstream.headers);
-  headers.delete('content-encoding'); // evita problemas de streaming
+  const resHeaders = new Headers();
+  upstream.headers.forEach((v, k) => {
+    if (k.toLowerCase() !== 'content-encoding') resHeaders.set(k, v);
+  });
 
   const body = await upstream.arrayBuffer();
   return new NextResponse(body, {
     status: upstream.status,
     statusText: upstream.statusText,
-    headers,
+    headers: resHeaders,
   });
 }
 
-export const GET = forward;
-export const POST = forward;
-export const PATCH = forward;
-export const PUT = forward;
-export const DELETE = forward;
+// **não tipar o 2.º argumento**
+export async function GET(req: NextRequest, _ctx: any)   { return forward(req); }
+export async function POST(req: NextRequest, _ctx: any)  { return forward(req); }
+export async function PATCH(req: NextRequest, _ctx: any) { return forward(req); }
+export async function PUT(req: NextRequest, _ctx: any)   { return forward(req); }
+export async function DELETE(req: NextRequest, _ctx: any){ return forward(req); }

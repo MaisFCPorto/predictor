@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import FixtureCard from '@/components/FixtureCard';
 import FixtureSkeleton from '@/components/FixtureSkeleton';
 import { supabasePKCE } from '@/utils/supabase/client';
@@ -9,25 +9,34 @@ import toast, { Toaster } from 'react-hot-toast';
 
 type FixtureDTO = {
   id: string;
-  kickoff_at: string;            // UTC
+  kickoff_at: string; // UTC
   status: 'SCHEDULED' | 'FINISHED' | string;
   home_team_name: string;
   away_team_name: string;
   home_crest: string | null;
   away_crest: string | null;
-
-  // novos
   competition_id: string | null;
-  competition_code: string | null;  // p/ pill (LP/LE/TP/TL…)
-  round_label: string | null;       // J1, QF, SF, F, M1…
+  competition_code: string | null; // LP/LE/TP/TL…
+  round_label: string | null;      // J1, QF, SF, F, M1…
   leg: number | null;
-
-  // lock calculado pela API
   is_locked: boolean;
   lock_at_utc?: string | null;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+/** Helper que garante JSON (evita erro quando o Worker devolve HTML) */
+async function fetchJson(url: string) {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`${url} → (${res.status}) ${res.statusText}${txt ? ` — ${txt.slice(0, 140)}…` : ''}`);
+  }
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`${url} → resposta não-JSON: ${txt.slice(0, 140)}…`);
+  }
+  return res.json();
+}
 
 export default function JogosPage() {
   const [loading, setLoading] = useState(true);
@@ -35,7 +44,6 @@ export default function JogosPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // carrega jogos (novo endpoint) com fallback
   useEffect(() => {
     let abort = false;
     (async () => {
@@ -43,19 +51,15 @@ export default function JogosPage() {
         setLoading(true);
         setError(null);
 
-        // 1) tenta o novo
-        let res = await fetch(`${API_BASE}/api/fixtures/open`, { cache: 'no-store' });
-        if (res.status === 404) {
-          // 2) fallback para o antigo (se ainda existirem md1)
-          res = await fetch(`${API_BASE}/api/matchdays/md1/fixtures`, { cache: 'no-store' });
-        }
-        if (!res.ok) {
-          const txt = await res.text().catch(() => '');
-          throw new Error(`(${res.status}) ${res.statusText} ${txt}`.trim());
-        }
-        const list: FixtureDTO[] = await res.json();
+        // 1) novo endpoint via proxy do Next
+        let list: FixtureDTO[] = await fetchJson('/api/fixtures/open');
 
-        if (!abort) setFixtures(list); // keep all fixtures; we'll split below
+        // 2) fallback para o endpoint antigo (se necessário)
+        if (!Array.isArray(list) || list.length === 0) {
+          list = await fetchJson('/api/matchdays/md1/fixtures');
+        }
+
+        if (!abort) setFixtures(list);
       } catch (e: any) {
         if (!abort) setError(e?.message ?? 'Erro a carregar jogos');
       } finally {
@@ -64,6 +68,17 @@ export default function JogosPage() {
     })();
     return () => { abort = true; };
   }, []);
+
+  // ordenar por kickoff
+  const sorted = useMemo(
+    () =>
+      [...fixtures].sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime()),
+    [fixtures]
+  );
+
+  // separar abertos vs bloqueados/passados
+  const openFixtures = sorted.filter(f => f.status === 'SCHEDULED' && !f.is_locked);
+  const lockedFixtures = sorted.filter(f => f.is_locked || f.status === 'FINISHED');
 
   // guardar palpite
   async function onSave(fixtureId: string, home: number, away: number) {
@@ -82,23 +97,17 @@ export default function JogosPage() {
     }
   }
 
-  // split fixtures
-  const openFixtures = fixtures.filter(f => f.status === 'SCHEDULED' && !f.is_locked);
-  const lockedFixtures = fixtures.filter(f => f.is_locked || f.status === 'FINISHED');
-
   return (
     <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-10">
       <Toaster position="top-center" />
 
       <div className="mx-auto w-full max-w-none space-y-10">
-        {/* Error banner */}
         {error && (
-          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm break-words">
             {error}
           </div>
         )}
 
-        {/* Loading skeletons */}
         {loading && (
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -107,7 +116,6 @@ export default function JogosPage() {
           </div>
         )}
 
-        {/* Open fixtures */}
         {!loading && (
           <section>
             <h2 className="text-2xl font-bold mb-4">Jogos em aberto</h2>
@@ -139,7 +147,6 @@ export default function JogosPage() {
           </section>
         )}
 
-        {/* Locked fixtures */}
         {!loading && (
           <section>
             <h2 className="text-2xl font-bold mb-4">Jogos passados</h2>

@@ -1,4 +1,4 @@
-// web/src/app/api/rankings/[...rest]/route.ts
+// web/src/app/api/rankings/route.ts
 import type { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -6,11 +6,9 @@ export const dynamic = 'force-dynamic';
 
 const UPSTREAM = process.env.API_BASE!;
 
-function targetFor(req: NextRequest) {
-  // remove o prefixo '/api/rankings' e preserva os segmentos seguintes
-  const rest = req.nextUrl.pathname.replace(/^\/api\/rankings\/?/, '');
+function targetBase(req: NextRequest) {
   const qs = req.nextUrl.search || '';
-  return `${UPSTREAM}/api/rankings/${rest}${qs}`;
+  return `${UPSTREAM}/api/rankings${qs}`;
 }
 
 async function forward(req: NextRequest) {
@@ -32,7 +30,7 @@ async function forward(req: NextRequest) {
     cache: 'no-store',
   };
 
-  const upstream = await fetch(targetFor(req), init);
+  const upstream = await fetch(targetBase(req), init);
   const resHeaders = new Headers();
   upstream.headers.forEach((v, k) => {
     if (k.toLowerCase() !== 'content-encoding') resHeaders.set(k, v);

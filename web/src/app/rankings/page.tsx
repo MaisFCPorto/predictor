@@ -21,7 +21,21 @@ type GameLite = {
   round_label?: string | null;      // 'J1', 'QF', 'SF', 'F', ...
 };
 
-const API = process.env.NEXT_PUBLIC_API_BASE!;
+// --- helpers ---------------------------------------------------------------
+
+async function fetchJson(url: string) {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`(${res.status}) ${res.statusText}${txt ? ` — ${txt.slice(0, 160)}…` : ''}`);
+  }
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`Resposta não-JSON: ${txt.slice(0, 160)}…`);
+  }
+  return res.json();
+}
 
 function currentYM() {
   const d = new Date();
@@ -54,6 +68,8 @@ function gameLabel(g: GameLite) {
   return `${when} — ${g.home_team_name} vs ${g.away_team_name}${comp}${rnd}`;
 }
 
+// --- component -------------------------------------------------------------
+
 export default function RankingsPage() {
   const [mode, setMode] = useState<'general' | 'monthly' | 'bygame'>('general');
 
@@ -72,8 +88,7 @@ export default function RankingsPage() {
 
   // Carrega meses (para o modo mensal)
   useEffect(() => {
-    fetch(`${API}/api/rankings/months`)
-      .then((r) => (r.ok ? r.json() : []))
+    fetchJson('/api/rankings/months')
       .then((list: string[]) => {
         setMonths(list);
         if (list.length) {
@@ -88,37 +103,30 @@ export default function RankingsPage() {
   useEffect(() => {
     if (mode !== 'bygame') return;
     setErr(null);
-    fetch(`${API}/api/rankings/games`, { cache: 'no-store' })
-      .then(async (r) => {
-        if (!r.ok) throw new Error('Falha a carregar jogos');
-        const list: GameLite[] = await r.json();
+    fetchJson('/api/rankings/games')
+      .then((list: GameLite[]) => {
         setGames(list);
         // default = mais recente (assumindo que a API devolve por kickoff desc)
         if (list?.length && !fixtureId) setFixtureId(list[0].id);
       })
       .catch((e: any) => setErr(e?.message ?? 'Erro a carregar jogos'));
-    // não resetamos fixtureId ao sair do modo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   // Carrega ranking consoante o modo
   useEffect(() => {
-    let url = `${API}/api/rankings`;
+    let url = '/api/rankings';
     if (mode === 'monthly') {
-      url = `${API}/api/rankings?ym=${encodeURIComponent(ym)}`;
+      url = `/api/rankings?ym=${encodeURIComponent(ym)}`;
     } else if (mode === 'bygame') {
       if (!fixtureId) return; // espera pelo fixtureId default
-      url = `${API}/api/rankings/game?fixtureId=${encodeURIComponent(fixtureId)}`;
+      url = `/api/rankings/game?fixtureId=${encodeURIComponent(fixtureId)}`;
     }
 
     setLoading(true);
     setErr(null);
-    fetch(url, { cache: 'no-store' })
-      .then(async (r) => {
-        if (!r.ok) throw new Error('Falha a carregar ranking');
-        const data: Row[] = await r.json();
-        setRows(data);
-      })
+    fetchJson(url)
+      .then((data: Row[]) => setRows(data))
       .catch((e: any) => setErr(e?.message ?? 'Erro a carregar ranking'))
       .finally(() => setLoading(false));
   }, [mode, ym, fixtureId]);

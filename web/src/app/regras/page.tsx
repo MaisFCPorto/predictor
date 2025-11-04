@@ -67,13 +67,13 @@ export default function RegrasPage() {
         </ul>
         <p className="mt-3 text-sm text-white/60">
           Ex.: jogo termina 2–1. Quem apostou 2–1 recebe 5; quem apostou 3–2 recebe 3;
-          quem apostou 1–0 recebe 1; quem apostou 0–2 recebe 0.
+          quem apostou 2–0 recebe 1; quem apostou 0–2 recebe 0.
         </p>
       </RuleCard>
 
       <RuleCard id="fecho" title="Fecho e bloqueios">
         <ul className="space-y-2 text-white/80">
-          <li>• Os palpites fecham alguns minutos antes do apito inicial.</li>
+          <li>• Os palpites fecham à hora para a qual o jogo está agendado.</li>
           <li>• Um contador indica quando o jogo será bloqueado.</li>
           <li>• Palpites após o fecho não são considerados.</li>
         </ul>
@@ -85,7 +85,7 @@ export default function RegrasPage() {
           <li>Mais acertos <span className="font-semibold">exatos</span>;</li>
           <li>Mais acertos de <span className="font-semibold">diferença</span>;</li>
           <li>
-            Antiguidade do palpite (timestamp) — quem submeteu primeiro tem vantagem.
+            Antiguidade do palpite (timestamp) - quem submeteu primeiro tem vantagem.
           </li>
         </ol>
       </RuleCard>
@@ -93,6 +93,7 @@ export default function RegrasPage() {
       <RuleCard id="elegibilidade" title="Elegibilidade aos prémios">
         <ul className="space-y-2 text-white/80">
           <li>• Maior de idade; conta válida e sem comportamentos abusivos.</li>
+          <li>• Conta válida e sem comportamentos abusivos.</li>
           <li>• Seguir o Instagram @maisfcporto (comunicação e validações).</li>
           <li>• Para freebets: conta Betano ativa e verificada através do link de parceiro.</li>
           <li>• Podemos solicitar prova de identidade e/ou dados mínimos para entrega.</li>
@@ -102,7 +103,7 @@ export default function RegrasPage() {
       <RuleCard id="conduta" title="Conduta e fair-play">
         <ul className="space-y-2 text-white/80">
           <li>• Proibido uso de múltiplas contas, bots ou manipulação.</li>
-          <li>• Reservamo-nos o direito de remover participantes que quebrem regras.</li>
+          <li>• Reservamo-nos o direito de excluir participantes que quebrem regras.</li>
         </ul>
       </RuleCard>
 
@@ -122,7 +123,7 @@ export default function RegrasPage() {
         />
         <CtaButton
           label="Criar conta Betano"
-          href="https://betano.pt/??parceiro=teu_codigo" // substitui pelo teu link de afiliado
+          href="https://gml-grp.com/C.ashx?btag=a_15985b_289c_&affid=5177&siteid=15985&adid=289&c=&asclurl=https://promos.betano.pt/confia-fcporto/index.html?cod=MAISFCP "
         />
       </div>
     </main>

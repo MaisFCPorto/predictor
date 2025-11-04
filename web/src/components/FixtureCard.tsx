@@ -128,6 +128,23 @@ export default function FixtureCard({
   const [away, setAway] = useState<number | ''>('');
   const canSave = !nowLocked && home !== '' && away !== '';
 
+  // Points display for past fixtures (example logic; replace with real data when available)
+  const pointsBadge = useMemo(() => {
+    if (variant !== 'past') return null;
+    // Replace with real prediction data when available; for now, stub based on fixture state
+    const stubPoints = Math.random() > 0.8 ? null : Math.floor(Math.random() * 6); // 0..5 or null
+    if (stubPoints === null) {
+      return { label: 'Sem participação', className: 'bg-gray-500/15 text-gray-300' };
+    }
+    switch (stubPoints) {
+      case 5: return { label: '+5 pontos', className: 'bg-green-500/25 text-green-100' };
+      case 3: return { label: '+3 pontos', className: 'bg-green-400/25 text-green-50' };
+      case 1: return { label: '+1 ponto', className: 'bg-amber-400/25 text-amber-50' };
+      case 0: return { label: '0 pontos', className: 'bg-red-500/25 text-red-100' };
+      default: return { label: '0 pontos', className: 'bg-red-500/25 text-red-100' };
+    }
+  }, [variant]);
+
   const watermarkUrl = useMemo(() => {
     switch (competition_code) {
       case 'TP':
@@ -284,51 +301,53 @@ export default function FixtureCard({
         </div>
 
         {/* SCORE */}
-        <div className="relative flex items-center justify-center w-[45%]">
-          <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4">
+        <div className="flex items-center justify-center w-[45%]">
+          <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
             <ScoreBox
               disabled={nowLocked}
               value={home}
               onChange={(v) => setHome(v)}
             />
             <span className="opacity-60 text-white text-xl sm:text-2xl">–</span>
-            <ScoreBox
-              disabled={locked}
-              value={away}
-              onChange={(v) => setAway(v)}
-            />
+            <div className="relative flex items-center">
+              <ScoreBox
+                disabled={locked}
+                value={away}
+                onChange={(v) => setAway(v)}
+              />
+              {/* Save icon on wider screens (right of away score, absolute to avoid layout shift) */}
+              {variant !== 'past' && (
+                <button
+                  type="button"
+                  disabled={!canSave || !!saving}
+                  className={clsx(
+                    'hidden md:flex absolute left-full top-1/2 -translate-y-1/2 items-center justify-center w-10 h-10 rounded-full transition ml-2',
+                    !canSave ? 'md:hidden' : '', // hide icon unless both inputs are filled
+                    saving
+                      ? 'bg-white/5 text-white/40 cursor-not-allowed'
+                      : 'bg-white/10 hover:bg-white/15 text-white'
+                  )}
+                  onClick={() => {
+                    if (typeof home === 'number' && typeof away === 'number') {
+                      onSave(id, home, away);
+                    }
+                  }}
+                  title="Guardar palpite"
+                >
+                  {saving ? (
+                    <svg className="animate-spin h-5 w-5 text-white/60" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+                    </svg>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
-          {/* Save icon on wider screens (inside the score container) */}
-          {variant !== 'past' && (
-            <button
-              type="button"
-              disabled={!canSave || !!saving}
-              className={clsx(
-                'hidden md:flex absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 items-center justify-center w-10 h-10 rounded-full transition',
-                !canSave ? 'md:hidden' : '', // hide icon unless both inputs are filled
-                saving
-                  ? 'bg-white/5 text-white/40 cursor-not-allowed'
-                  : 'bg-white/10 hover:bg-white/15 text-white'
-              )}
-              onClick={() => {
-                if (typeof home === 'number' && typeof away === 'number') {
-                  onSave(id, home, away);
-                }
-              }}
-              title="Guardar palpite"
-            >
-              {saving ? (
-                <svg className="animate-spin h-5 w-5 text-white/60" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              ) : (
-                <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
-                </svg>
-              )}
-            </button>
-          )}
         </div>
 
         {/* AWAY */}
@@ -339,6 +358,15 @@ export default function FixtureCard({
           </div>
         </div>
       </div>
+
+      {/* Points badge for past fixtures */}
+      {pointsBadge && (
+        <div className="flex justify-center mt-2">
+          <span className={clsx('inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none', pointsBadge.className)}>
+            {pointsBadge.label}
+          </span>
+        </div>
+      )}
 
       {/* Mobile Guardar button centered below score */}
       {variant !== 'past' && (

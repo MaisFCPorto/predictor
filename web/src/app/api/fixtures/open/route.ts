@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
   } catch (e:any) {
     return NextResponse.json({ where:'/api/fixtures/open', upstream:url, error:String(e?.message || e) }, { status: 500 });
   }
+}
 // export async function GET() {
 //   const baseEnv = process.env.API_BASE || process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8787';
 //   try {

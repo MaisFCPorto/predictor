@@ -6,12 +6,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const UPSTREAM = process.env.API_BASE; // ex.: https://predictor-porto-api.predictorporto.workers.dev
 
+
 function buildTarget(req: NextRequest) {
-  // remove só o prefixo /api do Next, mantendo /admin/...
-  const rest = req.nextUrl.pathname.replace(/^\/api\/?/, '');  // <- mantém "admin"
+  // remove o prefixo local /api/admin e reencaminha para o worker em /api/admin/<rest>
+  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, '');
   const qs = req.nextUrl.search || '';
-  // destino passa a /admin/fixtures/... no Worker
-  return `${UPSTREAM}/${rest}${qs}`;
+  return `${UPSTREAM}/api/admin/${rest}${qs}`; // <-- mantém 'admin' aqui
 }
 
 async function forward(req: NextRequest) {

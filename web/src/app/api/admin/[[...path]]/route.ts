@@ -7,9 +7,11 @@ import { NextRequest, NextResponse } from 'next/server';
 const UPSTREAM = process.env.API_BASE; // ex.: https://<teu-worker>.workers.dev
 
 function buildTarget(req: NextRequest) {
-  // Não alteres o path — reencaminha tal e qual
+  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, '');
   const qs = req.nextUrl.search || '';
-  return `${UPSTREAM}${req.nextUrl.pathname}${qs}`;
+  // evita '//' quando rest está vazio
+  const suffix = rest ? `/${rest}` : '';
+  return `${UPSTREAM}/api/admin${suffix}${qs}`;
 }
 
 async function forward(req: NextRequest) {

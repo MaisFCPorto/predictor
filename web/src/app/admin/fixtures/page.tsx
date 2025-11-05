@@ -13,20 +13,15 @@ import AdminGate from '../_components/AdminGate';
  * Não uses NEXT_PUBLIC_ADMIN_KEY aqui (nunca exponhas a secret no browser).
  */
 const adm = axios.create({
-  // baseURL vazio => todos os pedidos são relativos ao mesmo host (Next)
-  baseURL: '',
+  baseURL: '', // relativo ao mesmo host
 });
 
 adm.interceptors.response.use(
   (res) => res,
   (error) => {
     const status = error?.response?.status;
-    if (status === 401) {
-      alert('Sessão expirada ou em falta. Faz login novamente.');
-    }
-    if (status === 403) {
-      alert('Acesso negado (precisas de ser admin).');
-    }
+    if (status === 401) alert('Sessão expirada ou em falta. Faz login novamente.');
+    if (status === 403) alert('Acesso negado (precisas de ser admin).');
     return Promise.reject(error);
   }
 );
@@ -37,12 +32,13 @@ type Competition = { id: string; code: string; name: string };
 
 type Fx = {
   id: string;
-  competition_id?: string | null;
+  competition_id?: string | null;       // <- ID (UUID) da competition
+  competition_code?: string | null;     // <- pode vir da API (fallback)
   round_label?: string | null;
   leg_number?: number | null;
   home_team_id: string;
   away_team_id: string;
-  kickoff_at: string; // UTC
+  kickoff_at: string; // UTC (YYYY-MM-DD HH:mm:ss)
   status: 'SCHEDULED' | 'FINISHED' | string;
   home_score?: number | null;
   away_score?: number | null;
@@ -102,7 +98,7 @@ export default function AdminFixtures() {
 
   const [creating, setCreating] = useState(false);
   const [newFx, setNewFx] = useState<{
-    competition_id: string | '';
+    competition_id: string | ''; // <- guarda o ID (não o code)
     round_label: string;
     leg_number: '' | '1' | '2';
     home_team_id: string;
@@ -137,6 +133,7 @@ export default function AdminFixtures() {
     const { data } = await adm.get<Team[]>('/api/admin/teams', { headers: { 'cache-control': 'no-store' } });
     setTeams(data);
   }
+
   async function loadCompetitions() {
     try {
       const { data } = await adm.get<Competition[]>('/api/admin/competitions', { headers: { 'cache-control': 'no-store' } });
@@ -145,45 +142,78 @@ export default function AdminFixtures() {
       setCompetitions([]);
     }
   }
+
   async function loadFixtures() {
     setLoading(true);
     try {
       const { data } = await adm.get('/api/admin/fixtures', { headers: { 'cache-control': 'no-store' } });
-      const list: Fx[] = (data ?? []).map((x: any) => ({ ...x, _hs: x.home_score ?? '', _as: x.away_score ?? '' }));
+
+      // mapa code -> id para fallback
+      const byCode = new Map(competitions.map(c => [c.code, c.id]));
+
+      const list: Fx[] = (data ?? []).map((x: any) => ({
+        ...x,
+        // se a API devolver competition_code, converte para competition_id (id)
+        competition_id:
+          x.competition_id ??
+          (x.competition_code ? byCode.get(x.competition_code) ?? null : null),
+        _hs: x.home_score ?? '',
+        _as: x.away_score ?? '',
+      }));
+
       setFixtures(list);
     } catch (e: any) {
-      const msg = e?.response?.data?.error || 'Falha a carregar jogos (podes não ter permissões).';
-      alert(msg);
+      alert(e?.response?.data?.error || 'Falha a carregar jogos (podes não ter permissões).');
       setFixtures([]);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { void loadTeams(); void loadCompetitions(); void loadFixtures(); }, []);
+  useEffect(() => { void loadTeams(); void loadCompetitions(); }, []);
+  useEffect(() => { void loadFixtures(); /* recarrega quando já tivermos competitions */ }, [competitions.length]);
 
   /* -------------------- Mutations -------------------- */
   async function updateField(id: string, patch: Partial<Fx>) {
-    await adm.patch(`/api/admin/fixtures/${id}`, patch);
-    notify('Atualizado ✅');
-    await loadFixtures();
+    try {
+      await adm.patch(`/api/admin/fixtures/${id}`, patch);
+      notify('Atualizado ✅');
+      await loadFixtures();
+    } catch (e) {
+      alert(errorMessage(e));
+    }
   }
+
   async function finishFixture(id: string, hs: number, as: number) {
-    await adm.patch(`/api/admin/fixtures/${id}/result`, { home_score: Number(hs || 0), away_score: Number(as || 0) });
-    notify('Fechado ✅');
-    await loadFixtures();
+    try {
+      await adm.patch(`/api/admin/fixtures/${id}/result`, { home_score: Number(hs || 0), away_score: Number(as || 0) });
+      notify('Fechado ✅');
+      await loadFixtures();
+    } catch (e) {
+      alert(errorMessage(e));
+    }
   }
+
   async function reopenFixture(id: string) {
-    await adm.patch(`/api/admin/fixtures/${id}/reopen`, {});
-    notify('Reaberto ✅');
-    await loadFixtures();
+    try {
+      await adm.patch(`/api/admin/fixtures/${id}/reopen`, {});
+      notify('Reaberto ✅');
+      await loadFixtures();
+    } catch (e) {
+      alert(errorMessage(e));
+    }
   }
+
   async function deleteFixture(id: string) {
-    const ok = prompt('Para confirmar a eliminação escreve: APAGAR');
-    if (ok !== 'APAGAR') return;
-    await adm.delete(`/api/admin/fixtures/${id}`);
-    notify('Apagado ✅');
-    await loadFixtures();
+    try {
+      const ok = prompt('Para confirmar a eliminação escreve: APAGAR');
+      if (ok !== 'APAGAR') return;
+      await adm.delete(`/api/admin/fixtures/${id}`);
+      notify('Apagado ✅');
+      await loadFixtures();
+    } catch (e) {
+      alert(errorMessage(e));
+    }
   }
 
   async function createFixture() {
@@ -201,7 +231,7 @@ export default function AdminFixtures() {
 
       await adm.post('/api/admin/fixtures', {
         matchday_id,
-        competition_id: competition_id || null,
+        competition_id: competition_id || null,                     // <- ENVIA O ID
         round_label: round_label ? round_label.toUpperCase().slice(0, 3) : null,
         leg_number: leg_number ? Number(leg_number) : null,
         home_team_id,
@@ -267,11 +297,15 @@ export default function AdminFixtures() {
               <label className="text-xs opacity-70">Comp</label>
               <select
                 className="w-full rounded border border-white/10 bg-black/20 px-2 py-1"
-                value={newFx.competition_id}
+                value={newFx.competition_id}                              // <- ID
                 onChange={(e) => setNewFx(v => ({ ...v, competition_id: e.target.value }))}
               >
                 <option value="">—</option>
-                {competitions.map(c => <option key={c.id} value={c.code}>{c.code}</option>)}
+                {competitions.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.code}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -416,15 +450,19 @@ export default function AdminFixtures() {
                   return (
                     <tr key={f.id} className="border-t border-white/10 hover:bg-white/5">
                       {/* Comp */}
-                      <td className="p-2 w-20">
+                      <td className="p-2 w-28">
                         <select
                           className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                          value={f.competition_id ?? ''}
+                          value={f.competition_id ?? ''}               // <- usa ID
                           disabled={isFinished}
                           onChange={(e) => updateField(f.id, { competition_id: e.target.value || null })}
                         >
                           <option value="">—</option>
-                          {competitions.map(c => <option key={c.id} value={c.code}>{c.code}</option>)}
+                          {competitions.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.code}
+                            </option>
+                          ))}
                         </select>
                       </td>
 

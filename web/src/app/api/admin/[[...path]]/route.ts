@@ -4,14 +4,12 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const UPSTREAM = process.env.API_BASE; // ex.: https://predictor-porto-api.predictorporto.workers.dev
-
+const UPSTREAM = process.env.API_BASE; // ex.: https://<teu-worker>.workers.dev
 
 function buildTarget(req: NextRequest) {
-  // remove o prefixo local /api/admin e reencaminha para o worker em /api/admin/<rest>
-  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, '');
+  // Não alteres o path — reencaminha tal e qual
   const qs = req.nextUrl.search || '';
-  return `${UPSTREAM}/api/admin/${rest}${qs}`; // <-- mantém 'admin' aqui
+  return `${UPSTREAM}${req.nextUrl.pathname}${qs}`;
 }
 
 async function forward(req: NextRequest) {
@@ -21,10 +19,11 @@ async function forward(req: NextRequest) {
 
   const target = buildTarget(req);
 
+  // Copia headers e evita cache
   const headers = new Headers(req.headers);
   headers.set('cache-control', 'no-store');
 
-  // chave só no servidor
+  // Chave admin só no servidor
   const adminKey = (process.env.API_ADMIN_KEY || process.env.ADMIN_KEY || '').trim();
   if (adminKey) headers.set('x-admin-key', adminKey);
 
@@ -38,6 +37,7 @@ async function forward(req: NextRequest) {
 
   const upstream = await fetch(target, init);
 
+  // Re-envia a resposta tal e qual (sem content-encoding para evitar gzip duplo)
   const outHeaders = new Headers();
   upstream.headers.forEach((v, k) => {
     if (k.toLowerCase() !== 'content-encoding') outHeaders.set(k, v);
@@ -51,9 +51,9 @@ async function forward(req: NextRequest) {
   });
 }
 
-// NÃO tipar o 2º arg para evitar erros na build
-export async function GET(req: NextRequest, _ctx: any)    { return forward(req); }
-export async function POST(req: NextRequest, _ctx: any)   { return forward(req); }
-export async function PATCH(req: NextRequest, _ctx: any)  { return forward(req); }
-export async function PUT(req: NextRequest, _ctx: any)    { return forward(req); }
-export async function DELETE(req: NextRequest, _ctx: any) { return forward(req); }
+// Exporta todos os métodos
+export async function GET(req: NextRequest)    { return forward(req); }
+export async function POST(req: NextRequest)   { return forward(req); }
+export async function PATCH(req: NextRequest)  { return forward(req); }
+export async function PUT(req: NextRequest)    { return forward(req); }
+export async function DELETE(req: NextRequest) { return forward(req); }

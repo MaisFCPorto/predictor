@@ -264,6 +264,13 @@ app.get('/api/admin/teams', async (c) => {
   return c.json(results);
 });
 
+// --- ADMIN: check -------------------------------------------------
+app.get('/api/admin/check', (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;               // devolve 403 se a x-admin-key não bater certo
+  return c.json({ ok: true });
+});
+
 // ----------------------------------------------------
 // ADMIN: Fixtures (NOVO modelo sem matchday_id obrigatório)
 // ----------------------------------------------------

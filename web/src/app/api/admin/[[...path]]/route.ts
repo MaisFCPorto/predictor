@@ -1,4 +1,3 @@
-// Roda no server (App Router)
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -7,17 +6,21 @@ import { NextRequest, NextResponse } from 'next/server';
 const UPSTREAM = process.env.API_BASE; // ex.: https://predictor-porto-api.predictorporto.workers.dev
 
 function buildTarget(req: NextRequest) {
-  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, ''); // tira /api/admin
+  // tira o prefixo /api/admin/ e reencaminha para o Worker
+  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, '');
   const qs = req.nextUrl.search || '';
   const suffix = rest ? `/${rest}` : '';
   return `${UPSTREAM}/api/admin${suffix}${qs}`;
 }
 
+function missing() {
+  return NextResponse.json({ error: 'API_BASE missing' }, { status: 500 });
+}
+
 async function forward(req: NextRequest) {
-  if (!UPSTREAM) return NextResponse.json({ error: 'API_BASE missing' }, { status: 500 });
+  if (!UPSTREAM) return missing();
 
   const target = buildTarget(req);
-
   const headers = new Headers(req.headers);
   headers.set('cache-control', 'no-store');
 
@@ -29,7 +32,7 @@ async function forward(req: NextRequest) {
     body = await req.arrayBuffer();
   }
 
-  const res = await fetch(target, {
+  const upstream = await fetch(target, {
     method: req.method,
     headers,
     body,
@@ -38,12 +41,15 @@ async function forward(req: NextRequest) {
   });
 
   const out = new Headers();
-  res.headers.forEach((v, k) => { if (k.toLowerCase() !== 'content-encoding') out.set(k, v); });
+  upstream.headers.forEach((v, k) => {
+    if (k.toLowerCase() !== 'content-encoding') out.set(k, v);
+  });
 
-  const buf = await res.arrayBuffer();
-  return new NextResponse(buf, { status: res.status, statusText: res.statusText, headers: out });
+  const buf = await upstream.arrayBuffer();
+  return new NextResponse(buf, { status: upstream.status, headers: out });
 }
 
+// Preflight (alguns browsers fazem OPTIONS mesmo em same-origin)
 export async function OPTIONS() {
   const h = new Headers();
   h.set('Access-Control-Allow-Origin', '*');

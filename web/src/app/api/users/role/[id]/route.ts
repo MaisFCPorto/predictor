@@ -3,23 +3,22 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const UPSTREAM = process.env.API_BASE; // mesmo de cima
+const UPSTREAM = process.env.API_BASE!;
 
-export async function GET(_req: NextRequest, ctx: { params: { id: string } }) {
-  if (!UPSTREAM) return NextResponse.json({ error: 'API_BASE missing' }, { status: 500 });
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  if (!UPSTREAM) {
+    return NextResponse.json({ error: 'API_BASE missing' }, { status: 500 });
+  }
+  const qs = req.nextUrl.search || '';
+  const url = `${UPSTREAM}/api/users/role/${encodeURIComponent(params.id)}${qs}`;
 
-  const id = ctx.params?.id;
-  if (!id) return NextResponse.json({ error: 'missing_id' }, { status: 400 });
-
-  // no worker tens AMBAS as rotas: /api/users/:id/role e /api/users/role/:id
-  // usa a segunda para bater certo com o teu AdminGate:
-  const url = `${UPSTREAM}/api/users/role/${encodeURIComponent(id)}`;
-
-  const res = await fetch(url, { cache: 'no-store' });
-  const data = await res.arrayBuffer();
+  const upstream = await fetch(url, { method: 'GET', headers: req.headers, cache: 'no-store' });
 
   const headers = new Headers();
-  res.headers.forEach((v, k) => { if (k.toLowerCase() !== 'content-encoding') headers.set(k, v); });
+  upstream.headers.forEach((v, k) => {
+    if (k.toLowerCase() !== 'content-encoding') headers.set(k, v);
+  });
 
-  return new NextResponse(data, { status: res.status, statusText: res.statusText, headers });
+  const buf = await upstream.arrayBuffer();
+  return new NextResponse(buf, { status: upstream.status, headers });
 }

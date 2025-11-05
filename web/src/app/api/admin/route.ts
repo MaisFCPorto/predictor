@@ -26,16 +26,15 @@ async function forward(req: NextRequest) {
 
   const target = buildTarget(req);
 
-  // Clona headers de entrada
   const outgoing = new Headers(req.headers);
   outgoing.set('cache-control', 'no-store');
 
-  // chave só no servidor
+  // envia a chave admin do lado do servidor
   const adminKey =
     (process.env.API_ADMIN_KEY || process.env.ADMIN_KEY || '').trim();
   if (adminKey) outgoing.set('x-admin-key', adminKey);
 
-  // Corpo: só para métodos com body
+  // só mete body nos métodos que têm body
   let body: ArrayBuffer | undefined = undefined;
   if (!(req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS')) {
     body = await req.arrayBuffer();
@@ -49,7 +48,6 @@ async function forward(req: NextRequest) {
     cache: 'no-store',
   });
 
-  // Copia headers de resposta (evita content-encoding)
   const outHeaders = new Headers();
   upstream.headers.forEach((v, k) => {
     if (k.toLowerCase() !== 'content-encoding') outHeaders.set(k, v);
@@ -63,11 +61,8 @@ async function forward(req: NextRequest) {
   });
 }
 
-// --- Handlers -------------------------------------------------------------
-
-// Preflight: alguns navegadores/libraries fazem OPTIONS mesmo em same-origin.
-// Damos logo 204 e deixamos o browser seguir com o POST/PATCH.
-export async function OPTIONS(_req: NextRequest) {
+// Preflight
+export async function OPTIONS() {
   const h = new Headers();
   h.set('Access-Control-Allow-Origin', '*');
   h.set('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
@@ -76,8 +71,8 @@ export async function OPTIONS(_req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: h });
 }
 
-export async function GET(req: NextRequest, _ctx: any)    { return forward(req); }
-export async function POST(req: NextRequest, _ctx: any)   { return forward(req); }
-export async function PATCH(req: NextRequest, _ctx: any)  { return forward(req); }
-export async function PUT(req: NextRequest, _ctx: any)    { return forward(req); }
-export async function DELETE(req: NextRequest, _ctx: any) { return forward(req); }
+export async function GET(req: NextRequest)    { return forward(req); }
+export async function POST(req: NextRequest)   { return forward(req); }
+export async function PATCH(req: NextRequest)  { return forward(req); }
+export async function PUT(req: NextRequest)    { return forward(req); }
+export async function DELETE(req: NextRequest) { return forward(req); }

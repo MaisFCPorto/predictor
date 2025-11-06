@@ -4,10 +4,12 @@ import { Hono } from 'hono';
 type Env = { DB: D1Database };
 export const rankings = new Hono<{ Bindings: Env }>();
 
-// ---- Pontuação ----
+/* ============================
+   Pontuação e utilitários
+============================ */
 const POINTS_EXACT  = 5;
-const POINTS_DIFF   = 2; // <- o teu valor atual
-const POINTS_WINNER = 1;
+const POINTS_DIFF   = 3; // <- diferença de golos igual (mesmo sinal)
+const POINTS_WINNER = 1; // <- tendência (vencedor/empate)
 
 const sign = (d: number) => (d === 0 ? 0 : d > 0 ? 1 : -1);
 
@@ -30,17 +32,19 @@ function scoreOf(
   const rh = Number(realHome);
   const ra = Number(realAway);
 
+  // Resultado exato
   if (ph === rh && pa === ra) {
     return { points: POINTS_EXACT, exact: 1, diff: 0, winner: 0 };
   }
 
+  // Diferença de golos (mesma magnitude e mesmo sinal)
   const pd = ph - pa;
   const rd = rh - ra;
-
   if (Math.abs(pd) === Math.abs(rd) && sign(pd) === sign(rd)) {
     return { points: POINTS_DIFF, exact: 0, diff: 1, winner: 0 };
   }
 
+  // Tendência (mesmo sinal da diferença)
   if (sign(pd) === sign(rd)) {
     return { points: POINTS_WINNER, exact: 0, diff: 0, winner: 1 };
   }
@@ -48,34 +52,53 @@ function scoreOf(
   return { points: 0, exact: 0, diff: 0, winner: 0 };
 }
 
-// /api/rankings  (geral ou mensal se ?ym=YYYY-MM)
+// Comparador comum aos 3 rankings: pontos → exatos → diferenças → tendência → palpite mais cedo
+function cmpRanking<T extends {
+  points: number; exact: number; diff: number; winner: number;
+  first_pred_at?: number | null; // epoch ms; menor = mais cedo
+}>(a: T, b: T) {
+  if (b.points !== a.points)   return b.points  - a.points;
+  if (b.exact  !== a.exact)    return b.exact   - a.exact;
+  if (b.diff   !== a.diff)     return b.diff    - a.diff;
+  if (b.winner !== a.winner)   return b.winner  - a.winner;
+  const aa = a.first_pred_at ?? Number.POSITIVE_INFINITY;
+  const bb = b.first_pred_at ?? Number.POSITIVE_INFINITY;
+  return aa - bb; // mais cedo primeiro
+}
+
+/* ======================================================
+   /api/rankings  (geral ou mensal se ?ym=YYYY-MM)
+====================================================== */
 rankings.get('/', async (c) => {
   const ym = c.req.query('ym'); // ex: '2025-10'  -> modo mensal
 
   // 1) Fixtures FINISHED (opcionalmente filtrados por mês)
   const sqlFx = ym
     ? `
-       SELECT id, home_score, away_score
+       SELECT id, home_score, away_score, kickoff_at
        FROM fixtures
        WHERE status='FINISHED'
          AND strftime('%Y-%m', kickoff_at)=?
       `
     : `
-       SELECT id, home_score, away_score
+       SELECT id, home_score, away_score, kickoff_at
        FROM fixtures
        WHERE status='FINISHED'
       `;
   const finished = ym
-    ? await c.env.DB.prepare(sqlFx).bind(ym).all<{ id: string; home_score: number; away_score: number }>()
-    : await c.env.DB.prepare(sqlFx).all<{ id: string; home_score: number; away_score: number }>();
+    ? await c.env.DB.prepare(sqlFx).bind(ym).all<{ id: string; home_score: number; away_score: number; kickoff_at: string }>()
+    : await c.env.DB.prepare(sqlFx).all<{ id: string; home_score: number; away_score: number; kickoff_at: string }>();
 
   const fin = finished.results ?? [];
   if (!fin.length) return c.json([], 200);
 
-  // 2) Todas as previsões
+  // 2) Todas as previsões (precisamos do created_at para desempate final)
   const preds = await c.env.DB
-    .prepare(`SELECT user_id, fixture_id, home_goals, away_goals FROM predictions`)
-    .all<{ user_id: string; fixture_id: string; home_goals: number; away_goals: number }>();
+    .prepare(`
+      SELECT user_id, fixture_id, home_goals, away_goals, created_at
+      FROM predictions
+    `)
+    .all<{ user_id: string; fixture_id: string; home_goals: number; away_goals: number; created_at: string | null }>();
 
   // 3) Users (nome amigável)
   const users = await c.env.DB
@@ -98,9 +121,13 @@ rankings.get('/', async (c) => {
 
   const nameById = new Map(users.results?.map(u => [u.id, u.name]) ?? []);
   const avatarById = new Map(users.results?.map(u => [u.id, u.avatar_url ?? null]) ?? []);
-
   const fxMap = new Map(fin.map(f => [f.id, f]));
-  type Acc = { user_id: string; name: string; avatar_url: string | null; points: number; exact: number; diff: number; winner: number };
+
+  type Acc = {
+    user_id: string; name: string; avatar_url: string | null;
+    points: number; exact: number; diff: number; winner: number;
+    first_pred_at: number | null; // epoch ms do palpite mais antigo (entre os jogos que contam)
+  };
   const score: Record<string, Acc> = {};
 
   for (const p of preds.results ?? []) {
@@ -114,26 +141,32 @@ rankings.get('/', async (c) => {
         name: uName,
         avatar_url: avatarById.get(p.user_id) ?? null,
         points: 0, exact: 0, diff: 0, winner: 0,
+        first_pred_at: null,
       };
     }
 
+    // Pontos
     const s = scoreOf(p.home_goals, p.away_goals, f.home_score, f.away_score);
-    score[p.user_id].points += s.points;
-    score[p.user_id].exact  += s.exact;
-    score[p.user_id].diff   += s.diff;
-    score[p.user_id].winner += s.winner;
+    const acc = score[p.user_id];
+    acc.points += s.points;
+    acc.exact  += s.exact;
+    acc.diff   += s.diff;
+    acc.winner += s.winner;
+
+    // Desempate final: mais cedo
+    if (p.created_at) {
+      const t = new Date(p.created_at).getTime();
+      acc.first_pred_at = acc.first_pred_at == null ? t : Math.min(acc.first_pred_at, t);
+    }
   }
 
-  const ranking = Object.values(score).sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.exact  !== a.exact)  return b.exact  - a.exact;
-    return b.diff - a.diff;
-  });
-
+  const ranking = Object.values(score).sort(cmpRanking);
   return c.json(ranking, 200);
 });
 
-// /api/rankings/months  -> meses disponíveis com jogos FINISHED
+/* ======================================================
+   /api/rankings/months  -> meses com jogos FINISHED
+====================================================== */
 rankings.get('/months', async (c) => {
   const { results } = await c.env.DB
     .prepare(`
@@ -147,8 +180,7 @@ rankings.get('/months', async (c) => {
 });
 
 /* ======================================================
-   NOVO: /api/rankings/games  (para o seletor "Por jogo")
-   Devolve os jogos mais recentes com metadados básicos
+   /api/rankings/games  -> lista de jogos recentes
 ====================================================== */
 rankings.get('/games', async (c) => {
   const { results } = await c.env.DB
@@ -180,15 +212,14 @@ rankings.get('/games', async (c) => {
 });
 
 /* ======================================================
-   NOVO: /api/rankings/game?fixtureId=...
-   Ranking por jogo. Lista TODOS os utilizadores, mesmo
-   que não tenham palpite (0 pts).
+   /api/rankings/game?fixtureId=...
+   Ranking por jogo (mostra todos os users; 0 pts sem palpite)
 ====================================================== */
 rankings.get('/game', async (c) => {
   const fixtureId = c.req.query('fixtureId');
   if (!fixtureId) return c.json({ error: 'missing_fixtureId' }, 400);
 
-  // Resultado oficial (pode ainda não existir; nesse caso tudo dá 0)
+  // Resultado oficial do jogo
   const fx = await c.env.DB
     .prepare(`
       SELECT id, status, home_score, away_score
@@ -201,7 +232,7 @@ rankings.get('/game', async (c) => {
 
   if (!fx) return c.json({ error: 'fixture_not_found' }, 404);
 
-  // Traz todos os users + o seu palpite (se existir) para esse jogo
+  // Users + palpite (se existir) + timestamp do palpite
   const { results } = await c.env.DB
     .prepare(`
       SELECT
@@ -216,7 +247,8 @@ rankings.get('/game', async (c) => {
         )                                  AS name,
         u.avatar_url                       AS avatar_url,
         p.home_goals                       AS pred_home,
-        p.away_goals                       AS pred_away
+        p.away_goals                       AS pred_away,
+        p.created_at                       AS pred_created_at
       FROM users u
       LEFT JOIN predictions p
         ON p.user_id = u.id AND p.fixture_id = ?
@@ -229,10 +261,12 @@ rankings.get('/game', async (c) => {
       avatar_url: string | null;
       pred_home: number | null;
       pred_away: number | null;
+      pred_created_at: string | null;
     }>();
 
   const rows = (results ?? []).map(r => {
     const s = scoreOf(r.pred_home, r.pred_away, fx.home_score, fx.away_score);
+    const first_pred_at = r.pred_created_at ? new Date(r.pred_created_at).getTime() : null;
     return {
       user_id: r.user_id,
       name: r.name ?? 'Jogador',
@@ -241,14 +275,10 @@ rankings.get('/game', async (c) => {
       exact: s.exact,
       diff: s.diff,
       winner: s.winner,
+      first_pred_at, // para desempate final
     };
   });
 
-  rows.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.exact  !== a.exact)  return b.exact  - a.exact;
-    return b.diff - a.diff;
-  });
-
+  rows.sort(cmpRanking);
   return c.json(rows, 200);
 });

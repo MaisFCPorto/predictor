@@ -165,10 +165,19 @@ export default function AdminFixtures() {
     try {
       const { data } = await adm.get('/api/admin/fixtures', { headers: { 'cache-control': 'no-store' } });
 
+      // garante array
+      const arr: any[] = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('Expected array from /api/admin/fixtures, got:', data);
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+      }
+
       // mapa code -> id para fallback
       const byCode = new Map(competitions.map(c => [c.code, c.id]));
 
-      const list: Fx[] = (data ?? []).map((x: any) => ({
+      const list: Fx[] = arr.map((x: any) => ({
         ...x,
         // se a API devolver competition_code, converte para competition_id (id)
         competition_id:
@@ -180,7 +189,8 @@ export default function AdminFixtures() {
 
       setFixtures(list);
     } catch (e: any) {
-      alert(e?.response?.data?.error || 'Falha a carregar jogos (podes não ter permissões).');
+      const msg = e?.response?.data?.error || e?.message || 'Falha a carregar jogos (podes não ter permissões).';
+      alert(msg);
       setFixtures([]);
     } finally {
       setLoading(false);

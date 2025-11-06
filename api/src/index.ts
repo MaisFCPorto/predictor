@@ -71,6 +71,7 @@ app.get('/routes', (c) =>
       '/api/users/sync',
       '/api/admin/teams',
       '/api/admin/fixtures',
+      '/api/admin/fixtures/porto',
     ],
   }),
 );

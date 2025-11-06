@@ -59,7 +59,7 @@ export default function JogosPage() {
           list = await fetchJson('/api/matchdays/md1/fixtures');
         }
 
-        if (!abort) setFixtures(list);
+        if (!abort) setFixtures(Array.isArray(list) ? list : []);
       } catch (e: any) {
         if (!abort) setError(e?.message ?? 'Erro a carregar jogos');
       } finally {

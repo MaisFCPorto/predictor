@@ -90,10 +90,11 @@ export default function RankingsPage() {
   useEffect(() => {
     fetchJson('/api/rankings/months')
       .then((list: string[]) => {
-        setMonths(list);
-        if (list.length) {
-          if (list.includes(currentYM())) setYm(currentYM());
-          else setYm(list[0]); // mais recente
+        const arr = Array.isArray(list) ? list : [];
+        setMonths(arr);
+        if (arr.length) {
+          if (arr.includes(currentYM())) setYm(currentYM());
+          else setYm(arr[0]); // mais recente
         }
       })
       .catch(() => setMonths([]));
@@ -105,9 +106,10 @@ export default function RankingsPage() {
     setErr(null);
     fetchJson('/api/rankings/games')
       .then((list: GameLite[]) => {
-        setGames(list);
+        const arr = Array.isArray(list) ? list : [];
+        setGames(arr);
         // default = mais recente (assumindo que a API devolve por kickoff desc)
-        if (list?.length && !fixtureId) setFixtureId(list[0].id);
+        if (arr.length && !fixtureId) setFixtureId(arr[0].id);
       })
       .catch((e: any) => setErr(e?.message ?? 'Erro a carregar jogos'));
     // eslint-disable-next-line react-hooks/exhaustive-deps

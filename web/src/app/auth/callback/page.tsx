@@ -3,16 +3,15 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabaseBrowser } from '@/utils/supabase/client';
+import { supabasePKCE } from '@/utils/supabase/client';
 
 export default function OAuthCallback() {
   const router = useRouter();
 
   useEffect(() => {
     (async () => {
-      const supabase = supabaseBrowser();
       // força um getSession (ajuda a propagar cookies + middleware)
-      await supabase.auth.getSession();
+      await supabasePKCE.auth.getSession();
       router.replace('/jogos');
     })();
   }, [router]);

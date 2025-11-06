@@ -3475,6 +3475,11 @@ app.get("/api/admin/teams", async (c) => {
   const { results } = await all(c.env.DB, `SELECT id, name FROM teams ORDER BY name`);
   return c.json(results);
 });
+app.get("/api/admin/check", (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+  return c.json({ ok: true });
+});
 app.get("/api/admin/fixtures", async (c) => {
   const guard = requireAdmin(c);
   if (guard) return guard;

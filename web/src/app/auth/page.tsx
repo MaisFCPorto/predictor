@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabaseBrowser } from '@/utils/supabase/client';
+import { supabasePKCE } from '@/utils/supabase/client';
 import clsx from 'clsx';
 
 export default function AuthPage() {
   const router = useRouter();
-  const supabase = supabaseBrowser();
+  const supabase = supabasePKCE;
 
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');

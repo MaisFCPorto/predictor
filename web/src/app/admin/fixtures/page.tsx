@@ -35,11 +35,19 @@ adm.interceptors.response.use(
 type Team = { id: string; name: string };
 type Competition = { id: string; code: string; name: string };
 
+type PortoAPIMatch = {
+  utcDate?: string;
+  homeTeam?: { name?: string };
+  awayTeam?: { name?: string };
+  competition?: { code?: string };
+  matchday?: number | string;
+};
+
 type Fx = {
   id: string;
   competition_id?: string | null;
   round_label?: string | null;
-  leg_number?: number | null;
+  leg_number?: number | null | '';
   home_team_id: string;
   away_team_id: string;
   kickoff_at: string; // UTC
@@ -100,19 +108,28 @@ export default function AdminFixtures() {
   const [msg, setMsg] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
+  const [portoSuggest, setPortoSuggest] = useState<{
+    utcDate: string;
+    home: string;
+    away: string;
+    comp?: string;
+    round?: string;
+  }[]>([]);
+  const [loadingSuggest, setLoadingSuggest] = useState(false);
+
   const [creating, setCreating] = useState(false);
   const [newFx, setNewFx] = useState<{
-    competition_id: string | '';
-    round_label: string;
-    leg_number: '' | '1' | '2';
+    competition_id?: string | null;
+    round_label?: string | null;
+    leg_number?: number | null;
     home_team_id: string;
     away_team_id: string;
-    kickoff_local: string; // YYYY-MM-DDTHH:mm local
+    kickoff_local: string;
     status: 'SCHEDULED' | 'FINISHED';
   }>({
     competition_id: '',
     round_label: '',
-    leg_number: '',
+    leg_number: null,
     home_team_id: '',
     away_team_id: '',
     kickoff_local: '',
@@ -160,7 +177,31 @@ export default function AdminFixtures() {
     }
   }
 
-  useEffect(() => { void loadTeams(); void loadCompetitions(); void loadFixtures(); }, []);
+  async function loadPortoSuggestions() {
+    setLoadingSuggest(true);
+    try {
+      const { data } = await adm.get('/api/admin/fixtures/porto', { headers: { 'cache-control': 'no-store' } });
+      const matches: PortoAPIMatch[] = Array.isArray(data?.matches) ? data.matches : Array.isArray(data) ? data : [];
+      const items = matches
+        .map((m) => ({
+          utcDate: m.utcDate || '',
+          home: m.homeTeam?.name || '',
+          away: m.awayTeam?.name || '',
+          comp: m.competition?.code,
+          round: m.matchday != null ? String(m.matchday) : undefined,
+        }))
+        .filter((m) => m.utcDate && m.home && m.away)
+        .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+        .slice(0, 5);
+      setPortoSuggest(items);
+    } catch {
+      setPortoSuggest([]);
+    } finally {
+      setLoadingSuggest(false);
+    }
+  }
+
+  useEffect(() => { void loadTeams(); void loadCompetitions(); void loadFixtures(); void loadPortoSuggestions(); }, []);
 
   /* -------------------- Mutations -------------------- */
   async function updateField(id: string, patch: Partial<Fx>) {
@@ -214,7 +255,7 @@ export default function AdminFixtures() {
       setNewFx({
         competition_id: '',
         round_label: '',
-        leg_number: '',
+        leg_number: null,
         home_team_id: '',
         away_team_id: '',
         kickoff_local: '',
@@ -228,6 +269,8 @@ export default function AdminFixtures() {
     }
   }
 
+
+
   /* -------------------- Filtro de pesquisa -------------------- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -239,6 +282,32 @@ export default function AdminFixtures() {
       (f.round_label ?? '').toLowerCase().includes(q)
     );
   }, [fixtures, query]);
+
+  /* -------------------- Helpers -------------------- */
+  function findTeamIdByName(name: string): string {
+    const norm = (s: string) => s.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+    const n = norm(name);
+    const exact = teams.find(t => norm(t.name) === n)?.id;
+    if (exact) return exact;
+    const contains = teams.find(t => norm(t.name).includes(n) || n.includes(norm(t.name)))?.id;
+    return contains || '';
+  }
+
+  function prefillFromSuggestion(s: { utcDate: string; home: string; away: string; comp?: string; round?: string; }) {
+    const home_team_id = findTeamIdByName(s.home);
+    const away_team_id = findTeamIdByName(s.away);
+    const kickoff_local = toLocalDTValue(s.utcDate);
+    setNewFx(v => ({
+      ...v,
+      competition_id: s.comp || '',
+      round_label: s.round ? String(s.round).toUpperCase().slice(0, 3) : '',
+      leg_number: null,
+      home_team_id,
+      away_team_id,
+      kickoff_local,
+      status: 'SCHEDULED',
+    }));
+  }
 
   /* -------------------- Render -------------------- */
   return (
@@ -257,6 +326,33 @@ export default function AdminFixtures() {
           />
         </div>
 
+        {/* Sugestões próximos jogos do FC Porto */}
+        <div className="rounded-2xl border border-white/10 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg">Sugestões — Próximos jogos do FC Porto</h2>
+            <button className="rounded bg-white/10 px-2 py-1 hover:bg-white/15" onClick={() => void loadPortoSuggestions()} disabled={loadingSuggest}>
+              {loadingSuggest ? 'A atualizar…' : 'Atualizar'}
+            </button>
+          </div>
+          {portoSuggest.length === 0 ? (
+            <div className="opacity-70">Sem sugestões disponíveis.</div>
+          ) : (
+            <ul className="grid md:grid-cols-2 gap-2">
+              {portoSuggest.map((s, i) => (
+                <li key={i} className="flex items-center justify-between rounded border border-white/10 bg-black/20 px-3 py-2">
+                  <div className="space-y-0.5">
+                    <div className="font-medium">{s.home} vs {s.away}</div>
+                    <div className="text-xs opacity-70">
+                      {new Date(s.utcDate).toLocaleString()} {s.comp ? `· ${s.comp}` : ''} {s.round ? `· MD ${s.round}` : ''}
+                    </div>
+                  </div>
+                  <button className="rounded bg-white/10 px-2 py-1 hover:bg-white/15" onClick={() => prefillFromSuggestion(s)}>Preencher</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         {msg && <div className="rounded border border-emerald-500/40 bg-emerald-500/10 p-2">{msg}</div>}
 
         {/* Criação */}
@@ -267,7 +363,7 @@ export default function AdminFixtures() {
               <label className="text-xs opacity-70">Comp</label>
               <select
                 className="w-full rounded border border-white/10 bg-black/20 px-2 py-1"
-                value={newFx.competition_id}
+                value={newFx.competition_id || ''}
                 onChange={(e) => setNewFx(v => ({ ...v, competition_id: e.target.value }))}
               >
                 <option value="">—</option>
@@ -282,7 +378,7 @@ export default function AdminFixtures() {
                 className="w-full rounded border border-white/10 bg-black/20 px-2 py-1 uppercase"
                 maxLength={3}
                 placeholder="OF/ QF / SF / F / M1"
-                value={newFx.round_label}
+                value={newFx.round_label || ''}
                 onChange={(e) => setNewFx(v => ({ ...v, round_label: e.target.value.toUpperCase().slice(0, 3) }))}
               />
             </div>
@@ -292,8 +388,8 @@ export default function AdminFixtures() {
               <label className="text-xs opacity-70">Mão</label>
               <select
                 className="w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-center"
-                value={newFx.leg_number}
-                onChange={(e) => setNewFx(v => ({ ...v, leg_number: (e.target.value as '' | '1' | '2') }))}
+                value={newFx.leg_number || ''}
+                onChange={(e) => setNewFx(v => ({ ...v, leg_number: e.target.value === '' ? null : Number(e.target.value) }))}
               >
                 <option value="">—</option>
                 <option value="1">1</option>
@@ -590,6 +686,7 @@ export default function AdminFixtures() {
             </table>
           </div>
         )}
+
       </main>
     </AdminGate>
   );

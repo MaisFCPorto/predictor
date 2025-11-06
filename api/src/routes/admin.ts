@@ -1,9 +1,11 @@
 // predictor-porto/api/src/routes/admin.ts
 import { Hono } from 'hono'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 
 type Env = {
   DB: D1Database
   ADMIN_KEY: string
+  FOOTBALL_DATA_TOKEN: string
 }
 
 // Middleware: exige header x-admin-key (chave guardada no Worker)
@@ -30,7 +32,7 @@ admin.get('/role', requireAdminKey, async (c) => {
   return c.json({ role: row?.role ?? 'user' })
 })
 // --- NOVO: lista de equipas
-admin.get('/api/admin/teams', requireAdminKey, async (c) => {
+admin.get('/teams', requireAdminKey, async (c) => {
     const { results } = await c.env.DB
       .prepare(`SELECT id, name FROM teams ORDER BY name`)
       .all();
@@ -38,9 +40,35 @@ admin.get('/api/admin/teams', requireAdminKey, async (c) => {
   });
   
   // --- NOVO: lista de competições
-  admin.get('/api/admin/competitions', requireAdminKey, async (c) => {
+  admin.get('/competitions', requireAdminKey, async (c) => {
     const { results } = await c.env.DB
       .prepare(`SELECT id, code, name FROM competitions ORDER BY name`)
       .all();
     return c.json(results);
   });
+
+admin.get('/fixtures/porto', requireAdminKey, async (c) => {
+  const token = (c.env.FOOTBALL_DATA_TOKEN || '').trim()
+  if (!token) return c.json({ error: 'missing token' }, 500)
+
+  const url = 'https://api.football-data.org/v4/teams/503/matches?status=SCHEDULED'
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'X-Auth-Token': token,
+      'accept': 'application/json',
+    },
+    redirect: 'manual',
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    let body: any
+    try { body = JSON.parse(text) } catch { body = text }
+    const status = (res.status === 204 || res.status === 205 || res.status === 304) ? 500 : res.status
+    return c.json({ error: 'upstream', status: res.status, body }, status as ContentfulStatusCode)
+  }
+
+  const data = await res.json()
+  return c.json(data)
+})

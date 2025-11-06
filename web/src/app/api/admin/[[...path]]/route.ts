@@ -7,10 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 const UPSTREAM = process.env.API_BASE; // ex.: https://predictor-porto-api.predictorporto.workers.dev
 
 function buildTarget(req: NextRequest) {
-  // tira o prefixo /api/admin e reencaminha para /api/<resto>
-  const rest = req.nextUrl.pathname.replace(/^\/api\/admin\/?/, '');
+  // Encaminha mantendo o path completo (ex.: /api/admin/...) para o UPSTREAM
+  const path = req.nextUrl.pathname; // já começa por /api/admin/... no nosso caso
   const qs = req.nextUrl.search || '';
-  return `${UPSTREAM}/api/${rest}${qs}`;
+  return `${UPSTREAM}${path}${qs}`;
 }
 
 async function forward(req: NextRequest) {
@@ -32,7 +32,7 @@ async function forward(req: NextRequest) {
     headers,
     body: (req.method === 'GET' || req.method === 'HEAD') ? undefined : await req.blob(),
     redirect: 'manual',
-    cache: 'no-store',
+    // 'cache' is a browser-only field; Next.js server runtime throws if set. Use Cache-Control header instead.
   };
 
   const upstream = await fetch(target, init);

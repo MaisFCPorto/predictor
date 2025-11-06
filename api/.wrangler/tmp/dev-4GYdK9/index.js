@@ -3273,13 +3273,39 @@ admin.get("/role", requireAdminKey, async (c) => {
   const row = await c.env.DB.prepare("SELECT role FROM users WHERE email = ?").bind(email).first();
   return c.json({ role: row?.role ?? "user" });
 });
-admin.get("/api/admin/teams", requireAdminKey, async (c) => {
+admin.get("/teams", requireAdminKey, async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT id, name FROM teams ORDER BY name`).all();
   return c.json(results);
 });
-admin.get("/api/admin/competitions", requireAdminKey, async (c) => {
+admin.get("/competitions", requireAdminKey, async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT id, code, name FROM competitions ORDER BY name`).all();
   return c.json(results);
+});
+admin.get("/fixtures/porto", requireAdminKey, async (c) => {
+  const token = (c.env.FOOTBALL_DATA_TOKEN || "").trim();
+  if (!token) return c.json({ error: "missing token" }, 500);
+  const url = "https://api.football-data.org/v4/teams/503/matches?status=SCHEDULED";
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-Auth-Token": token,
+      "accept": "application/json"
+    },
+    redirect: "manual"
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+    const status = res.status === 204 || res.status === 205 || res.status === 304 ? 500 : res.status;
+    return c.json({ error: "upstream", status: res.status, body }, status);
+  }
+  const data = await res.json();
+  return c.json(data);
 });
 
 // src/index.ts
@@ -3335,7 +3361,6 @@ app.route("/api/rankings", rankings);
 app.route("/api/admin/competitions", adminCompetitions);
 app.route("/api/auth", auth);
 app.route("/api/admin", admin);
-app.route("/", admin);
 async function listFixtures(c, matchdayId) {
   const lockMs = getLockMs(c);
   const now = Date.now();
@@ -3619,7 +3644,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-IdoW5g/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-eJM2X9/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -3651,7 +3676,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-IdoW5g/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-eJM2X9/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

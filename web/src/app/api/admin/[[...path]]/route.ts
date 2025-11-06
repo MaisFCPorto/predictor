@@ -43,11 +43,11 @@ async function forward(req: NextRequest) {
 
   const out = new Headers();
   upstream.headers.forEach((v, k) => {
-    if (k.toLowerCase() !== 'content-encoding') out.set(k, v);
+    out.set(k, v);
   });
 
-  const buf = await upstream.arrayBuffer();
-  return new NextResponse(buf, { status: upstream.status, headers: out });
+  // Stream the upstream body as-is so the browser handles decompression per headers
+  return new NextResponse(upstream.body, { status: upstream.status, headers: out });
 }
 
 // Preflight (alguns browsers fazem OPTIONS mesmo em same-origin)

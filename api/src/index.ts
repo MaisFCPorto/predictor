@@ -362,7 +362,9 @@ app.patch('/api/admin/fixtures/:id', async (c) => {
        status       = COALESCE(?, status),
        competition_id = COALESCE(?, competition_id),
        round_label  = COALESCE(?, round_label),
-       leg   = COALESCE(?, leg)
+       leg   = COALESCE(?, leg),
+       home_score     = COALESCE(?, home_score),  
+       away_score     = COALESCE(?, away_score) 
      WHERE id=?`,
     b.home_team_id ?? null,
     b.away_team_id ?? null,
@@ -371,6 +373,8 @@ app.patch('/api/admin/fixtures/:id', async (c) => {
     b.competition_id ?? null,
     b.round_label ?? null,
     (b.leg_number ?? b.leg ?? null), 
+    b.home_score ?? null,                          
+    b.away_score ?? null,     
     id,
   );
 

@@ -2,6 +2,7 @@ name = "predictor-porto-api"
 main = "src/index.ts"
 compatibility_date = "2024-10-01"
 workers_dev = true
+account_id = "31b3483d39dca7d948bf92ed7b263d8f"
 
 [[d1_databases]]
 binding = "DB"

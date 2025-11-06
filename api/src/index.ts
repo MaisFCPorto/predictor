@@ -90,6 +90,8 @@ const isLocked = (kickoffISO: string, nowMs: number, lockMs: number) => {
 app.route('/api/rankings', rankings);
 app.route('/api/admin/competitions', adminCompetitions);
 app.route('/api/auth', auth);
+//app.route('/api/admin', admin);
+//app.route('/', admin);
 app.route('/api/admin', admin);
 
 // ----------------------------------------------------
@@ -261,6 +263,13 @@ app.get('/api/admin/teams', async (c) => {
   const guard = requireAdmin(c); if (guard) return guard;
   const { results } = await all<any>(c.env.DB, `SELECT id, name FROM teams ORDER BY name`);
   return c.json(results);
+});
+
+// --- ADMIN: check -------------------------------------------------
+app.get('/api/admin/check', (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;               // devolve 403 se a x-admin-key não bater certo
+  return c.json({ ok: true });
 });
 
 // ----------------------------------------------------

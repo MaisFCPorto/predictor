@@ -1,7 +1,4 @@
 // apps/web/src/lib/supabaseClient.ts
-import { createClient } from '@supabase/supabase-js'
+import { supabasePKCE } from '@/utils/supabase/client'
 
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+export const supabase = supabasePKCE

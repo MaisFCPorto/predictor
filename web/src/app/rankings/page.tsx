@@ -128,7 +128,7 @@ export default function RankingsPage() {
     setLoading(true);
     setErr(null);
     fetchJson(url)
-      .then((data: Row[]) => setRows(data))
+      .then((data: Row[]) => setRows(Array.isArray(data) ? data : []))
       .catch((e: any) => setErr(e?.message ?? 'Erro a carregar ranking'))
       .finally(() => setLoading(false));
   }, [mode, ym, fixtureId]);

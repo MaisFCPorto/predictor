@@ -229,8 +229,8 @@ export default function JogosPage() {
       <div className="mx-auto w-full max-w-6xl space-y-8">
         {/* Header + mini dashboard */}
         <header className="space-y-3">
-          <div className="text-sm opacity-80">Bem-vindo</div>
-          <h1 className="text-3xl font-bold tracking-tight">Olá, {userName}</h1>
+          <div className="text-sm opacity-80">Bem-vindo,</div>
+          <h1 className="text-3xl font-bold tracking-tight">{userName}</h1>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">

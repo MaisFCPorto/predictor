@@ -244,10 +244,11 @@ export default function AuthPage() {
 
         {/* Rodapé mini */}
         <div className="mt-6 flex flex-col items-center gap-1 pb-2">
+          <span className="text-[11px] italic text-white/60">Powered by</span>
           <img
-            src="/logos/predictor-02.svg"
+            src="https://www.betano.pt/assets/images/header-logos/logo__betano.svg"
             alt="Betano"
-            className="h-14 w-auto mx-auto mb-2 pointer-events-none select-none opacity-95"
+            className="h-7 w-auto pointer-events-none select-none opacity-95"
           />
         </div>
       </div>

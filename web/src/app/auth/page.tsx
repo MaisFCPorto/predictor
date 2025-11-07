@@ -13,7 +13,10 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [agree, setAgree] = useState(false); // <- NOVO: aceitar regras (só em signup)
+
+  // Aceitação das regras (requerido no registo, email e Google)
+  const [agree, setAgree] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -28,7 +31,6 @@ export default function AuthPage() {
         if (error) throw error;
         router.push('/jogos');
       } else {
-        // bloqueia se não aceitar as regras
         if (!agree) {
           throw new Error('Tens de aceitar as regras do passatempo para criares conta.');
         }
@@ -38,7 +40,7 @@ export default function AuthPage() {
           options: {
             data: {
               name,
-              accepted_rules_at: new Date().toISOString(), // guarda registo da aceitação
+              accepted_rules_at: new Date().toISOString(),
             },
           },
         });
@@ -57,7 +59,22 @@ export default function AuthPage() {
   async function signInWithGoogle() {
     try {
       setErr(null);
+      // Bloqueia Google OAuth no REGISTO enquanto não aceitar regras
+      if (mode === 'signup' && !agree) {
+        throw new Error('Para continuares com Google no registo, tens de aceitar as regras do passatempo.');
+      }
+
       setLoading(true);
+
+      // Guarda a aceitação para o callback poder gravar em user_metadata
+      // No /auth/callback, lê isto e faz:
+      //   const ts = sessionStorage.getItem('accepted_rules_at');
+      //   if (ts) await supabase.auth.updateUser({ data: { accepted_rules_at: ts }});
+      //   sessionStorage.removeItem('accepted_rules_at');
+      if (mode === 'signup') {
+        sessionStorage.setItem('accepted_rules_at', new Date().toISOString());
+      }
+
       const redirectTo = `${window.location.origin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -82,11 +99,11 @@ export default function AuthPage() {
             <img
               src="/logobranco.png"
               alt="MaisFCP Predictor"
-              className="h-14 w-auto mx-auto mb-2"
+              className="h-20 md:h-24 w-auto mx-auto mb-2"  // <- LOGO MAIOR
             />
           </div>
           <p className="mt-1 text-sm text-white/70">
-            Mini-liga de palpites do +FCPorto. Entra, dá os teus palpites, sobe no ranking e habilta-te a fantásticos prémios!
+            Mini-liga de palpites do +FCPorto. Entra, dá os teus palpites, sobe no ranking e habilita-te a fantásticos prémios!
           </p>
         </div>
 
@@ -165,7 +182,7 @@ export default function AuthPage() {
             />
           </div>
 
-          {/* Checkbox de aceitação das regras (só em signup) */}
+          {/* Checkbox de aceitação das regras (só em signup, e controla também o Google) */}
           {mode === 'signup' && (
             <div className="mt-3 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
               <input
@@ -211,14 +228,15 @@ export default function AuthPage() {
           <div className="h-px flex-1 bg-white/10" />
         </div>
 
-        {/* Google OAuth */}
+        {/* Google OAuth (bloqueado em signup se não aceitar regras) */}
         <button
           onClick={signInWithGoogle}
-          disabled={loading}
+          disabled={loading || (mode === 'signup' && !agree)}
           className={clsx(
             'flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium hover:bg-white/10',
-            loading && 'cursor-not-allowed opacity-60',
+            (loading || (mode === 'signup' && !agree)) && 'cursor-not-allowed opacity-60',
           )}
+          title={mode === 'signup' && !agree ? 'Aceita as regras para continuares com Google' : undefined}
         >
           <GoogleIcon />
           Entrar com Google

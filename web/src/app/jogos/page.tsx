@@ -23,6 +23,27 @@ type FixtureDTO = {
   lock_at_utc?: string | null;
 };
 
+type RankRow = {
+  user_id: string;
+  name: string;
+  avatar_url: string | null;
+  points: number;
+  exact: number;
+  diff: number;
+  winner: number;
+};
+
+type LastPoints = {
+  points: number;
+  exact: number;
+  diff: number;
+  winner: number;
+  position: number | null;
+  fixture?: { id: string; kickoff_at: string } | null;
+} | null;
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
+
 /** Helper que garante JSON (evita erro quando o Worker devolve HTML) */
 async function fetchJson(url: string) {
   const res = await fetch(url, { cache: 'no-store' });
@@ -38,12 +59,106 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
+function currentYM() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${d.getFullYear()}-${m}`;
+}
+
+function initials(name?: string | null) {
+  if (!name) return '—';
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join('');
+}
+
 export default function JogosPage() {
+  // --- fixtures ---
   const [loading, setLoading] = useState(true);
   const [fixtures, setFixtures] = useState<FixtureDTO[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // --- user + dashboard summaries ---
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>('Jogador');
+
+  const [genPoints, setGenPoints] = useState<number | null>(null);
+  const [genPos, setGenPos] = useState<number | null>(null);
+
+  const [monPoints, setMonPoints] = useState<number | null>(null);
+  const [monPos, setMonPos] = useState<number | null>(null);
+
+  const [lastPoints, setLastPoints] = useState<LastPoints>(null);
+  const [summaryErr, setSummaryErr] = useState<string | null>(null);
+
+  // --- supabase user ---
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabasePKCE.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        setUserName(user.user_metadata?.name || user.email?.split('@')[0] || 'Jogador');
+      } else {
+        setUserId(null);
+        setUserName('Convidado');
+      }
+    })();
+  }, []);
+
+  // --- carregar dashboard (geral / mensal / último) ---
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      try {
+        setSummaryErr(null);
+
+        // geral + mensal (via proxy do Next)
+        const [general, monthly] = await Promise.all([
+          fetchJson('/api/rankings') as Promise<RankRow[]>,
+          fetchJson(`/api/rankings?ym=${encodeURIComponent(currentYM())}`) as Promise<RankRow[]>,
+        ]);
+
+        const pickMyRow = (rows: RankRow[]) => {
+          if (!userId) return { pos: null, pts: null };
+          const idx = rows.findIndex(r => r.user_id === userId);
+          return idx >= 0 ? { pos: idx + 1, pts: rows[idx].points } : { pos: null, pts: 0 };
+        };
+
+        const g = pickMyRow(general);
+        const m = pickMyRow(monthly);
+
+        if (!abort) {
+          setGenPos(g.pos);
+          setGenPoints(g.pts);
+          setMonPos(m.pos);
+          setMonPoints(m.pts);
+        }
+
+        // último jogo — chama direto ao Worker se tivermos API_BASE
+        if (!abort) {
+          if (userId && API_BASE) {
+            try {
+              const lp = await fetchJson(`${API_BASE}/api/users/${encodeURIComponent(userId)}/last-points`);
+              setLastPoints(lp as LastPoints);
+            } catch {
+              setLastPoints(null);
+            }
+          } else {
+            setLastPoints(null);
+          }
+        }
+      } catch (e: any) {
+        if (!abort) setSummaryErr(e?.message ?? 'Erro a carregar resumo');
+      }
+    })();
+    return () => { abort = true; };
+  }, [userId]);
+
+  // --- carregar fixtures ---
   useEffect(() => {
     let abort = false;
     (async () => {
@@ -69,16 +184,26 @@ export default function JogosPage() {
     return () => { abort = true; };
   }, []);
 
-  // ordenar por kickoff
-  const sorted = useMemo(
-    () =>
-      [...fixtures].sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime()),
+  // ordenar por kickoff asc (para abertos)
+  const sortedAsc = useMemo(
+    () => [...fixtures].sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime()),
     [fixtures]
   );
 
-  // separar abertos vs bloqueados/passados
-  const openFixtures = sorted.filter(f => f.status === 'SCHEDULED' && !f.is_locked);
-  const lockedFixtures = sorted.filter(f => f.is_locked || f.status === 'FINISHED');
+  const openFixtures = useMemo(
+    () => sortedAsc.filter(f => f.status === 'SCHEDULED' && !f.is_locked),
+    [sortedAsc]
+  );
+
+  // passados/bloqueados: ordenar DESC e limitar a 3
+  const lockedRecent = useMemo(
+    () =>
+      [...fixtures]
+        .filter(f => f.is_locked || f.status === 'FINISHED')
+        .sort((a, b) => new Date(b.kickoff_at).getTime() - new Date(a.kickoff_at).getTime())
+        .slice(0, 3),
+    [fixtures]
+  );
 
   // guardar palpite
   async function onSave(fixtureId: string, home: number, away: number) {
@@ -101,13 +226,63 @@ export default function JogosPage() {
     <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-10">
       <Toaster position="top-center" />
 
-      <div className="mx-auto w-full max-w-none space-y-10">
+      <div className="mx-auto w-full max-w-6xl space-y-8">
+        {/* Header + mini dashboard */}
+        <header className="space-y-3">
+          <div className="text-sm opacity-80">Bem-vindo</div>
+          <h1 className="text-3xl font-bold tracking-tight">Olá, {userName}</h1>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="text-sm opacity-75">Classificação Geral</div>
+              <div className="mt-1 text-3xl font-bold">
+                {genPos == null ? '—' : `#${genPos}`}
+              </div>
+              <div className="mt-1 text-sm opacity-75">
+                Pontos: {genPoints == null ? '—' : genPoints}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="text-sm opacity-75">Classificação Mensal</div>
+              <div className="mt-1 text-3xl font-bold">
+                {monPos == null ? '—' : `#${monPos}`}
+              </div>
+              <div className="mt-1 text-sm opacity-75">
+                Pontos: {monPoints == null ? '—' : monPoints}
+              </div>
+              <div className="mt-1 text-xs opacity-60">Mês: {currentYM()}</div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="text-sm opacity-75">Último Jogo</div>
+              <div className="mt-1 text-3xl font-bold">
+                {lastPoints == null ? '—' : `${lastPoints.points ?? 0} pts`}
+              </div>
+              <div className="mt-1 text-sm opacity-75">
+                {lastPoints?.position ? `Posição: #${lastPoints.position}` : 'Sem palpite'}
+              </div>
+              {!!lastPoints?.fixture && (
+                <div className="mt-1 text-xs opacity-60">Jogo: {lastPoints.fixture.id}</div>
+              )}
+            </div>
+          </div>
+
+          {summaryErr && (
+            <div className="rounded border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm">
+              {summaryErr}
+            </div>
+          )}
+        </header>
+
+        {/* Erro geral */}
         {error && (
           <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm break-words">
             {error}
           </div>
         )}
 
+        {/* Loading skeletons */}
         {loading && (
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -116,6 +291,7 @@ export default function JogosPage() {
           </div>
         )}
 
+        {/* Jogos em aberto */}
         {!loading && (
           <section>
             <h2 className="text-2xl font-bold mb-4">Jogos em aberto</h2>
@@ -147,14 +323,15 @@ export default function JogosPage() {
           </section>
         )}
 
+        {/* Jogos passados (máx 3) */}
         {!loading && (
           <section>
             <h2 className="text-2xl font-bold mb-4">Jogos passados</h2>
-            {lockedFixtures.length === 0 ? (
+            {lockedRecent.length === 0 ? (
               <div className="opacity-70">Sem jogos passados.</div>
             ) : (
               <div className="space-y-4">
-                {lockedFixtures.map((f) => (
+                {lockedRecent.map((f) => (
                   <FixtureCard
                     key={f.id}
                     id={f.id}

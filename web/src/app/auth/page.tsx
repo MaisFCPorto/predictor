@@ -13,6 +13,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [agree, setAgree] = useState(false); // <- NOVO: aceitar regras (só em signup)
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -27,14 +28,24 @@ export default function AuthPage() {
         if (error) throw error;
         router.push('/jogos');
       } else {
+        // bloqueia se não aceitar as regras
+        if (!agree) {
+          throw new Error('Tens de aceitar as regras do passatempo para criares conta.');
+        }
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { name } },
+          options: {
+            data: {
+              name,
+              accepted_rules_at: new Date().toISOString(), // guarda registo da aceitação
+            },
+          },
         });
         if (error) throw error;
         setOk('Conta criada! Verifica o teu email se for necessário confirmar.');
         setMode('login');
+        setAgree(false);
       }
     } catch (e: any) {
       setErr(e?.message ?? 'Ocorreu um erro');
@@ -58,6 +69,9 @@ export default function AuthPage() {
       setLoading(false);
     }
   }
+
+  const submitDisabled =
+    loading || (mode === 'signup' && (!agree || !email || !password || !name));
 
   return (
     <main className="mx-auto max-w-lg px-6 py-10 md:py-16">
@@ -151,12 +165,37 @@ export default function AuthPage() {
             />
           </div>
 
+          {/* Checkbox de aceitação das regras (só em signup) */}
+          {mode === 'signup' && (
+            <div className="mt-3 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
+              <input
+                id="agree"
+                type="checkbox"
+                checked={agree}
+                onChange={(e) => setAgree(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/20"
+                aria-describedby="agree-help"
+              />
+              <label htmlFor="agree" className="text-sm leading-5">
+                Declaro que li e aceito as{' '}
+                <a
+                  href="/regras"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-white/90"
+                >
+                  regras do passatempo
+                </a>.
+              </label>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={loading}
+            disabled={submitDisabled}
             className={clsx(
-              'mt-2 w-full rounded-xl px-4 py-2 font-medium',
-              loading
+              'mt-2 w-full rounded-xl px-4 py-2 font-medium transition-colors',
+              submitDisabled
                 ? 'cursor-not-allowed bg-white/10 text-white/60'
                 : 'bg-white/15 hover:bg-white/20',
             )}
@@ -187,9 +226,8 @@ export default function AuthPage() {
 
         {/* Rodapé mini */}
         <div className="mt-6 flex flex-col items-center gap-1 pb-2">
-          <span className="text-[11px] italic text-white/60">Powered by</span>
           <img
-            src="https://www.betano.pt/assets/images/header-logos/logo__betano.svg"
+            src="/logos/predictor-02.svg"
             alt="Betano"
             className="h-7 w-auto pointer-events-none select-none opacity-95"
           />

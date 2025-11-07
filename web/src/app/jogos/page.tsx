@@ -92,17 +92,37 @@ export default function JogosPage() {
   const [lastPoints, setLastPoints] = useState<LastPoints>(null);
   const [summaryErr, setSummaryErr] = useState<string | null>(null);
 
-  // --- supabase user ---
+  // --- supabase user + SYNC NO WORKER ---
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabasePKCE.auth.getUser();
+
       if (user) {
+        const friendly =
+          user.user_metadata?.name ||
+          user.email?.split('@')[0] ||
+          'Jogador';
+
         setUserId(user.id);
-        setUserName(user.user_metadata?.name || user.email?.split('@')[0] || 'Jogador');
+        setUserName(friendly);
+
+        // 🔄 SINCRONIZAÇÃO NO WORKER (via proxy Next)
+        // Não bloqueia o UI; erros são ignorados silenciosamente.
+        fetch('/api/users/sync', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            id: user.id,
+            email: user.email ?? null,
+            name: friendly,
+            avatar_url: user.user_metadata?.avatar_url ?? null,
+          }),
+        }).catch(() => {});
       } else {
         setUserId(null);
         setUserName('Convidado');
       }
+
       setAuthLoading(false);
     })();
   }, []);

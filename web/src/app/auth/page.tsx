@@ -99,7 +99,7 @@ export default function AuthPage() {
             <img
               src="/logobranco.png"
               alt="MaisFCP Predictor"
-              className="h-20 md:h-24 w-auto mx-auto mb-2"  // <- LOGO MAIOR
+              className="h-14 w-auto mx-auto mb-2"
             />
           </div>
           <p className="mt-1 text-sm text-white/70">
@@ -247,7 +247,7 @@ export default function AuthPage() {
           <img
             src="/logos/predictor-02.svg"
             alt="Betano"
-            className="h-7 w-auto pointer-events-none select-none opacity-95"
+            className="h-14 w-auto mx-auto mb-2 pointer-events-none select-none opacity-95"
           />
         </div>
       </div>

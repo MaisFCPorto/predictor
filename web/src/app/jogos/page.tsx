@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import FixtureCard from '@/components/FixtureCard';
 import FixtureSkeleton from '@/components/FixtureSkeleton';
 import { supabasePKCE } from '@/utils/supabase/client';
@@ -33,14 +35,16 @@ type RankRow = {
   winner: number;
 };
 
-type LastPoints = {
-  points: number;
-  exact: number;
-  diff: number;
-  winner: number;
-  position: number | null;
-  fixture?: { id: string; kickoff_at: string } | null;
-} | null;
+type LastPoints =
+  | {
+      points: number;
+      exact: number;
+      diff: number;
+      winner: number;
+      position: number | null;
+      fixture?: { id: string; kickoff_at: string } | null;
+    }
+  | null;
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
@@ -65,17 +69,9 @@ function currentYM() {
   return `${d.getFullYear()}-${m}`;
 }
 
-function initials(name?: string | null) {
-  if (!name) return '—';
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]!.toUpperCase())
-    .join('');
-}
-
 export default function JogosPage() {
+  const router = useRouter();
+
   // --- fixtures ---
   const [loading, setLoading] = useState(true);
   const [fixtures, setFixtures] = useState<FixtureDTO[]>([]);
@@ -83,6 +79,7 @@ export default function JogosPage() {
   const [error, setError] = useState<string | null>(null);
 
   // --- user + dashboard summaries ---
+  const [authLoading, setAuthLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('Jogador');
 
@@ -106,6 +103,7 @@ export default function JogosPage() {
         setUserId(null);
         setUserName('Convidado');
       }
+      setAuthLoading(false);
     })();
   }, []);
 
@@ -116,14 +114,21 @@ export default function JogosPage() {
       try {
         setSummaryErr(null);
 
-        // geral + mensal (via proxy do Next)
+        if (!userId) {
+          if (!abort) {
+            setGenPos(null); setGenPoints(null);
+            setMonPos(null); setMonPoints(null);
+            setLastPoints(null);
+          }
+          return;
+        }
+
         const [general, monthly] = await Promise.all([
           fetchJson('/api/rankings') as Promise<RankRow[]>,
           fetchJson(`/api/rankings?ym=${encodeURIComponent(currentYM())}`) as Promise<RankRow[]>,
         ]);
 
         const pickMyRow = (rows: RankRow[]) => {
-          if (!userId) return { pos: null, pts: null };
           const idx = rows.findIndex(r => r.user_id === userId);
           return idx >= 0 ? { pos: idx + 1, pts: rows[idx].points } : { pos: null, pts: 0 };
         };
@@ -138,11 +143,12 @@ export default function JogosPage() {
           setMonPoints(m.pts);
         }
 
-        // último jogo — chama direto ao Worker se tivermos API_BASE
         if (!abort) {
-          if (userId && API_BASE) {
+          if (API_BASE) {
             try {
-              const lp = await fetchJson(`${API_BASE}/api/users/${encodeURIComponent(userId)}/last-points`);
+              const lp = await fetchJson(
+                `${API_BASE}/api/users/${encodeURIComponent(userId)}/last-points`
+              );
               setLastPoints(lp as LastPoints);
             } catch {
               setLastPoints(null);
@@ -212,7 +218,6 @@ export default function JogosPage() {
       setError(null);
       const { data: { user } } = await supabasePKCE.auth.getUser();
       if (!user) throw new Error('Sessão inválida. Faz login novamente.');
-
       await savePrediction({ userId: user.id, fixtureId, home, away });
       toast.success('Palpite guardado!', { duration: 1500 });
     } catch (e: any) {
@@ -222,60 +227,110 @@ export default function JogosPage() {
     }
   }
 
+  // anchors
+  const ym = currentYM();
+  const linkGeneral = '/rankings?mode=general';
+  const linkMonthly = `/rankings?mode=monthly&ym=${encodeURIComponent(ym)}`;
+  const linkByGame =
+    lastPoints?.fixture?.id
+      ? `/rankings?mode=bygame&fixtureId=${encodeURIComponent(lastPoints.fixture.id)}`
+      : null;
+
+  // helper para tornar card clicável se tiver href
+  const CardLink: React.FC<{ href?: string | null; children: React.ReactNode; aria?: string }> = ({ href, children, aria }) => {
+    if (userId && href) {
+      return (
+        <Link
+          href={href}
+          aria-label={aria}
+          className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+        >
+          {children}
+        </Link>
+      );
+    }
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+        {children}
+      </div>
+    );
+  };
+
   return (
     <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-10">
       <Toaster position="top-center" />
 
       <div className="mx-auto w-full max-w-6xl space-y-8">
-        {/* Header + mini dashboard */}
-        <header className="space-y-3">
-          <div className="text-sm opacity-80">Bem-vindo,</div>
-          <h1 className="text-3xl font-bold tracking-tight">{userName}</h1>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <div className="text-sm opacity-75">Classificação Geral</div>
-              <div className="mt-1 text-3xl font-bold">
-                {genPos == null ? '—' : `#${genPos}`}
-              </div>
-              <div className="mt-1 text-sm opacity-75">
-                Pontos: {genPoints == null ? '—' : genPoints}
-              </div>
+        {/* Header + mini dashboard OU botão de login */}
+        <header className="space-y-4">
+          {authLoading ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm opacity-80">
+              A carregar utilizador…
             </div>
+          ) : userId ? (
+            <>
+              <div className="text-sm opacity-80">Bem-vindo,</div>
+              <h1 className="text-3xl font-bold tracking-tight">{userName}</h1>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <div className="text-sm opacity-75">Classificação Mensal</div>
-              <div className="mt-1 text-3xl font-bold">
-                {monPos == null ? '—' : `#${monPos}`}
-              </div>
-              <div className="mt-1 text-sm opacity-75">
-                Pontos: {monPoints == null ? '—' : monPoints}
-              </div>
-              <div className="mt-1 text-xs opacity-60">Mês: {currentYM()}</div>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <CardLink href={linkGeneral} aria="Ir para o ranking geral">
+                  <div className="text-sm opacity-75">Classificação Geral</div>
+                  <div className="mt-1 text-3xl font-bold">
+                    {genPos == null ? '—' : `#${genPos}`}
+                  </div>
+                  <div className="mt-1 text-sm opacity-75">
+                    Pontos: {genPoints == null ? '—' : genPoints}
+                  </div>
+                </CardLink>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <div className="text-sm opacity-75">Último Jogo</div>
-              <div className="mt-1 text-3xl font-bold">
-                {lastPoints == null ? '—' : `${lastPoints.points ?? 0} pts`}
+                <CardLink href={linkMonthly} aria="Ir para o ranking mensal">
+                  <div className="text-sm opacity-75">Classificação Mensal</div>
+                  <div className="mt-1 text-3xl font-bold">
+                    {monPos == null ? '—' : `#${monPos}`}
+                  </div>
+                  <div className="mt-1 text-sm opacity-75">
+                    Pontos: {monPoints == null ? '—' : monPoints}
+                  </div>
+                  <div className="mt-1 text-xs opacity-60">Mês: {ym}</div>
+                </CardLink>
+
+                <CardLink href={linkByGame} aria="Ir para o ranking do último jogo">
+                  <div className="text-sm opacity-75">Último Jogo</div>
+                  <div className="mt-1 text-3xl font-bold">
+                    {lastPoints == null ? '—' : `${lastPoints.points ?? 0} pts`}
+                  </div>
+                  <div className="mt-1 text-sm opacity-75">
+                    {lastPoints?.position ? `Posição: #${lastPoints.position}` : 'Sem palpite'}
+                  </div>
+                  {!!lastPoints?.fixture && (
+                    <div className="mt-1 text-xs opacity-60">Jogo: {lastPoints.fixture.id}</div>
+                  )}
+                </CardLink>
               </div>
-              <div className="mt-1 text-sm opacity-75">
-                {lastPoints?.position ? `Posição: #${lastPoints.position}` : 'Sem palpite'}
-              </div>
-              {!!lastPoints?.fixture && (
-                <div className="mt-1 text-xs opacity-60">Jogo: {lastPoints.fixture.id}</div>
+
+              {summaryErr && (
+                <div className="rounded border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm">
+                  {summaryErr}
+                </div>
               )}
-            </div>
-          </div>
-
-          {summaryErr && (
-            <div className="rounded border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm">
-              {summaryErr}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-6">
+              <h1 className="mb-2 text-3xl font-bold tracking-tight">Convidado</h1>
+              <p className="mb-4 text-sm opacity-80">
+                Entra para veres a tua classificação e começares a pontuar!
+              </p>
+              <button
+                onClick={() => router.push('/auth')}
+                className="rounded-2xl border border-white/10 bg-white/[0.10] px-6 py-3 text-base font-medium hover:bg-white/[0.15] transition"
+              >
+                🔐 Entrar / Criar Conta
+              </button>
             </div>
           )}
         </header>
 
-        {/* Erro geral */}
+        {/* Erro geral (fixtures) */}
         {error && (
           <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm break-words">
             {error}

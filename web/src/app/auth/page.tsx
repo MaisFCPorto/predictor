@@ -184,7 +184,7 @@ export default function AuthPage() {
 
           {/* Checkbox de aceitação das regras (só em signup, e controla também o Google) */}
           {mode === 'signup' && (
-            <div className="mt-3 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
+            <div className="mt-3 flex items-start gap-3 rounded-xl px-3 py-2 text-xs">
               <input
                 id="agree"
                 type="checkbox"

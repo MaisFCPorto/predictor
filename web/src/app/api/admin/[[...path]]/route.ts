@@ -24,6 +24,8 @@ async function forward(req: NextRequest) {
   const target = buildTarget(req);
   const headers = new Headers(req.headers);
   headers.set('cache-control', 'no-store');
+  // Evita respostas comprimidas do upstream (alguns runtimes descomprimem mas mantêm os headers)
+  headers.set('accept-encoding', 'identity');
 
   const adminKey = (process.env.API_ADMIN_KEY || process.env.ADMIN_KEY || '').trim();
   if (adminKey) headers.set('x-admin-key', adminKey);
@@ -43,6 +45,10 @@ async function forward(req: NextRequest) {
 
   const out = new Headers();
   upstream.headers.forEach((v, k) => {
+    // Remove headers que podem causar decoding mismatch no browser
+    if (/^content-encoding$/i.test(k)) return;
+    if (/^content-length$/i.test(k)) return;
+    if (/^transfer-encoding$/i.test(k)) return;
     out.set(k, v);
   });
 

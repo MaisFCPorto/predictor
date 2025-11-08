@@ -96,3 +96,20 @@ body::before {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* ---------- Native select dropdown (dark theme) ---------- */
+/* Style the opened dropdown list background and text */
+select option {
+  background-color: var(--card);
+  color: var(--fg);
+}
+select optgroup {
+  background-color: var(--card);
+  color: var(--fg);
+}
+/* Highlighted/hovered/selected option */
+select option:hover,
+select option:checked {
+  background-color: var(--muted);
+  color: var(--fg);
+}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios, { AxiosError } from 'axios';
 import AdminGate from '../_components/AdminGate';
+import Link from 'next/link';
 
 /**
  * IMPORTANTE
@@ -103,6 +104,12 @@ export default function AdminFixtures() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [compFilter, setCompFilter] = useState<string>(''); // competition code filter
+  const [sortField, setSortField] = useState<'comp' | 'ronda' | 'kickoff' | ''>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [statusFilter, setStatusFilter] = useState<string>('');
 
   const [portoSuggest, setPortoSuggest] = useState<{
     utcDate: string;
@@ -131,6 +138,21 @@ export default function AdminFixtures() {
     kickoff_local: '',
     status: 'SCHEDULED',
   });
+
+  // validação: tudo obrigatório excepto Mão (leg_number)
+  const createErrors = useMemo(() => {
+    const errs: Record<string, string | null> = {};
+    errs.comp = newFx.competition_id ? null : 'Obrigatório';
+    errs.ronda = newFx.round_label ? null : 'Obrigatório';
+    errs.home = newFx.home_team_id ? null : 'Obrigatório';
+    errs.away = newFx.away_team_id ? null : 'Obrigatório';
+    if (newFx.home_team_id && newFx.away_team_id && newFx.home_team_id === newFx.away_team_id) {
+      errs.away = 'Equipas não podem ser iguais';
+    }
+    errs.ko = newFx.kickoff_local ? null : 'Obrigatório';
+    return errs;
+  }, [newFx]);
+  const hasCreateErrors = useMemo(() => Object.values(createErrors).some(Boolean), [createErrors]);
 
   // valor inicial: hoje às 21:00
   useEffect(() => {
@@ -210,9 +232,14 @@ export default function AdminFixtures() {
           comp: m.competition?.code,
           round: m.matchday != null ? String(m.matchday) : undefined,
         }))
-        .filter((m) => m.utcDate && m.home && m.away)
+        // exclui jogos sem data/equipas e jogos com hora exatamente 00:00:00
+        .filter((m) => {
+          if (!m.utcDate || !m.home || !m.away) return false;
+          const d = new Date(m.utcDate);
+          return !(d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0);
+        })
         .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-        .slice(0, 5);
+        .slice(0, 4);
       setPortoSuggest(items);
     } catch {
       setPortoSuggest([]);
@@ -310,52 +337,161 @@ export default function AdminFixtures() {
 
 
 
-  /* -------------------- Filtro de pesquisa -------------------- */
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return fixtures;
-    return fixtures.filter(f =>
+  /* -------------------- Filtro + Ordenação + Paginação -------------------- */
+  // total após filtros (sem paginação)
+  const totalCount = useMemo(() => {
+  const q = query.trim().toLowerCase();
+  const byIdToCode = new Map(competitions.map(c => [c.id, c.code]));
+  return fixtures.filter(f => {
+    const inQuery = !q ||
       (f.home_name ?? '').toLowerCase().includes(q) ||
       (f.away_name ?? '').toLowerCase().includes(q) ||
       f.id.toLowerCase().includes(q) ||
-      (f.round_label ?? '').toLowerCase().includes(q)
-    );
-  }, [fixtures, query]);
+      (f.round_label ?? '').toLowerCase().includes(q);
+    const fxCode = f.competition_code ?? (f.competition_id ? byIdToCode.get(f.competition_id) ?? '' : '');
+    const inComp = !compFilter || fxCode === compFilter;
+    const inStatus = !statusFilter || (f.status ?? '').toUpperCase() === statusFilter;
+    return inQuery && inComp && inStatus;
+  }).length;
+}, [fixtures, competitions, query, compFilter, statusFilter]);
 
-  /* -------------------- Helpers -------------------- */
-  function findTeamIdByName(name: string): string {
-    const norm = (s: string) => s.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-    const n = norm(name);
-    const exact = teams.find(t => norm(t.name) === n)?.id;
-    if (exact) return exact;
-    const contains = teams.find(t => norm(t.name).includes(n) || n.includes(norm(t.name)))?.id;
-    return contains || '';
-  }
+const filtered = useMemo(() => {
+  const q = query.trim().toLowerCase();
+  const byIdToCode = new Map(competitions.map(c => [c.id, c.code]));
+  const base = fixtures.filter(f => {
+    const inQuery = !q ||
+      (f.home_name ?? '').toLowerCase().includes(q) ||
+      (f.away_name ?? '').toLowerCase().includes(q) ||
+      f.id.toLowerCase().includes(q) ||
+      (f.round_label ?? '').toLowerCase().includes(q);
+    const fxCode = f.competition_code ?? (f.competition_id ? byIdToCode.get(f.competition_id) ?? '' : '');
+    const inComp = !compFilter || fxCode === compFilter;
+    const inStatus = !statusFilter || (f.status ?? '').toUpperCase() === statusFilter;
+    return inQuery && inComp && inStatus;
+  });
 
-  function prefillFromSuggestion(s: { utcDate: string; home: string; away: string; comp?: string; round?: string; }) {
-    const home_team_id = findTeamIdByName(s.home);
-    const away_team_id = findTeamIdByName(s.away);
-    const kickoff_local = toLocalDTValue(s.utcDate);
-    setNewFx(v => ({
-      ...v,
-      competition_id: s.comp || '',
-      round_label: s.round ? String(s.round).toUpperCase().slice(0, 3) : '',
-      leg_number: null,
-      home_team_id,
-      away_team_id,
-      kickoff_local,
-      status: 'SCHEDULED',
-    }));
-  }
+  const cmp = (a: Fx, b: Fx) => {
+    if (!sortField) return 0;
+    const dir = sortDir === 'asc' ? 1 : -1;
+    if (sortField === 'comp') {
+      const ac = (a.competition_code ?? (a.competition_id ? byIdToCode.get(a.competition_id) ?? '' : '')).toUpperCase();
+      const bc = (b.competition_code ?? (b.competition_id ? byIdToCode.get(b.competition_id) ?? '' : '')).toUpperCase();
+      return ac.localeCompare(bc) * dir;
+    }
+    if (sortField === 'ronda') {
+      const norm = (s?: string | null) => (s ?? '').toUpperCase();
+      const ar = norm(a.round_label);
+      const br = norm(b.round_label);
+      // tenta comparar Jx numericamente
+      const aj = /^J(\d+)$/i.exec(ar);
+      const bj = /^J(\d+)$/i.exec(br);
+      if (aj && bj) return (Number(aj[1]) - Number(bj[1])) * dir;
+      return ar.localeCompare(br) * dir;
+    }
+    if (sortField === 'kickoff') {
+      const at = new Date(a.kickoff_at).getTime();
+      const bt = new Date(b.kickoff_at).getTime();
+      return (at - bt) * dir;
+    }
+    return 0;
+  };
 
-  /* -------------------- Render -------------------- */
-  return (
-    <AdminGate>
-      <main className="max-w-6xl mx-auto p-6 space-y-4">
-        <h1 className="text-2xl font-semibold">Backoffice — Jogos</h1>
+  const sorted = sortField ? [...base].sort(cmp) : base;
 
-        {/* Filtros topo */}
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize;
+  return sorted.slice(start, end);
+}, [fixtures, competitions, query, compFilter, statusFilter, sortField, sortDir, page, pageSize]);
+
+// reset página quando filtros/ordenação mudam
+useEffect(() => { setPage(1); }, [query, compFilter, statusFilter, sortField, sortDir]);
+
+/* -------------------- Helpers -------------------- */
+function findTeamIdByName(name: string): string {
+const norm = (s: string) => s.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+const n = norm(name);
+const exact = teams.find(t => norm(t.name) === n)?.id;
+if (exact) return exact;
+const contains = teams.find(t => norm(t.name).includes(n) || n.includes(norm(t.name)))?.id;
+return contains || '';
+}
+
+function prefillFromSuggestion(s: { utcDate: string; home: string; away: string; comp?: string; round?: string; }) {
+const home_team_id = findTeamIdByName(s.home);
+const away_team_id = findTeamIdByName(s.away);
+const kickoff_local = toLocalDTValue(s.utcDate);
+setNewFx(v => ({
+  ...v,
+  // força a competição para Liga Portugal (LP) usando o respetivo ID
+  competition_id: competitions.find(c => c.code === 'LP')?.id || '',
+  // converte o matchday num formato de ronda "J11" em vez de "MD"
+  round_label: s.round ? `J${String(s.round)}`.toUpperCase().slice(0, 3) : '',
+  leg_number: null,
+  home_team_id,
+  away_team_id,
+  kickoff_local,
+  status: 'SCHEDULED',
+}));
+}
+
+/* -------------------- Render -------------------- */
+return (
+<AdminGate>
+  <main className="max-w-6xl mx-auto p-6 space-y-4">
+    <h1 className="text-2xl font-semibold">Backoffice — Jogos</h1>
+
+    {/* Sugestões próximos jogos do FC Porto */}
+    <div className="rounded-2xl border border-white/10 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-lg">Sugestões — Próximos jogos do FC Porto</h2>
+        <button className="rounded bg-white/10 px-2 py-1 hover:bg-white/15" onClick={() => void loadPortoSuggestions()} disabled={loadingSuggest}>
+          {loadingSuggest ? 'A atualizar…' : 'Atualizar'}
+        </button>
+      </div>
+      {portoSuggest.length === 0 ? (
+        <div className="opacity-70">Sem sugestões disponíveis.</div>
+      ) : (
+        <ul className="grid md:grid-cols-2 gap-2">
+          {portoSuggest.map((s, i) => (
+            <li key={i} className="flex items-center justify-between rounded border border-white/10 bg-black/20 px-3 py-2">
+              <div className="space-y-0.5">
+                <div className="font-medium">{s.home} vs {s.away}</div>
+                <div className="text-xs opacity-70">
+                  {new Date(s.utcDate).toLocaleString()} {s.comp ? `· ${s.comp}` : ''} {s.round ? `· MD ${s.round}` : ''}
+                </div>
+              </div>
+              <button className="rounded bg-white/10 px-2 py-1 hover:bg-white/15" onClick={() => prefillFromSuggestion(s)}>
+                Preencher
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+{/* Filtros topo */}
         <div className="flex flex-wrap items-center gap-2 bg-card/15 border border-white/10 rounded-2xl p-3">
+          <Link href="/admin/teams" className="rounded bg-white/10 px-3 py-2 hover:bg-white/15">Equipas</Link>
+          <select
+            className="rounded border border-white/10 bg-black/20 px-2 py-1"
+            value={compFilter}
+            onChange={(e) => setCompFilter(e.target.value)}
+            title="Filtrar por competição"
+          >
+            <option value="">Todas as competições</option>
+            {Array.from(new Set(competitions.map(c => c.code))).map(code => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </select>
+          <select
+            className="rounded border border-white/10 bg-black/20 px-2 py-1"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value.toUpperCase())}
+            title="Filtrar por status"
+          >
+            <option value="">Todos os status</option>
+            <option value="SCHEDULED">SCHEDULED</option>
+            <option value="FINISHED">FINISHED</option>
+          </select>
           <div className="flex-1" />
           <input
             className="rounded border border-white/10 bg-black/20 px-3 py-2 w-64"
@@ -363,180 +499,62 @@ export default function AdminFixtures() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          <button
+            className="rounded bg-white/10 px-3 py-2 hover:bg-white/15"
+            onClick={() => { setQuery(''); setCompFilter(''); setSortField(''); setSortDir('asc'); setPage(1); }}
+            title="Limpar filtros"
+          >
+            Limpar filtros
+          </button>
         </div>
-
-        {/* Sugestões próximos jogos do FC Porto */}
-        <div className="rounded-2xl border border-white/10 p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg">Sugestões — Próximos jogos do FC Porto</h2>
-            <button className="rounded bg-white/10 px-2 py-1 hover:bg-white/15" onClick={() => void loadPortoSuggestions()} disabled={loadingSuggest}>
-              {loadingSuggest ? 'A atualizar…' : 'Atualizar'}
-            </button>
-          </div>
-          {portoSuggest.length === 0 ? (
-            <div className="opacity-70">Sem sugestões disponíveis.</div>
-          ) : (
-            <ul className="grid md:grid-cols-2 gap-2">
-              {portoSuggest.map((s, i) => (
-                <li key={i} className="flex items-center justify-between rounded border border-white/10 bg-black/20 px-3 py-2">
-                  <div className="space-y-0.5">
-                    <div className="font-medium">{s.home} vs {s.away}</div>
-                    <div className="text-xs opacity-70">
-                      {new Date(s.utcDate).toLocaleString()} {s.comp ? `· ${s.comp}` : ''} {s.round ? `· MD ${s.round}` : ''}
-                    </div>
-                  </div>
-                  <button className="rounded bg-white/10 px-2 py-1 hover:bg-white/15" onClick={() => prefillFromSuggestion(s)}>Preencher</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {msg && <div className="rounded border border-emerald-500/40 bg-emerald-500/10 p-2">{msg}</div>}
-
-        {/* Criação */}
-        <div className="rounded-2xl border border-white/10 p-3">
-          <div className="grid grid-cols-12 gap-2 items-center">
-            {/* Comp */}
-            <div className="col-span-2">
-              <label className="text-xs opacity-70">Comp</label>
-              <select
-                className="w-full rounded border border-white/10 bg-black/20 px-2 py-1"
-                value={newFx.competition_id || ''}
-                onChange={(e) => setNewFx(v => ({ ...v, competition_id: e.target.value }))}
-              >
-                <option value="">—</option>
-                {competitions.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.code}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Ronda */}
-            <div className="col-span-2">
-              <label className="text-xs opacity-70">Ronda</label>
-              <input
-                className="w-full rounded border border-white/10 bg-black/20 px-2 py-1 uppercase"
-                maxLength={3}
-                placeholder="OF/ QF / SF / F / M1"
-                value={newFx.round_label || ''}
-                onChange={(e) => setNewFx(v => ({ ...v, round_label: e.target.value.toUpperCase().slice(0, 3) }))}
-              />
-            </div>
-
-            {/* Mão */}
-            <div className="col-span-1">
-              <label className="text-xs opacity-70">Mão</label>
-              <select
-                className="w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-center"
-                value={newFx.leg_number || ''}
-                onChange={(e) => setNewFx(v => ({ ...v, leg_number: e.target.value === '' ? null : Number(e.target.value) }))}
-              >
-                <option value="">—</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-              </select>
-            </div>
-
-            {/* Home */}
-            <div className="col-span-2">
-              <label className="text-xs opacity-70">Home</label>
-              <select
-                className="w-full rounded border border-white/10 bg-black/20 px-2 py-1"
-                value={newFx.home_team_id}
-                onChange={(e) => setNewFx(v => ({ ...v, home_team_id: e.target.value }))}
-              >
-                <option value="">—</option>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-
-            {/* Away */}
-            <div className="col-span-2">
-              <label className="text-xs opacity-70">Away</label>
-              <select
-                className="w-full rounded border border-white/10 bg-black/20 px-2 py-1"
-                value={newFx.away_team_id}
-                onChange={(e) => setNewFx(v => ({ ...v, away_team_id: e.target.value }))}
-              >
-                <option value="">—</option>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-
-            {/* Kickoff (Data + Hora) */}
-            {(() => {
-              const { date, time } = splitLocal(newFx.kickoff_local);
-              return (
-                <div className="col-span-2 grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs opacity-70">Data</label>
-                    <input
-                      type="date"
-                      className="w-full rounded border border-white/10 bg-black/20 px-2 py-1"
-                      value={date}
-                      onChange={(e) =>
-                        setNewFx(v => ({ ...v, kickoff_local: joinLocal(e.target.value, time) }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs opacity-70">Hora</label>
-                    <input
-                      type="time"
-                      step={60}
-                      className="w-full rounded border border-white/10 bg-black/20 px-2 py-1"
-                      value={time}
-                      onChange={(e) =>
-                        setNewFx(v => ({ ...v, kickoff_local: joinLocal(date, e.target.value) }))
-                      }
-                    />
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Status */}
-            <div className="col-span-1">
-              <label className="text-xs opacity-70">Status</label>
-              <select
-                className="w-full rounded border border-white/10 bg-black/20 px-2 py-1"
-                value={newFx.status}
-                onChange={(e) => setNewFx(v => ({ ...v, status: e.target.value as 'SCHEDULED' | 'FINISHED' }))}
-              >
-                <option value="SCHEDULED">SCHEDULED</option>
-                <option value="FINISHED">FINISHED</option>
-              </select>
-            </div>
-
-            <div className="col-span-12 flex justify-end">
-              <button
-                onClick={createFixture}
-                disabled={creating}
-                className="rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
-              >
-                {creating ? 'A criar…' : 'Criar'}
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* Tabela */}
         {loading ? (
           <div className="opacity-70">A carregar…</div>
         ) : (
+          <div className="space-y-2">
           <div className="overflow-x-auto rounded-2xl border border-white/10">
             <table className="min-w-full text-sm">
               <thead className="bg-white/5">
                 <tr>
-                  <th className="p-2 text-left">Comp</th>
-                  <th className="p-2 text-left">Ronda</th>
+                  <th className="p-2 text-left">
+                    <button
+                      className="hover:underline"
+                      onClick={() => {
+                        setSortField(f => (f === 'comp' ? 'comp' : 'comp'));
+                        setSortDir(d => (sortField === 'comp' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'));
+                      }}
+                      title="Ordenar por competição"
+                    >
+                      Comp {sortField === 'comp' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                    </button>
+                  </th>
+                  <th className="p-2 text-left">
+                    <button
+                      className="hover:underline"
+                      onClick={() => {
+                        setSortField(f => (f === 'ronda' ? 'ronda' : 'ronda'));
+                        setSortDir(d => (sortField === 'ronda' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'));
+                      }}
+                      title="Ordenar por ronda"
+                    >
+                      Ronda {sortField === 'ronda' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                    </button>
+                  </th>
                   <th className="p-2 text-left">Mão</th>
                   <th className="p-2 text-left">Home</th>
                   <th className="p-2 text-left">Away</th>
-                  <th className="p-2 text-left">Kickoff</th>
+                  <th className="p-2 text-left">
+                    <button
+                      className="hover:underline"
+                      onClick={() => {
+                        setSortField(f => (f === 'kickoff' ? 'kickoff' : 'kickoff'));
+                        setSortDir(d => (sortField === 'kickoff' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'));
+                      }}
+                      title="Ordenar por kickoff"
+                    >
+                      Kickoff {sortField === 'kickoff' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                    </button>
+                  </th>
                   <th className="p-2 text-left">Status</th>
                   <th className="p-2 text-left">Resultado</th>
                   <th className="p-2 text-right">Ações</th>
@@ -555,7 +573,7 @@ export default function AdminFixtures() {
                   return (
                     <tr key={f.id} className="border-t border-white/10 hover:bg-white/5">
                       {/* Comp */}
-                      <td className="p-2 w-28">
+                      <td className="p-2 w-16">
                         <select
                           className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
                           value={f.competition_id ?? ''}               // <- usa ID
@@ -731,6 +749,28 @@ export default function AdminFixtures() {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="flex items-center justify-end gap-2 mt-2">
+            <span className="opacity-70 text-sm">Página {page} de {Math.max(1, Math.ceil(totalCount / pageSize))}</span>
+            <button
+              className="rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+            >Anterior</button>
+            <button
+              className="rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
+              onClick={() => setPage(p => (p * pageSize < totalCount ? p + 1 : p))}
+              disabled={page * pageSize >= totalCount}
+            >Seguinte</button>
+            <select
+              className="rounded border border-white/10 bg-black/20 px-2 py-1"
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value) || 20); setPage(1); }}
+              title="Itens por página"
+            >
+              {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}/pág</option>)}
+            </select>
+          </div>
           </div>
         )}
 

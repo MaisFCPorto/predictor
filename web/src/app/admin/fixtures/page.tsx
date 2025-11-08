@@ -709,6 +709,12 @@ return (
                             defaultValue={f._hs === '' ? '' : String(f._hs ?? '')}
                             disabled={isFinished}
                             onChange={(e) => { f._hs = e.target.value === '' ? '' : Number(e.target.value); }}
+  onBlur={async (e) => {
+    const v = e.target.value;
+    const val = v === '' ? null : Number(v);
+    if (val === null || Number.isNaN(val)) return;
+    await updateField(f.id, { home_score: val });   
+  }}
                           />
                           <span className="opacity-60">–</span>
                           <input
@@ -717,6 +723,12 @@ return (
                             defaultValue={f._as === '' ? '' : String(f._as ?? '')}
                             disabled={isFinished}
                             onChange={(e) => { f._as = e.target.value === '' ? '' : Number(e.target.value); }}
+                            onBlur={async (e) => {
+                              const v = e.target.value;
+                              const val = v === '' ? null : Number(v);
+                              if (val === null || Number.isNaN(val)) return;
+                              await updateField(f.id, { away_score: val });   
+                            }}
                           />
                         </div>
                       </td>

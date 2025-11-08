@@ -1,7 +1,6 @@
 INSERT INTO teams (id, name, short_name, crest_url) VALUES
 ('scp', 'Sporting CP', 'SCP', 'https://www.ligaportugal.pt/backoffice/assets/thumbnail_Emb_Sporting_CP_Negativo_200x300_fcdfc36244.png'),
 ('slb', 'SL Benfica', 'SLB', 'https://www.ligaportugal.pt/backoffice/assets/thumbnail_Emb_SL_Benfica_AF_200x200_300_0770235542.png'),
-('fcp', 'FC Porto', 'FCP', 'https://www.ligaportugal.pt/backoffice/assets/thumbnail_Emb_FC_Porto_AF_200x200_300_0ff1ab3115.png'),
 ('scb', 'SC Braga', 'SCB', 'https://www.ligaportugal.pt/backoffice/assets/thumbnail_Emb_SC_Braga_AF_200x200_300_53d73be09a.png'),
 ('vsc', 'Vitória SC', 'VSC', 'https://www.ligaportugal.pt/backoffice/assets/thumbnail_Emb_GD_Chaves_AF_200x200_300_41124a3064.png'),
 ('est', 'Estoril Praia', 'GDEP', 'https://www.ligaportugal.pt/backoffice/assets/thumbnail_Emb_Estori_Praia_044249cad.png'),

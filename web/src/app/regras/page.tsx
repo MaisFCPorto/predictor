@@ -92,7 +92,7 @@ export default function RegrasPage() {
 
       <RuleCard id="elegibilidade" title="Elegibilidade aos prémios">
         <ul className="space-y-2 text-white/80">
-          <li>• Maior de idade; conta válida e sem comportamentos abusivos.</li>
+          <li>• Maior de idade.</li>
           <li>• Conta válida e sem comportamentos abusivos.</li>
           <li>• Seguir o Instagram @maisfcporto (comunicação e validações).</li>
           <li>• Para freebets: conta Betano ativa e verificada através do link de parceiro.</li>

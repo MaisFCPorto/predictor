@@ -272,7 +272,8 @@ export default function JogosPage() {
       try {
         setPastLoading(true);
         const res = await fetch(`/api/fixtures/closed?limit=3&offset=0`, { cache: 'no-store' });
-        const list: FixtureDTO[] = (await res.json()) ?? [];
+        const json = await res.json();
+        const list: FixtureDTO[] = Array.isArray(json) ? json : [];
         if (!abort) {
           setPast(list);
           setPastOffset(list.length);
@@ -345,7 +346,8 @@ export default function JogosPage() {
     try {
       setPastLoading(true);
       const res = await fetch(`/api/fixtures/closed?limit=3&offset=${pastOffset}`, { cache: 'no-store' });
-      const more: FixtureDTO[] = (await res.json()) ?? [];
+      const json = await res.json();
+      const more: FixtureDTO[] = Array.isArray(json) ? json : [];
       setPast((prev) => [...prev, ...more]);
       setPastOffset((o) => o + more.length);
       setPastHasMore(more.length >= 3);

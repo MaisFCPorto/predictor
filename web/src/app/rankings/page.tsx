@@ -42,6 +42,15 @@ function currentYM() {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   return `${d.getFullYear()}-${m}`;
 }
+function formatYmLabel(ym: string) {
+  // ym expected as YYYY-MM
+  const [y, m] = ym.split('-');
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  const month = d.toLocaleDateString('pt-PT', { month: 'long' });
+  const cap = month.charAt(0).toUpperCase() + month.slice(1);
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${cap}'${yy}`;
+}
 function initials(name?: string | null) {
   if (!name) return '—';
   return name
@@ -66,6 +75,29 @@ function gameLabel(g: GameLite) {
   const comp = g.competition_code ? ` • ${g.competition_code}` : '';
   const rnd  = g.round_label ? ` ${g.round_label}` : '';
   return `${when} — ${g.home_team_name} vs ${g.away_team_name}${comp}${rnd}`;
+}
+function gameShort(g: GameLite) {
+  const d = new Date(g.kickoff_at);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm} - ${g.home_team_name} vs ${g.away_team_name}`;
+}
+function gameHeaderLabel(g: GameLite) {
+  const d = new Date(g.kickoff_at);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  const weekday = d.toLocaleDateString('pt-PT', { weekday: 'long' }).toLowerCase();
+  const compMap: Record<string, string> = {
+    TP: 'Taça de Portugal',
+    LP: 'Liga Portugal',
+    LE: 'Liga Europa',
+    TL: 'Taça da Liga',
+  };
+  const compName = g.competition_code ? compMap[g.competition_code] || g.competition_code : '';
+  const comp = compName ? `  • ${compName}` : '';
+  return `${weekday}, ${dd}/${mm}, ${hh}:${mi}${comp}`;
 }
 
 // --- component -------------------------------------------------------------
@@ -136,10 +168,12 @@ export default function RankingsPage() {
   const pageTitle = 'Rankings';
   const cardTitle = useMemo(() => {
     if (mode === 'general') return 'Ranking Geral';
-    if (mode === 'monthly') return `Ranking Mensal ${ym}`;
+    if (mode === 'monthly') return `Ranking Mensal - ${formatYmLabel(ym)}`;
     const g = games.find((x) => x.id === fixtureId);
     return g ? `Ranking por Jogo — ${g.home_team_name} vs ${g.away_team_name}` : 'Ranking por Jogo';
   }, [mode, ym, games, fixtureId]);
+
+  const selectedGame = useMemo(() => games.find((x) => x.id === fixtureId) || null, [games, fixtureId]);
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -193,7 +227,7 @@ export default function RankingsPage() {
             >
               {months.map((m) => (
                 <option key={m} value={m}>
-                  {m}
+                  {formatYmLabel(m)}
                 </option>
               ))}
             </select>
@@ -210,7 +244,7 @@ export default function RankingsPage() {
             >
               {games.map((g) => (
                 <option key={g.id} value={g.id}>
-                  {gameLabel(g)}
+                  {gameShort(g)}
                 </option>
               ))}
             </select>
@@ -228,11 +262,9 @@ export default function RankingsPage() {
 
           {mode === 'bygame' && fixtureId && (
             <div className="hidden items-center gap-2 text-xs text-white/80 md:flex">
-              <span className="opacity-70">Seleção:</span>
+              <span className="opacity-70">Detalhes:</span>
               <span className="rounded-full bg-white/10 px-2 py-0.5">
-                {games.find((x) => x.id === fixtureId)
-                  ? gameLabel(games.find((x) => x.id === fixtureId)!)
-                  : '—'}
+                {selectedGame ? gameHeaderLabel(selectedGame) : '—'}
               </span>
             </div>
           )}
@@ -294,24 +326,35 @@ export default function RankingsPage() {
         {!loading && !err && (
           <div className="hidden sm:block">
             <div className="overflow-x-auto">
-              <table className="min-w-full table-fixed text-sm">
+              <table className="w-full table-auto text-sm">
                 <colgroup>
-                  <col style={{ width: '64px' }} />
+                  {/* #: narrow */}
+                  <col style={{ width: '3rem' }} />
+                  {/* Jogador: flexible */}
                   <col />
-                  <col style={{ width: '140px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '110px' }} />
+                  {/* Metrics: equal responsive width via clamp */}
+                  <col style={{ width: 'clamp(6.5rem, 12vw, 8rem)' }} />
+                  <col style={{ width: 'clamp(6.5rem, 12vw, 8rem)' }} />
+                  <col style={{ width: 'clamp(6.5rem, 12vw, 8rem)' }} />
+                  <col style={{ width: 'clamp(6.5rem, 12vw, 8rem)' }} />
                 </colgroup>
 
                 <thead>
                   <tr className="bg-white/[0.05] text-left">
-                    <th className="px-5 py-3">#</th>
+                    <th className="px-5 py-3 w-12">#</th>
                     <th className="px-5 py-3">Jogador</th>
-                    <th className="px-5 py-3 text-right">Pts</th>
-                    <th className="px-5 py-3 text-right">Exatos</th>
-                    <th className="px-5 py-3 text-right">Dif.</th>
-                    <th className="px-5 py-3 text-right">Tend.</th>
+                    <th className="px-5 py-3 text-right font-semibold whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1">
+                        {/* small medal icon */}
+                        <svg className="h-3.5 w-3.5 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 17l-5.5 3 1.5-6.5L3 8.5l6.5-.5L12 2l2.5 6 6.5.5-5 5 1.5 6.5z" />
+                        </svg>
+                        Pontos
+                      </span>
+                    </th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">Exatos</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">Diferença</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">Tendência</th>
                   </tr>
                 </thead>
 
@@ -331,9 +374,9 @@ export default function RankingsPage() {
                         key={`${r.user_id}-${i}`}
                         className="border-t border-white/10 odd:bg-white/[0.02] hover:bg-white/[0.05]"
                       >
-                        <td className="px-5 py-3 tabular-nums">{i + 1}</td>
+                        <td className="px-5 py-3 tabular-nums w-12">{i + 1}</td>
                         <td className="px-5 py-3">
-                          <div className="flex items-center gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
                             <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-xs font-semibold text-white/90">
                               {r.avatar_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -346,21 +389,23 @@ export default function RankingsPage() {
                                 <span>{initials(r.name)}</span>
                               )}
                             </div>
-                            <span className="font-medium">
+                            <span className="font-medium truncate block max-w-[28ch]">
                               {r.name ?? 'Jogador'}
                             </span>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-right tabular-nums font-semibold">
-                          {r.points}
+                        <td className="px-5 py-3 text-right whitespace-nowrap">
+                          <span className="inline-block rounded-full bg-white/10 px-2.5 py-1 text-white font-semibold tabular-nums">
+                            {r.points}
+                          </span>
                         </td>
-                        <td className="px-5 py-3 text-right tabular-nums">
+                        <td className="px-5 py-3 text-right tabular-nums whitespace-nowrap">
                           {r.exact}
                         </td>
-                        <td className="px-5 py-3 text-right tabular-nums">
+                        <td className="px-5 py-3 text-right tabular-nums whitespace-nowrap">
                           {r.diff}
                         </td>
-                        <td className="px-5 py-3 text-right tabular-nums">
+                        <td className="px-5 py-3 text-right tabular-nums whitespace-nowrap">
                           {r.winner}
                         </td>
                       </tr>
@@ -375,9 +420,9 @@ export default function RankingsPage() {
         {/* Rodapé (legenda de pontuação) */}
         <div className="border-t border-white/10 px-5 py-3 text-center text-xs text-white/70">
           <span className="font-semibold text-white">Legenda:</span>{' '}
-          Resultado exato = <span className="text-white/90">5 pts</span>,{' '}
-          diferença correta = <span className="text-white/90">3 pts</span>,{' '}
-          tendência correta = <span className="text-white/90">1 pt</span>.
+          Resultado exato = <span className="text-white/90">5 pontos</span>,{' '}
+          diferença correta = <span className="text-white/90">3 pontos</span>,{' '}
+          tendência correta = <span className="text-white/90">1 ponto</span>.
         </div>
       </section>
     </main>

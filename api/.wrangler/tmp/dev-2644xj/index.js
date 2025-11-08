@@ -1628,7 +1628,7 @@ var cors = /* @__PURE__ */ __name((options) => {
 // src/routes/rankings.ts
 var rankings = new Hono2();
 var POINTS_EXACT = 5;
-var POINTS_DIFF = 2;
+var POINTS_DIFF = 3;
 var POINTS_WINNER = 1;
 var sign = /* @__PURE__ */ __name((d) => d === 0 ? 0 : d > 0 ? 1 : -1, "sign");
 function scoreOf(predHome, predAway, realHome, realAway) {
@@ -1656,22 +1656,35 @@ function scoreOf(predHome, predAway, realHome, realAway) {
   return { points: 0, exact: 0, diff: 0, winner: 0 };
 }
 __name(scoreOf, "scoreOf");
+function cmpRanking(a, b) {
+  if (b.points !== a.points) return b.points - a.points;
+  if (b.exact !== a.exact) return b.exact - a.exact;
+  if (b.diff !== a.diff) return b.diff - a.diff;
+  if (b.winner !== a.winner) return b.winner - a.winner;
+  const aa = a.first_pred_at ?? Number.POSITIVE_INFINITY;
+  const bb = b.first_pred_at ?? Number.POSITIVE_INFINITY;
+  return aa - bb;
+}
+__name(cmpRanking, "cmpRanking");
 rankings.get("/", async (c) => {
   const ym = c.req.query("ym");
   const sqlFx = ym ? `
-       SELECT id, home_score, away_score
+       SELECT id, home_score, away_score, kickoff_at
        FROM fixtures
        WHERE status='FINISHED'
          AND strftime('%Y-%m', kickoff_at)=?
       ` : `
-       SELECT id, home_score, away_score
+       SELECT id, home_score, away_score, kickoff_at
        FROM fixtures
        WHERE status='FINISHED'
       `;
   const finished = ym ? await c.env.DB.prepare(sqlFx).bind(ym).all() : await c.env.DB.prepare(sqlFx).all();
   const fin = finished.results ?? [];
   if (!fin.length) return c.json([], 200);
-  const preds = await c.env.DB.prepare(`SELECT user_id, fixture_id, home_goals, away_goals FROM predictions`).all();
+  const preds = await c.env.DB.prepare(`
+      SELECT user_id, fixture_id, home_goals, away_goals, created_at
+      FROM predictions
+    `).all();
   const users = await c.env.DB.prepare(`
       SELECT
         u.id,
@@ -1703,20 +1716,22 @@ rankings.get("/", async (c) => {
         points: 0,
         exact: 0,
         diff: 0,
-        winner: 0
+        winner: 0,
+        first_pred_at: null
       };
     }
     const s = scoreOf(p.home_goals, p.away_goals, f.home_score, f.away_score);
-    score[p.user_id].points += s.points;
-    score[p.user_id].exact += s.exact;
-    score[p.user_id].diff += s.diff;
-    score[p.user_id].winner += s.winner;
+    const acc = score[p.user_id];
+    acc.points += s.points;
+    acc.exact += s.exact;
+    acc.diff += s.diff;
+    acc.winner += s.winner;
+    if (p.created_at) {
+      const t = new Date(p.created_at).getTime();
+      acc.first_pred_at = acc.first_pred_at == null ? t : Math.min(acc.first_pred_at, t);
+    }
   }
-  const ranking = Object.values(score).sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.exact !== a.exact) return b.exact - a.exact;
-    return b.diff - a.diff;
-  });
+  const ranking = Object.values(score).sort(cmpRanking);
   return c.json(ranking, 200);
 });
 rankings.get("/months", async (c) => {
@@ -1769,7 +1784,8 @@ rankings.get("/game", async (c) => {
         )                                  AS name,
         u.avatar_url                       AS avatar_url,
         p.home_goals                       AS pred_home,
-        p.away_goals                       AS pred_away
+        p.away_goals                       AS pred_away,
+        p.created_at                       AS pred_created_at
       FROM users u
       LEFT JOIN predictions p
         ON p.user_id = u.id AND p.fixture_id = ?
@@ -1777,6 +1793,7 @@ rankings.get("/game", async (c) => {
     `).bind(fixtureId).all();
   const rows = (results ?? []).map((r) => {
     const s = scoreOf(r.pred_home, r.pred_away, fx.home_score, fx.away_score);
+    const first_pred_at = r.pred_created_at ? new Date(r.pred_created_at).getTime() : null;
     return {
       user_id: r.user_id,
       name: r.name ?? "Jogador",
@@ -1784,14 +1801,12 @@ rankings.get("/game", async (c) => {
       points: s.points,
       exact: s.exact,
       diff: s.diff,
-      winner: s.winner
+      winner: s.winner,
+      first_pred_at
+      // para desempate final
     };
   });
-  rows.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.exact !== a.exact) return b.exact - a.exact;
-    return b.diff - a.diff;
-  });
+  rows.sort(cmpRanking);
   return c.json(rows, 200);
 });
 
@@ -3424,6 +3439,55 @@ app.get(
   (c) => listFixtures(c, c.req.param("id"))
 );
 app.get("/api/matchdays/md1/fixtures", (c) => listFixtures(c, "md1"));
+app.get("/api/fixtures/finished", async (c) => {
+  const limitQ = Number(c.req.query("limit") ?? "10");
+  const offsetQ = Number(c.req.query("offset") ?? "0");
+  const limit = Number.isFinite(limitQ) ? Math.min(Math.max(limitQ, 1), 100) : 10;
+  const offset = Number.isFinite(offsetQ) ? Math.max(offsetQ, 0) : 0;
+  const { results } = await c.env.DB.prepare(`
+      SELECT 
+        f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
+        f.competition_id, f.round_label,
+        f.leg AS leg,
+        ht.name AS home_team_name, at.name AS away_team_name,
+        ht.crest_url AS home_crest, at.crest_url AS away_crest,
+        co.code AS competition_code, co.name AS competition_name
+      FROM fixtures f
+      JOIN teams ht ON ht.id = f.home_team_id
+      JOIN teams at ON at.id = f.away_team_id
+      LEFT JOIN competitions co ON co.id = f.competition_id
+      WHERE f.status = 'FINISHED'
+      ORDER BY f.kickoff_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(limit, offset).all();
+  return c.json(results ?? []);
+});
+app.get("/api/fixtures/closed", async (c) => {
+  const limitQ = Number(c.req.query("limit") ?? "10");
+  const offsetQ = Number(c.req.query("offset") ?? "0");
+  const limit = Number.isFinite(limitQ) ? Math.min(Math.max(limitQ, 1), 100) : 10;
+  const offset = Number.isFinite(offsetQ) ? Math.max(offsetQ, 0) : 0;
+  const lockMinutes = Number(c.env.LOCK_MINUTES_BEFORE ?? "0");
+  const lockStr = String(Number.isFinite(lockMinutes) ? lockMinutes : 0);
+  const { results } = await c.env.DB.prepare(`
+      SELECT 
+        f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
+        f.competition_id, f.round_label,
+        f.leg AS leg,
+        ht.name AS home_team_name, at.name AS away_team_name,
+        ht.crest_url AS home_crest, at.crest_url AS away_crest,
+        co.code AS competition_code, co.name AS competition_name
+      FROM fixtures f
+      JOIN teams ht ON ht.id = f.home_team_id
+      JOIN teams at ON at.id = f.away_team_id
+      LEFT JOIN competitions co ON co.id = f.competition_id
+      WHERE f.status = 'FINISHED'
+         OR DATETIME('now') >= DATETIME(f.kickoff_at, '-' || ? || ' minutes')
+      ORDER BY f.kickoff_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(lockStr, limit, offset).all();
+  return c.json(results ?? []);
+});
 app.post("/api/predictions", async (c) => {
   try {
     const body = await c.req.json().catch(() => null);
@@ -3449,6 +3513,14 @@ app.post("/api/predictions", async (c) => {
     console.error("Erro /api/predictions:", e);
     return c.json({ error: "internal_error" }, 500);
   }
+});
+app.get("/api/predictions", async (c) => {
+  const userId = c.req.query("userId");
+  if (!userId) return c.json([], 200);
+  const { results } = await c.env.DB.prepare(
+    `SELECT fixture_id, home_goals, away_goals FROM predictions WHERE user_id = ?`
+  ).bind(userId).all();
+  return c.json(results ?? []);
 });
 app.post("/api/users/sync", async (c) => {
   try {
@@ -3549,7 +3621,9 @@ app.patch("/api/admin/fixtures/:id", async (c) => {
        status       = COALESCE(?, status),
        competition_id = COALESCE(?, competition_id),
        round_label  = COALESCE(?, round_label),
-       leg   = COALESCE(?, leg)
+       leg   = COALESCE(?, leg),
+       home_score     = COALESCE(?, home_score),  
+       away_score     = COALESCE(?, away_score) 
      WHERE id=?`,
     b.home_team_id ?? null,
     b.away_team_id ?? null,
@@ -3558,6 +3632,8 @@ app.patch("/api/admin/fixtures/:id", async (c) => {
     b.competition_id ?? null,
     b.round_label ?? null,
     b.leg_number ?? b.leg ?? null,
+    b.home_score ?? null,
+    b.away_score ?? null,
     id
   );
   return c.json({ ok: true });
@@ -3650,7 +3726,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-pAeyIz/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-O0Wx1W/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -3682,7 +3758,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-pAeyIz/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-O0Wx1W/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

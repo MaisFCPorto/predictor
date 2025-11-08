@@ -54,3 +54,4 @@ async function forward(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) { return forward(req); }
+export async function GET(req: NextRequest) { return forward(req); }

@@ -186,6 +186,91 @@ app.get('/api/matchdays/:id/fixtures', (c) =>
 app.get('/api/matchdays/md1/fixtures', (c) => listFixtures(c, 'md1'));
 
 // ----------------------------------------------------
+// PUBLIC: Finished fixtures with pagination
+//   GET /api/fixtures/finished?limit=10&offset=0
+// ----------------------------------------------------
+app.get('/api/fixtures/finished', async (c) => {
+  const limitQ = Number(c.req.query('limit') ?? '10');
+  const offsetQ = Number(c.req.query('offset') ?? '0');
+  const limit = Number.isFinite(limitQ) ? Math.min(Math.max(limitQ, 1), 100) : 10;
+  const offset = Number.isFinite(offsetQ) ? Math.max(offsetQ, 0) : 0;
+
+  const { results } = await c.env.DB
+    .prepare(`
+      SELECT 
+        f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
+        f.competition_id, f.round_label,
+        f.leg AS leg,
+        ht.name AS home_team_name, at.name AS away_team_name,
+        ht.crest_url AS home_crest, at.crest_url AS away_crest,
+        co.code AS competition_code, co.name AS competition_name
+      FROM fixtures f
+      JOIN teams ht ON ht.id = f.home_team_id
+      JOIN teams at ON at.id = f.away_team_id
+      LEFT JOIN competitions co ON co.id = f.competition_id
+      WHERE f.status = 'FINISHED'
+      ORDER BY f.kickoff_at DESC
+      LIMIT ? OFFSET ?
+    `)
+    .bind(limit, offset)
+    .all<{
+      id: string; kickoff_at: string; status: string;
+      home_team_name: string; away_team_name: string;
+      home_crest: string | null; away_crest: string | null;
+      competition_id: string | null; competition_code: string | null; competition_name: string | null;
+      round_label: string | null; leg: number | null;
+      home_score: number | null; away_score: number | null;
+    }>();
+
+  return c.json(results ?? []);
+});
+
+// ----------------------------------------------------
+// PUBLIC: Closed fixtures (FINISHED or SCHEDULED but already locked)
+//   GET /api/fixtures/closed?limit=10&offset=0
+// ----------------------------------------------------
+app.get('/api/fixtures/closed', async (c) => {
+  const limitQ = Number(c.req.query('limit') ?? '10');
+  const offsetQ = Number(c.req.query('offset') ?? '0');
+  const limit = Number.isFinite(limitQ) ? Math.min(Math.max(limitQ, 1), 100) : 10;
+  const offset = Number.isFinite(offsetQ) ? Math.max(offsetQ, 0) : 0;
+
+  // lock minutes from env
+  const lockMinutes = Number(c.env.LOCK_MINUTES_BEFORE ?? '0');
+  const lockStr = String(Number.isFinite(lockMinutes) ? lockMinutes : 0);
+
+  const { results } = await c.env.DB
+    .prepare(`
+      SELECT 
+        f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
+        f.competition_id, f.round_label,
+        f.leg AS leg,
+        ht.name AS home_team_name, at.name AS away_team_name,
+        ht.crest_url AS home_crest, at.crest_url AS away_crest,
+        co.code AS competition_code, co.name AS competition_name
+      FROM fixtures f
+      JOIN teams ht ON ht.id = f.home_team_id
+      JOIN teams at ON at.id = f.away_team_id
+      LEFT JOIN competitions co ON co.id = f.competition_id
+      WHERE f.status = 'FINISHED'
+         OR DATETIME('now') >= DATETIME(f.kickoff_at, '-' || ? || ' minutes')
+      ORDER BY f.kickoff_at DESC
+      LIMIT ? OFFSET ?
+    `)
+    .bind(lockStr, limit, offset)
+    .all<{
+      id: string; kickoff_at: string; status: string;
+      home_team_name: string; away_team_name: string;
+      home_crest: string | null; away_crest: string | null;
+      competition_id: string | null; competition_code: string | null; competition_name: string | null;
+      round_label: string | null; leg: number | null;
+      home_score: number | null; away_score: number | null;
+    }>();
+
+  return c.json(results ?? []);
+});
+
+// ----------------------------------------------------
 // PUBLIC: Predictions
 // ----------------------------------------------------
 app.post('/api/predictions', async (c) => {
@@ -229,6 +314,18 @@ app.post('/api/predictions', async (c) => {
     console.error('Erro /api/predictions:', e);
     return c.json({ error: 'internal_error' }, 500);
   }
+});
+
+app.get('/api/predictions', async (c) => {
+  const userId = c.req.query('userId');
+  if (!userId) return c.json([], 200);
+  const { results } = await c.env.DB
+    .prepare(
+      `SELECT fixture_id, home_goals, away_goals FROM predictions WHERE user_id = ?`
+    )
+    .bind(userId)
+    .all<{ fixture_id: string; home_goals: number; away_goals: number }>();
+  return c.json(results ?? []);
 });
 
 // ----------------------------------------------------

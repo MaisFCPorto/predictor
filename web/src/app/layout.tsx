@@ -35,7 +35,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl px-4 py-6">{children}</main>
+        <main className="mx-auto w-full max-w-6xl px-4">{children}</main>
+
+        <footer className="mt-10 border-t border-white/10">
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 text-xs leading-relaxed text-white/70 text-center">
+            <div className="opacity-80">© {new Date().getFullYear()} +FCPorto Predictor. Todos os direitos reservados.</div>
+            <div className="mt-1">
+              As marcas, nomes e logótipos do +FCPorto e da Betano são propriedade dos respetivos titulares e estão protegidos por direitos de autor e/ou marcas registadas. Não é permitida a utilização para fins comerciais sem autorização.
+            </div>
+            <div className="mt-1">
+              A utilização deste site implica a aceitação dos{' '}
+              <Link href="/regras" className="underline underline-offset-2 hover:text-white/90">
+                Termos e Condições
+              </Link>{' '}deste projeto.
+            </div>
+          </div>
+        </footer>
       </body>
     </html>
   );

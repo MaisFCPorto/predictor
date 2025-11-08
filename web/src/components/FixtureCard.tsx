@@ -18,6 +18,12 @@ type Props = {
   is_locked?: boolean;
   lock_at_utc?: string | null;
   leg?: number | null;
+  // optional final result from database (for past fixtures)
+  final_home_score?: number | null;
+  final_away_score?: number | null;
+  // optional user's prediction values
+  pred_home?: number | null;
+  pred_away?: number | null;
   onSave: (id: string, h: number, a: number) => Promise<void> | void;
   saving?: boolean;
   variant?: 'default' | 'past';
@@ -38,6 +44,8 @@ export default function FixtureCard({
   home_crest, away_crest,
   competition_code, round_label,
   is_locked, lock_at_utc,
+  final_home_score, final_away_score,
+  pred_home, pred_away,
   onSave, saving,
   variant = 'default',
 }: Props) {
@@ -126,24 +134,86 @@ export default function FixtureCard({
   const nowLocked = locked || (variant !== 'past' && (remainMs ?? 1) <= 0);
   const [home, setHome] = useState<number | ''>('');
   const [away, setAway] = useState<number | ''>('');
-  const canSave = !nowLocked && home !== '' && away !== '';
+  const hasPred = typeof pred_home === 'number' && typeof pred_away === 'number';
+  const unchanged = hasPred && typeof home === 'number' && typeof away === 'number'
+    ? (home === pred_home && away === pred_away)
+    : false;
+  const canSave = !nowLocked && home !== '' && away !== '' && !unchanged;
 
-  // Points display for past fixtures (example logic; replace with real data when available)
+  // Prefill from user's prediction. For past fixtures, always reflect prediction.
+  // For open fixtures, only initialize when empty to avoid clobbering user typing.
+  useEffect(() => {
+    const ph = typeof pred_home === 'number' ? pred_home : null;
+    const pa = typeof pred_away === 'number' ? pred_away : null;
+    if (variant === 'past') {
+      if (ph !== null) setHome(ph);
+      if (pa !== null) setAway(pa);
+    } else {
+      if (home === '' && ph !== null) setHome(ph);
+      if (away === '' && pa !== null) setAway(pa);
+    }
+  }, [pred_home, pred_away, variant]);
+
+  // Points display for past fixtures (based on prediction vs final score)
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
-    // Replace with real prediction data when available; for now, stub based on fixture state
-    const stubPoints = Math.random() > 0.8 ? null : Math.floor(Math.random() * 6); // 0..5 or null
-    if (stubPoints === null) {
-      return { label: 'Sem participação', className: 'bg-gray-500/15 text-gray-300' };
+    const ph = typeof pred_home === 'number' ? pred_home : null;
+    const pa = typeof pred_away === 'number' ? pred_away : null;
+    const rh = typeof final_home_score === 'number' ? final_home_score : null;
+    const ra = typeof final_away_score === 'number' ? final_away_score : null;
+    if (ph == null || pa == null) return { label: 'Sem participação', className: 'bg-red-500/25 text-red-100' };
+    if (rh == null || ra == null) return { label: '+0 pontos', className: 'bg-white/5 text-gray-200' };
+
+    const winner = (n: number) => (n === 0 ? 0 : n > 0 ? 1 : -1);
+    let pts = 0;
+    if (winner(ph - pa) === winner(rh - ra)) pts += 3;                  // Correct result (winner/draw)
+    if (ph === rh) pts += 2;                                            // Correct home goals
+    if (pa === ra) pts += 2;                                            // Correct away goals
+    if (Math.abs(ph - pa) === Math.abs(rh - ra)) pts += 3;              // Correct goal difference
+
+    const label = `+${pts} ${pts === 1 ? 'ponto' : 'pontos'}`;
+    if (pts === 0) {
+      return { label, className: 'bg-amber-400/25 text-amber-50' };
     }
-    switch (stubPoints) {
-      case 5: return { label: '+5 pontos', className: 'bg-green-500/25 text-green-100' };
-      case 3: return { label: '+3 pontos', className: 'bg-green-400/25 text-green-50' };
-      case 1: return { label: '+1 ponto', className: 'bg-amber-400/25 text-amber-50' };
-      case 0: return { label: '0 pontos', className: 'bg-red-500/25 text-red-100' };
-      default: return { label: '0 pontos', className: 'bg-red-500/25 text-red-100' };
-    }
-  }, [variant]);
+    // Green scale 1..10 (darker as points increase)
+    const greens = [
+      'bg-green-500/[0.12] text-green-100', // 1
+      'bg-green-500/[0.16] text-green-100', // 2
+      'bg-green-500/[0.20] text-green-100', // 3
+      'bg-green-500/[0.24] text-green-100', // 4
+      'bg-green-500/[0.28] text-green-100', // 5
+      'bg-green-500/[0.32] text-green-50',  // 6
+      'bg-green-600/[0.36] text-green-50',  // 7
+      'bg-green-600/[0.40] text-green-50',  // 8
+      'bg-green-700/[0.48] text-green-50',  // 9
+      'bg-green-700/[0.56] text-green-50',  // 10
+    ];
+    const idx = Math.min(Math.max(pts, 1), 10) - 1;
+    return { label, className: greens[idx] };
+  }, [variant, pred_home, pred_away, final_home_score, final_away_score]);
+
+  const finalScoreText = useMemo(() => {
+    const h = typeof final_home_score === 'number' ? final_home_score : null;
+    const a = typeof final_away_score === 'number' ? final_away_score : null;
+    if (variant !== 'past') return null;
+    if (h == null || a == null) return null;
+    return `${h}-${a}`;
+  }, [variant, final_home_score, final_away_score]);
+
+  const lastPredText = useMemo(() => {
+    const ph = typeof pred_home === 'number' ? pred_home : null;
+    const pa = typeof pred_away === 'number' ? pred_away : null;
+    if (variant === 'past') return null;
+    if (ph == null || pa == null) return null;
+    return `${ph}-${pa}`;
+  }, [variant, pred_home, pred_away]);
+
+  // status label shown in header right pill
+  const headerStatusLabel = useMemo(() => {
+    if (variant === 'past') return status === 'FINISHED' ? 'Terminado' : 'Bloqueado';
+    if (nowLocked) return 'Bloqueado';
+    return null;
+  }, [variant, status, nowLocked]);
 
   const watermarkUrl = useMemo(() => {
     switch (competition_code) {
@@ -210,13 +280,13 @@ export default function FixtureCard({
           <span
             className={clsx(
               'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] leading-none',
-              variant === 'past' || nowLocked
+              headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
                 : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER)
             )}
           >
-            {variant === 'past' || nowLocked ? (
-              'Bloqueado'
+            {headerStatusLabel ? (
+              headerStatusLabel
             ) : (
               <>
                 <svg className="inline h-3 w-3 mr-1 align-[-2px] opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -266,13 +336,13 @@ export default function FixtureCard({
           <span
             className={clsx(
               'rounded-full px-3 py-1 text-[12px] leading-none',
-              variant === 'past' || nowLocked
+              headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
                 : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER)
             )}
           >
-            {variant === 'past' || nowLocked ? (
-              'Bloqueado'
+            {headerStatusLabel ? (
+              headerStatusLabel
             ) : (
               <>
                 <span className="mr-1">Fecha em</span>
@@ -359,17 +429,31 @@ export default function FixtureCard({
         </div>
       </div>
 
-      {/* Points badge for past fixtures */}
+      {/* Points badge for past fixtures (status now shown in header) */}
       {pointsBadge && (
-        <div className="flex justify-center mt-2">
+        <div className="flex justify-center mt-2 gap-2">
+          {finalScoreText && (
+            <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
+              Resultado Correto: {finalScoreText}
+            </span>
+          )}
           <span className={clsx('inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none', pointsBadge.className)}>
             {pointsBadge.label}
           </span>
         </div>
       )}
 
-      {/* Mobile Guardar button centered below score */}
-      {variant !== 'past' && (
+      {/* Last prediction pill for open fixtures */}
+      {!pointsBadge && lastPredText && (
+        <div className="flex justify-center mt-2">
+          <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
+            Última previsão: {lastPredText}
+          </span>
+        </div>
+      )}
+
+      {/* Mobile Guardar button centered below score (only when canSave) */}
+      {variant !== 'past' && canSave && (
         <div className="md:hidden flex justify-center mt-1">
           <button
             disabled={!canSave || !!saving}
@@ -437,7 +521,7 @@ function ScoreBox({ disabled, value, onChange }: { disabled?: boolean; value: nu
           : 'border-white/20 bg-[#010436] text-white hover:bg-[#010436] focus:outline-none focus:ring-2 focus:ring-white/20'
       )}
       disabled={disabled}
-      placeholder="0"
+      placeholder=""
       inputMode="numeric"
     />
   );

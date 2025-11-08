@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import FixtureCard from '@/components/FixtureCard';
@@ -23,6 +23,15 @@ type FixtureDTO = {
   leg: number | null;
   is_locked: boolean;
   lock_at_utc?: string | null;
+  // optional final result from API when available
+  home_score?: number | null;
+  away_score?: number | null;
+};
+
+type PredictionDTO = {
+  fixture_id: string;
+  home_goals: number;
+  away_goals: number;
 };
 
 type RankRow = {
@@ -68,6 +77,13 @@ function currentYM() {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   return `${d.getFullYear()}-${m}`;
 }
+function formatYmLabel(ym: string) {
+  const [y, m] = ym.split('-');
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  const month = d.toLocaleDateString('pt-PT', { month: 'long' });
+  const cap = month.charAt(0).toUpperCase() + month.slice(1);
+  return cap;
+}
 
 export default function JogosPage() {
   const router = useRouter();
@@ -77,6 +93,15 @@ export default function JogosPage() {
   const [fixtures, setFixtures] = useState<FixtureDTO[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // past fixtures infinite list
+  const [past, setPast] = useState<FixtureDTO[]>([]);
+  const [pastOffset, setPastOffset] = useState(0);
+  const [pastHasMore, setPastHasMore] = useState(true);
+  const [pastLoading, setPastLoading] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const [enableAutoLoad, setEnableAutoLoad] = useState(false);
+  const autoloadResumeAtRef = useRef<number>(0);
+  const lastScrollYRef = useRef<number>(0);
 
   // --- user + dashboard summaries ---
   const [authLoading, setAuthLoading] = useState(true);
@@ -91,6 +116,9 @@ export default function JogosPage() {
 
   const [lastPoints, setLastPoints] = useState<LastPoints>(null);
   const [summaryErr, setSummaryErr] = useState<string | null>(null);
+
+  // --- predictions for current user (by fixture id) ---
+  const [predictions, setPredictions] = useState<Record<string, { home: number; away: number }>>({});
 
   // --- supabase user + SYNC NO WORKER ---
   useEffect(() => {
@@ -126,6 +154,32 @@ export default function JogosPage() {
       setAuthLoading(false);
     })();
   }, []);
+
+  // --- carregar predictions do utilizador ---
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      try {
+        if (!userId) { if (!abort) setPredictions({}); return; }
+        const res = await fetch(`/api/predictions?userId=${encodeURIComponent(userId)}`, { cache: 'no-store' });
+        if (!res.ok) { if (!abort) setPredictions({}); return; }
+        const list = (await res.json()) as PredictionDTO[] | any;
+        const arr: PredictionDTO[] = Array.isArray(list) ? list : Array.isArray(list?.items) ? list.items : [];
+        const map: Record<string, { home: number; away: number }> = {};
+        for (const p of arr) {
+          if (p && typeof p.fixture_id === 'string') {
+            const h = (p as any).home_goals;
+            const a = (p as any).away_goals;
+            if (typeof h === 'number' && typeof a === 'number') map[p.fixture_id] = { home: h, away: a };
+          }
+        }
+        if (!abort) setPredictions(map);
+      } catch {
+        if (!abort) setPredictions({});
+      }
+    })();
+    return () => { abort = true; };
+  }, [userId]);
 
   // --- carregar dashboard (geral / mensal / último) ---
   useEffect(() => {
@@ -210,6 +264,80 @@ export default function JogosPage() {
     return () => { abort = true; };
   }, []);
 
+  // --- carregar primeiros jogos fechados (terminado ou bloqueado) — apenas 3 ---
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      try {
+        setPastLoading(true);
+        const res = await fetch(`/api/fixtures/closed?limit=3&offset=0`, { cache: 'no-store' });
+        const list: FixtureDTO[] = (await res.json()) ?? [];
+        if (!abort) {
+          setPast(list);
+          setPastOffset(list.length);
+          setPastHasMore(list.length >= 3);
+        }
+      } catch {
+        if (!abort) { setPast([]); setPastHasMore(false); }
+      } finally {
+        if (!abort) setPastLoading(false);
+      }
+    })();
+    return () => { abort = true; };
+  }, []);
+
+  // --- observer para carregar mais ao scroll (jogos fechados) ---
+  useEffect(() => {
+    if (!enableAutoLoad || !pastHasMore || pastLoading) return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(async (entries) => {
+      const e = entries[0];
+      if (!e.isIntersecting) return;
+      obs.unobserve(el);
+      try {
+        setPastLoading(true);
+        const res = await fetch(`/api/fixtures/closed?limit=3&offset=${pastOffset}`, { cache: 'no-store' });
+        const more: FixtureDTO[] = (await res.json()) ?? [];
+        setPast((prev) => [...prev, ...more]);
+        setPastOffset((o) => o + more.length);
+        setPastHasMore(more.length >= 3);
+      } finally {
+        setPastLoading(false);
+      }
+    }, { rootMargin: '200px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [enableAutoLoad, pastHasMore, pastLoading, pastOffset]);
+
+  // --- ativa auto-load quando o utilizador fizer scroll PARA BAIXO (rearma se for desativado), com cooldown
+  useEffect(() => {
+    if (enableAutoLoad) return;
+    const onScroll = () => {
+      const y = window.scrollY || 0;
+      const last = lastScrollYRef.current;
+      const directionDown = y > last + 4; // ignora pequenas oscilações
+      lastScrollYRef.current = y;
+      if (!directionDown) return;
+      if (Date.now() < autoloadResumeAtRef.current) return;
+      setEnableAutoLoad(true);
+      window.removeEventListener('scroll', onScroll);
+    };
+    // inicializa referência
+    lastScrollYRef.current = window.scrollY || 0;
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [enableAutoLoad]);
+
+  // permite "mostrar menos" — volta aos 3 iniciais e desarma o autoload
+  function collapsePast() {
+    setPast((prev) => prev.slice(0, 3));
+    setPastOffset(3);
+    setPastHasMore(true);
+    setEnableAutoLoad(false);
+    autoloadResumeAtRef.current = Date.now() + 1000; // 1s cooldown para evitar trigger imediato
+  }
+
   // ordenar por kickoff asc (para abertos)
   const sortedAsc = useMemo(
     () => [...fixtures].sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime()),
@@ -221,15 +349,7 @@ export default function JogosPage() {
     [sortedAsc]
   );
 
-  // passados/bloqueados: ordenar DESC e limitar a 3
-  const lockedRecent = useMemo(
-    () =>
-      [...fixtures]
-        .filter(f => f.is_locked || f.status === 'FINISHED')
-        .sort((a, b) => new Date(b.kickoff_at).getTime() - new Date(a.kickoff_at).getTime())
-        .slice(0, 3),
-    [fixtures]
-  );
+  // lockedRecent no longer used; we paginate finished fixtures via API
 
   // guardar palpite
   async function onSave(fixtureId: string, home: number, away: number) {
@@ -304,14 +424,13 @@ export default function JogosPage() {
                 </CardLink>
 
                 <CardLink href={linkMonthly} aria="Ir para o ranking mensal">
-                  <div className="text-sm opacity-75">Classificação Mensal</div>
+                  <div className="text-sm opacity-75">Classificação Mensal - {formatYmLabel(ym)}</div>
                   <div className="mt-1 text-3xl font-bold">
                     {monPos == null ? '—' : `#${monPos}`}
                   </div>
                   <div className="mt-1 text-sm opacity-75">
                     Pontos: {monPoints == null ? '—' : monPoints}
                   </div>
-                  <div className="mt-1 text-xs opacity-60">Mês: {ym}</div>
                 </CardLink>
 
                 <CardLink href={linkByGame} aria="Ir para o ranking do último jogo">
@@ -389,6 +508,8 @@ export default function JogosPage() {
                     leg={f.leg}
                     is_locked={f.is_locked || f.status === 'FINISHED'}
                     lock_at_utc={f.lock_at_utc}
+                    pred_home={predictions[f.id]?.home}
+                    pred_away={predictions[f.id]?.away}
                     onSave={onSave}
                     saving={savingId === f.id}
                   />
@@ -398,15 +519,17 @@ export default function JogosPage() {
           </section>
         )}
 
-        {/* Jogos passados (máx 3) */}
+        {/* Jogos passados (scroll infinito) */}
         {!loading && (
           <section>
             <h2 className="text-2xl font-bold mb-4">Jogos passados</h2>
-            {lockedRecent.length === 0 ? (
+            {past.length === 0 && pastLoading ? (
+              <div className="opacity-70">A carregar…</div>
+            ) : past.length === 0 ? (
               <div className="opacity-70">Sem jogos passados.</div>
             ) : (
               <div className="space-y-4">
-                {lockedRecent.map((f) => (
+                {past.map((f) => (
                   <FixtureCard
                     key={f.id}
                     id={f.id}
@@ -419,13 +542,30 @@ export default function JogosPage() {
                     competition_code={f.competition_code}
                     round_label={f.round_label}
                     leg={f.leg}
-                    is_locked={f.is_locked || f.status === 'FINISHED'}
-                    lock_at_utc={f.lock_at_utc}
+                    is_locked={true}
+                    lock_at_utc={null}
+                    final_home_score={f.home_score ?? null}
+                    final_away_score={f.away_score ?? null}
+                    pred_home={predictions[f.id]?.home}
+                    pred_away={predictions[f.id]?.away}
                     onSave={onSave}
-                    saving={savingId === f.id}
+                    saving={false}
                     variant="past"
                   />
                 ))}
+                {past.length > 3 && (
+                  <div className="flex justify-center">
+                    <button
+                      className="rounded bg-white/10 px-3 py-1 hover:bg-white/15"
+                      onClick={collapsePast}
+                      title="Ocultar jogos carregados e voltar aos 3 mais recentes"
+                    >
+                      Mostrar menos
+                    </button>
+                  </div>
+                )}
+                {enableAutoLoad && <div ref={loadMoreRef} />}
+                {pastLoading && <div className="opacity-70">A carregar…</div>}
               </div>
             )}
           </section>

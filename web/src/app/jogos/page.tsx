@@ -102,6 +102,7 @@ export default function JogosPage() {
   const [enableAutoLoad, setEnableAutoLoad] = useState(false);
   const autoloadResumeAtRef = useRef<number>(0);
   const lastScrollYRef = useRef<number>(0);
+  const [manualLoad, setManualLoad] = useState(false);
 
   // --- user + dashboard summaries ---
   const [authLoading, setAuthLoading] = useState(true);
@@ -312,7 +313,7 @@ export default function JogosPage() {
 
   // --- ativa auto-load quando o utilizador fizer scroll PARA BAIXO (rearma se for desativado), com cooldown
   useEffect(() => {
-    if (enableAutoLoad) return;
+    if (enableAutoLoad || manualLoad) return; // não rearmar se estivermos em modo manual
     const onScroll = () => {
       const y = window.scrollY || 0;
       const last = lastScrollYRef.current;
@@ -327,7 +328,7 @@ export default function JogosPage() {
     lastScrollYRef.current = window.scrollY || 0;
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, [enableAutoLoad]);
+  }, [enableAutoLoad, manualLoad]);
 
   // permite "mostrar menos" — volta aos 3 iniciais e desarma o autoload
   function collapsePast() {
@@ -336,6 +337,21 @@ export default function JogosPage() {
     setPastHasMore(true);
     setEnableAutoLoad(false);
     autoloadResumeAtRef.current = Date.now() + 1000; // 1s cooldown para evitar trigger imediato
+    setManualLoad(true); // a partir daqui, só carrega ao clicar em "Mostrar mais"
+  }
+
+  async function loadMoreManual() {
+    if (pastLoading || !pastHasMore) return;
+    try {
+      setPastLoading(true);
+      const res = await fetch(`/api/fixtures/closed?limit=3&offset=${pastOffset}`, { cache: 'no-store' });
+      const more: FixtureDTO[] = (await res.json()) ?? [];
+      setPast((prev) => [...prev, ...more]);
+      setPastOffset((o) => o + more.length);
+      setPastHasMore(more.length >= 3);
+    } finally {
+      setPastLoading(false);
+    }
   }
 
   // ordenar por kickoff asc (para abertos)
@@ -564,7 +580,19 @@ export default function JogosPage() {
                     </button>
                   </div>
                 )}
-                {enableAutoLoad && <div ref={loadMoreRef} />}
+                {/* Modo auto (inicial) usa sentinel; modo manual mostra botão */}
+                {!manualLoad && enableAutoLoad && <div ref={loadMoreRef} />}
+                {manualLoad && pastHasMore && past.length <= 3 && (
+                  <div className="flex justify-center">
+                    <button
+                      className="mt-2 rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
+                      onClick={loadMoreManual}
+                      disabled={pastLoading}
+                    >
+                      {pastLoading ? 'A carregar…' : 'Mostrar mais'}
+                    </button>
+                  </div>
+                )}
                 {pastLoading && <div className="opacity-70">A carregar…</div>}
               </div>
             )}

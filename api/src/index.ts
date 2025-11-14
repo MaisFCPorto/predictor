@@ -368,25 +368,35 @@ app.post('/api/predictions', async (c) => {
     if (!body) return c.json({ error: 'invalid_json' }, 400);
 
     const { fixtureId, home, away, userId } = body;
-    if (!fixtureId || !userId || home == null || away == null)
+    if (!fixtureId || !userId || home == null || away == null) {
       return c.json({ error: 'missing_data' }, 400);
+    }
 
     const userExists = await c.env.DB
-      .prepare(`SELECT 1 FROM users WHERE id=? LIMIT 1`)
+      .prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`)
       .bind(userId)
       .first();
     if (!userExists) return c.json({ error: 'user_missing' }, 400);
 
     const fx = await c.env.DB
-      .prepare(`SELECT kickoff_at, status FROM fixtures WHERE id=? LIMIT 1`)
+      .prepare(
+        `SELECT kickoff_at, status
+         FROM fixtures
+         WHERE id = ?
+         LIMIT 1`,
+      )
       .bind(fixtureId)
       .first<{ kickoff_at: string; status: string }>();
 
     if (!fx) return c.json({ error: 'fixture_not_found' }, 404);
 
     const lockMs = getLockMs(c);
-    if (fx.status === 'FINISHED' || isLocked(fx.kickoff_at, Date.now(), lockMs))
+    if (
+      fx.status === 'FINISHED' ||
+      isLocked(fx.kickoff_at, Date.now(), lockMs)
+    ) {
       return c.json({ error: 'locked' }, 400);
+    }
 
     await c.env.DB
       .prepare(
@@ -394,7 +404,9 @@ app.post('/api/predictions', async (c) => {
         INSERT INTO predictions (id, user_id, fixture_id, home_goals, away_goals)
         VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)
         ON CONFLICT(user_id, fixture_id)
-        DO UPDATE SET home_goals=excluded.home_goals, away_goals=excluded.away_goals
+        DO UPDATE SET
+          home_goals = excluded.home_goals,
+          away_goals = excluded.away_goals
       `,
       )
       .bind(userId, fixtureId, home, away)
@@ -402,52 +414,57 @@ app.post('/api/predictions', async (c) => {
 
     return c.json({ success: true });
   } catch (e) {
-    console.error('Erro /api/predictions:', e);
+    console.error('POST /api/predictions error:', e);
     return c.json({ error: 'internal_error' }, 500);
   }
 });
 
 app.get('/api/predictions', async (c) => {
-  const userId = c.req.query('userId');
-  if (!userId) {
-    return new Response('[]', {
-      status: 200,
-      headers: { 'content-type': 'application/json; charset=utf-8' },
-    });
+  try {
+    const userId = c.req.query('userId');
+    if (!userId) {
+      // devolve array vazio “normal” em JSON
+      return c.json([], 200);
+    }
+
+    const { results } = await c.env.DB
+      .prepare(
+        `
+        SELECT
+          fixture_id,
+          home_goals,
+          away_goals,
+          points
+        FROM predictions
+        WHERE user_id = ?
+      `,
+      )
+      .bind(userId)
+      .all<{
+        fixture_id: string;
+        home_goals: number | null;
+        away_goals: number | null;
+        points: number | null;
+      }>();
+
+    const safe = (results ?? []).map((r) => ({
+      fixture_id: String(r.fixture_id),
+      home_goals: r.home_goals ?? 0,
+      away_goals: r.away_goals ?? 0,
+      points: r.points, // pode ser null se ainda não foi calculado
+    }));
+
+    // Log server-side (apenas para debug; podes remover depois)
+    console.log(
+      'GET /api/predictions →',
+      JSON.stringify(safe).slice(0, 200),
+    );
+
+    return c.json(safe, 200);
+  } catch (e) {
+    console.error('GET /api/predictions error:', e);
+    return c.json({ error: 'internal_error' }, 500);
   }
-
-  const { results } = await c.env.DB
-    .prepare(
-      `
-      SELECT
-        fixture_id,
-        home_goals,
-        away_goals,
-        points
-      FROM predictions
-      WHERE user_id = ?
-    `,
-    )
-    .bind(userId)
-    .all<{
-      fixture_id: string;
-      home_goals: number | null;
-      away_goals: number | null;
-      points: number | null;
-    }>();
-
-  const safe = (results ?? []).map(r => ({
-    fixture_id: r.fixture_id,
-    home_goals: r.home_goals ?? 0,
-    away_goals: r.away_goals ?? 0,
-    points: r.points ?? 0,
-  }));
-
-  // usamos Response “à mão” para garantir que não vai nada estranho no body
-  return new Response(JSON.stringify(safe), {
-    status: 200,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  });
 });
 
 

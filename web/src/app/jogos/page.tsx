@@ -35,11 +35,6 @@ type PredictionDTO = {
   points?: number | null;
 };
 
-const [predictions, setPredictions] = useState<
-  Record<string, { home: number; away: number; points: number | null }>
->({});
-
-
 type RankRow = {
   user_id: string;
   name: string;
@@ -68,7 +63,11 @@ async function fetchJson(url: string) {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
-    throw new Error(`${url} → (${res.status}) ${res.statusText}${txt ? ` — ${txt.slice(0, 140)}…` : ''}`);
+    throw new Error(
+      `${url} → (${res.status}) ${res.statusText}${
+        txt ? ` — ${txt.slice(0, 140)}…` : ''
+      }`,
+    );
   }
   const ct = res.headers.get('content-type') || '';
   if (!ct.includes('application/json')) {
@@ -126,15 +125,15 @@ export default function JogosPage() {
 
   // --- predictions for current user (by fixture id) ---
   const [predictions, setPredictions] = useState<
-  Record<string, { home: number; away: number; points: number | null }>
->({});
-
-
+    Record<string, { home: number; away: number; points: number | null }>
+  >({});
 
   // --- supabase user + SYNC NO WORKER ---
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabasePKCE.auth.getUser();
+      const {
+        data: { user },
+      } = await supabasePKCE.auth.getUser();
 
       if (user) {
         const friendly =
@@ -173,24 +172,30 @@ export default function JogosPage() {
           if (!abort) setPredictions({});
           return;
         }
-  
-        const res = await fetch(`/api/predictions?userId=${encodeURIComponent(userId)}`, {
-          cache: 'no-store',
-        });
-  
+
+        const res = await fetch(
+          `/api/predictions?userId=${encodeURIComponent(userId)}`,
+          {
+            cache: 'no-store',
+          },
+        );
+
         if (!res.ok) {
           if (!abort) setPredictions({});
           return;
         }
-  
+
         const list = (await res.json()) as PredictionDTO[] | any;
         const arr: PredictionDTO[] = Array.isArray(list)
           ? list
           : Array.isArray(list?.items)
           ? list.items
           : [];
-  
-        const map: Record<string, { home: number; away: number; points: number | null }> = {};
+
+        const map: Record<
+          string,
+          { home: number; away: number; points: number | null }
+        > = {};
         for (const p of arr) {
           if (p && typeof p.fixture_id === 'string') {
             const h = (p as any).home_goals;
@@ -205,7 +210,7 @@ export default function JogosPage() {
             }
           }
         }
-  
+
         if (!abort) {
           console.log('PREDICTIONS MAP 👉', map);
           setPredictions(map);
@@ -215,12 +220,11 @@ export default function JogosPage() {
         if (!abort) setPredictions({});
       }
     })();
-  
+
     return () => {
       abort = true;
     };
   }, [userId]);
-  
 
   // --- carregar dashboard (geral / mensal / último) ---
   useEffect(() => {
@@ -231,8 +235,10 @@ export default function JogosPage() {
 
         if (!userId) {
           if (!abort) {
-            setGenPos(null); setGenPoints(null);
-            setMonPos(null); setMonPoints(null);
+            setGenPos(null);
+            setGenPoints(null);
+            setMonPos(null);
+            setMonPoints(null);
             setLastPoints(null);
           }
           return;
@@ -240,12 +246,16 @@ export default function JogosPage() {
 
         const [general, monthly] = await Promise.all([
           fetchJson('/api/rankings') as Promise<RankRow[]>,
-          fetchJson(`/api/rankings?ym=${encodeURIComponent(currentYM())}`) as Promise<RankRow[]>,
+          fetchJson(
+            `/api/rankings?ym=${encodeURIComponent(currentYM())}`,
+          ) as Promise<RankRow[]>,
         ]);
 
         const pickMyRow = (rows: RankRow[]) => {
-          const idx = rows.findIndex(r => r.user_id === userId);
-          return idx >= 0 ? { pos: idx + 1, pts: rows[idx].points } : { pos: null, pts: 0 };
+          const idx = rows.findIndex((r) => r.user_id === userId);
+          return idx >= 0
+            ? { pos: idx + 1, pts: rows[idx].points }
+            : { pos: null, pts: 0 };
         };
 
         const g = pickMyRow(general);
@@ -262,7 +272,9 @@ export default function JogosPage() {
           if (API_BASE) {
             try {
               const lp = await fetchJson(
-                `${API_BASE}/api/users/${encodeURIComponent(userId)}/last-points`,
+                `${API_BASE}/api/users/${encodeURIComponent(
+                  userId,
+                )}/last-points`,
               );
               setLastPoints(lp as LastPoints);
             } catch {
@@ -313,7 +325,10 @@ export default function JogosPage() {
     (async () => {
       try {
         setPastLoading(true);
-        const res = await fetch(`/api/fixtures/closed?limit=3&offset=0`, { cache: 'no-store' });
+        const res = await fetch(
+          `/api/fixtures/closed?limit=3&offset=0`,
+          { cache: 'no-store' },
+        );
         const json = await res.json();
         const list: FixtureDTO[] = Array.isArray(json) ? json : [];
         if (!abort) {
@@ -414,22 +429,32 @@ export default function JogosPage() {
     () =>
       [...fixtures].sort(
         (a, b) =>
-          new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime(),
+          new Date(a.kickoff_at).getTime() -
+          new Date(b.kickoff_at).getTime(),
       ),
     [fixtures],
   );
 
   const openFixtures = useMemo(
-    () => sortedAsc.filter((f) => f.status === 'SCHEDULED' && !f.is_locked),
+    () =>
+      sortedAsc.filter(
+        (f) => f.status === 'SCHEDULED' && !f.is_locked,
+      ),
     [sortedAsc],
   );
 
   // guardar palpite
-  async function onSave(fixtureId: string, home: number, away: number) {
+  async function onSave(
+    fixtureId: string,
+    home: number,
+    away: number,
+  ) {
     try {
       setSavingId(fixtureId);
       setError(null);
-      const { data: { user } } = await supabasePKCE.auth.getUser();
+      const {
+        data: { user },
+      } = await supabasePKCE.auth.getUser();
       if (!user) throw new Error('Sessão inválida. Faz login novamente.');
       await savePrediction({ userId: user.id, fixtureId, home, away });
       toast.success('Palpite guardado!', { duration: 1500 });
@@ -442,11 +467,14 @@ export default function JogosPage() {
 
   const ym = currentYM();
   const linkGeneral = '/rankings?mode=general';
-  const linkMonthly = `/rankings?mode=monthly&ym=${encodeURIComponent(ym)}`;
-  const linkByGame =
-    lastPoints?.fixture?.id
-      ? `/rankings?mode=bygame&fixtureId=${encodeURIComponent(lastPoints.fixture.id)}`
-      : null;
+  const linkMonthly = `/rankings?mode=monthly&ym=${encodeURIComponent(
+    ym,
+  )}`;
+  const linkByGame = lastPoints?.fixture?.id
+    ? `/rankings?mode=bygame&fixtureId=${encodeURIComponent(
+        lastPoints.fixture.id,
+      )}`
+    : null;
 
   const CardLink: React.FC<{
     href?: string | null;
@@ -485,20 +513,31 @@ export default function JogosPage() {
           ) : userId ? (
             <>
               <div className="text-sm opacity-80">Bem-vindo,</div>
-              <h1 className="text-3xl font-bold tracking-tight">{userName}</h1>
+              <h1 className="text-3xl font-bold tracking-tight">
+                {userName}
+              </h1>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <CardLink href={linkGeneral} aria="Ir para o ranking geral">
-                  <div className="text-sm opacity-75">Classificação Geral</div>
+                <CardLink
+                  href={linkGeneral}
+                  aria="Ir para o ranking geral"
+                >
+                  <div className="text-sm opacity-75">
+                    Classificação Geral
+                  </div>
                   <div className="mt-1 text-3xl font-bold">
                     {genPos == null ? '—' : `#${genPos}`}
                   </div>
                   <div className="mt-1 text-sm opacity-75">
-                    Pontos: {genPoints == null ? '—' : genPoints}
+                    Pontos:{' '}
+                    {genPoints == null ? '—' : genPoints}
                   </div>
                 </CardLink>
 
-                <CardLink href={linkMonthly} aria="Ir para o ranking mensal">
+                <CardLink
+                  href={linkMonthly}
+                  aria="Ir para o ranking mensal"
+                >
                   <div className="text-sm opacity-75">
                     Classificação Mensal - {formatYmLabel(ym)}
                   </div>
@@ -506,7 +545,8 @@ export default function JogosPage() {
                     {monPos == null ? '—' : `#${monPos}`}
                   </div>
                   <div className="mt-1 text-sm opacity-75">
-                    Pontos: {monPoints == null ? '—' : monPoints}
+                    Pontos:{' '}
+                    {monPoints == null ? '—' : monPoints}
                   </div>
                 </CardLink>
 
@@ -514,9 +554,13 @@ export default function JogosPage() {
                   href={linkByGame}
                   aria="Ir para o ranking do último jogo"
                 >
-                  <div className="text-sm opacity-75">Último Jogo</div>
+                  <div className="text-sm opacity-75">
+                    Último Jogo
+                  </div>
                   <div className="mt-1 text-3xl font-bold">
-                    {lastPoints == null ? '—' : `${lastPoints.points ?? 0} pts`}
+                    {lastPoints == null
+                      ? '—'
+                      : `${lastPoints.points ?? 0} pts`}
                   </div>
                   <div className="mt-1 text-sm opacity-75">
                     {lastPoints?.position
@@ -543,7 +587,8 @@ export default function JogosPage() {
                 Convidado
               </h1>
               <p className="mb-4 text-sm opacity-80">
-                Entra para veres a tua classificação e começares a pontuar!
+                Entra para veres a tua classificação e começares a
+                pontuar!
               </p>
               <button
                 onClick={() => router.push('/auth')}
@@ -574,35 +619,39 @@ export default function JogosPage() {
         {/* Jogos em aberto */}
         {!loading && (
           <section>
-            <h2 className="text-2xl font-bold mb-4">Jogos em aberto</h2>
+            <h2 className="text-2xl font-bold mb-4">
+              Jogos em aberto
+            </h2>
             {openFixtures.length === 0 ? (
-              <div className="opacity-70">Sem jogos abertos.</div>
+              <div className="opacity-70">
+                Sem jogos abertos.
+              </div>
             ) : (
               <div className="space-y-4">
                 {openFixtures.map((f) => (
                   <FixtureCard
-                  key={f.id}
-                  id={f.id}
-                  kickoff_at={f.kickoff_at}
-                  status={f.status}
-                  home_team_name={f.home_team_name}
-                  away_team_name={f.away_team_name}
-                  home_crest={f.home_crest}
-                  away_crest={f.away_crest}
-                  competition_code={f.competition_code}
-                  round_label={f.round_label}
-                  leg={f.leg}
-                  is_locked={true}
-                  lock_at_utc={null}
-                  final_home_score={f.home_score ?? null}
-                  final_away_score={f.away_score ?? null}
-                  pred_home={predictions[f.id]?.home}
-                  pred_away={predictions[f.id]?.away}
-                  points={predictions[f.id]?.points ?? null}
-                  onSave={onSave}
-                  saving={false}
-                  variant="past"
-                />                
+                    key={f.id}
+                    id={f.id}
+                    kickoff_at={f.kickoff_at}
+                    status={f.status}
+                    home_team_name={f.home_team_name}
+                    away_team_name={f.away_team_name}
+                    home_crest={f.home_crest}
+                    away_crest={f.away_crest}
+                    competition_code={f.competition_code}
+                    round_label={f.round_label}
+                    leg={f.leg}
+                    is_locked={true}
+                    lock_at_utc={null}
+                    final_home_score={f.home_score ?? null}
+                    final_away_score={f.away_score ?? null}
+                    pred_home={predictions[f.id]?.home}
+                    pred_away={predictions[f.id]?.away}
+                    points={predictions[f.id]?.points ?? null}
+                    onSave={onSave}
+                    saving={savingId === f.id}
+                    variant="past"
+                  />
                 ))}
               </div>
             )}
@@ -612,39 +661,45 @@ export default function JogosPage() {
         {/* Jogos passados (scroll infinito) */}
         {!loading && (
           <section>
-            <h2 className="text-2xl font-bold mb-4">Jogos passados</h2>
+            <h2 className="text-2xl font-bold mb-4">
+              Jogos passados
+            </h2>
             {past.length === 0 && pastLoading ? (
-              <div className="opacity-70">A carregar…</div>
+              <div className="opacity-70">
+                A carregar…
+              </div>
             ) : past.length === 0 ? (
-              <div className="opacity-70">Sem jogos passados.</div>
+              <div className="opacity-70">
+                Sem jogos passados.
+              </div>
             ) : (
               <div className="space-y-4">
                 {past.map((f) => (
-  <FixtureCard
-  key={f.id}
-  id={f.id}
-  kickoff_at={f.kickoff_at}
-  status={f.status}
-  home_team_name={f.home_team_name}
-  away_team_name={f.away_team_name}
-  home_crest={f.home_crest}
-  away_crest={f.away_crest}
-  competition_code={f.competition_code}
-  round_label={f.round_label}
-  leg={f.leg}
-  is_locked={true}
-  lock_at_utc={null}
-  final_home_score={f.home_score ?? null}
-  final_away_score={f.away_score ?? null}
-  pred_home={predictions[f.id]?.home}
-  pred_away={predictions[f.id]?.away}
-  points={predictions[f.id]?.points ?? null}   // 👈 aqui
-  onSave={onSave}
-  saving={false}
-  variant="past"
-/>
+                  <FixtureCard
+                    key={f.id}
+                    id={f.id}
+                    kickoff_at={f.kickoff_at}
+                    status={f.status}
+                    home_team_name={f.home_team_name}
+                    away_team_name={f.away_team_name}
+                    home_crest={f.home_crest}
+                    away_crest={f.away_crest}
+                    competition_code={f.competition_code}
+                    round_label={f.round_label}
+                    leg={f.leg}
+                    is_locked={true}
+                    lock_at_utc={null}
+                    final_home_score={f.home_score ?? null}
+                    final_away_score={f.away_score ?? null}
+                    pred_home={predictions[f.id]?.home}
+                    pred_away={predictions[f.id]?.away}
+                    points={predictions[f.id]?.points ?? null}
+                    onSave={onSave}
+                    saving={false}
+                    variant="past"
+                  />
+                ))}
 
-))}
                 {past.length > 3 && (
                   <div className="flex justify-center">
                     <button
@@ -656,19 +711,31 @@ export default function JogosPage() {
                     </button>
                   </div>
                 )}
-                {!manualLoad && enableAutoLoad && <div ref={loadMoreRef} />}
-                {manualLoad && pastHasMore && past.length <= 3 && (
-                  <div className="flex justify-center">
-                    <button
-                      className="mt-2 rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
-                      onClick={loadMoreManual}
-                      disabled={pastLoading}
-                    >
-                      {pastLoading ? 'A carregar…' : 'Mostrar mais'}
-                    </button>
+
+                {!manualLoad &&
+                  enableAutoLoad && <div ref={loadMoreRef} />}
+
+                {manualLoad &&
+                  pastHasMore &&
+                  past.length <= 3 && (
+                    <div className="flex justify-center">
+                      <button
+                        className="mt-2 rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
+                        onClick={loadMoreManual}
+                        disabled={pastLoading}
+                      >
+                        {pastLoading
+                          ? 'A carregar…'
+                          : 'Mostrar mais'}
+                      </button>
+                    </div>
+                  )}
+
+                {pastLoading && (
+                  <div className="opacity-70">
+                    A carregar…
                   </div>
                 )}
-                {pastLoading && <div className="opacity-70">A carregar…</div>}
               </div>
             )}
           </section>

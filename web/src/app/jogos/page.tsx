@@ -29,10 +29,11 @@ type FixtureDTO = {
 };
 
 type PredictionDTO = {
-  fixture_id: string;
+  fixture_id: string | number;
   home_goals: number;
   away_goals: number;
   points?: number | null;
+  uefa_points?: number | null;
 };
 
 type RankRow = {
@@ -186,6 +187,8 @@ export default function JogosPage() {
         }
 
         const list = (await res.json()) as PredictionDTO[] | any;
+        console.log('RAW /api/predictions →', list);
+
         const arr: PredictionDTO[] = Array.isArray(list)
           ? list
           : Array.isArray(list?.items)
@@ -196,18 +199,24 @@ export default function JogosPage() {
           string,
           { home: number; away: number; points: number | null }
         > = {};
+
         for (const p of arr) {
-          if (p && typeof p.fixture_id === 'string') {
-            const h = (p as any).home_goals;
-            const a = (p as any).away_goals;
-            const pts = (p as any).points;
-            if (typeof h === 'number' && typeof a === 'number') {
-              map[p.fixture_id] = {
-                home: h,
-                away: a,
-                points: typeof pts === 'number' ? pts : null,
-              };
-            }
+          if (!p || typeof (p as any).fixture_id === 'undefined') continue;
+
+          const fixtureKey = String((p as any).fixture_id); // aceita string ou number
+          const h = (p as any).home_goals;
+          const a = (p as any).away_goals;
+          const pts =
+            (p as any).points ??
+            (p as any).uefa_points ??
+            null; // aceita points ou uefa_points
+
+          if (typeof h === 'number' && typeof a === 'number') {
+            map[fixtureKey] = {
+              home: h,
+              away: a,
+              points: typeof pts === 'number' ? pts : null,
+            };
           }
         }
 
@@ -641,8 +650,8 @@ export default function JogosPage() {
                     competition_code={f.competition_code}
                     round_label={f.round_label}
                     leg={f.leg}
-                    is_locked={true}
-                    lock_at_utc={null}
+                    is_locked={f.is_locked}
+                    lock_at_utc={f.lock_at_utc ?? null}
                     final_home_score={f.home_score ?? null}
                     final_away_score={f.away_score ?? null}
                     pred_home={predictions[f.id]?.home}
@@ -650,7 +659,7 @@ export default function JogosPage() {
                     points={predictions[f.id]?.points ?? null}
                     onSave={onSave}
                     saving={savingId === f.id}
-                    variant="past"
+                    variant="default"
                   />
                 ))}
               </div>

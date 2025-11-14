@@ -31,8 +31,9 @@ async function forward(req: NextRequest) {
   let body: ArrayBuffer | undefined;
   if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     body = await req.arrayBuffer();
-    // garante content-type json se ainda não vier
-    if (!headers.get('content-type')) headers.set('content-type', 'application/json');
+    if (!headers.get('content-type')) {
+      headers.set('content-type', 'application/json');
+    }
   }
 
   const resp = await fetch(urlFor(req), {
@@ -43,15 +44,23 @@ async function forward(req: NextRequest) {
     cache: 'no-store',
   });
 
-  // copia headers da resposta (sem content-encoding)
+  // copia headers tal como vêm do upstream (NÃO mexer em content-encoding)
   const out = new Headers();
   resp.headers.forEach((v, k) => {
-    if (k.toLowerCase() !== 'content-encoding') out.set(k, v);
+    out.set(k, v);
   });
 
-  const buf = await resp.arrayBuffer();
-  return new NextResponse(buf, { status: resp.status, statusText: resp.statusText, headers: out });
+  // importante: NÃO ler para arrayBuffer, apenas passar o stream em bruto
+  return new NextResponse(resp.body, {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: out,
+  });
 }
 
-export async function POST(req: NextRequest) { return forward(req); }
-export async function GET(req: NextRequest) { return forward(req); }
+export async function POST(req: NextRequest) {
+  return forward(req);
+}
+export async function GET(req: NextRequest) {
+  return forward(req);
+}

@@ -10,13 +10,17 @@ import { supabasePKCE } from '@/utils/supabase/client';
 type UserInfo = {
   id: string;
   name: string | null;
+  avatar_url: string | null;
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+
+  const loggedIn = !!user;
 
   // Buscar user autenticado
   useEffect(() => {
@@ -34,7 +38,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             u.email?.split('@')[0] ||
             'Jogador';
 
-          setUser({ id: u.id, name: friendly });
+          setUser({
+            id: u.id,
+            name: friendly,
+            avatar_url: (u.user_metadata as any)?.avatar_url ?? null,
+          });
         } else {
           setUser(null);
         }
@@ -48,12 +56,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     };
   }, []);
 
-  // Fecha o menu mobile quando muda de rota
+  // Fecha menus ao mudar de rota
   useEffect(() => {
     setMenuOpen(false);
+    setProfileOpen(false);
   }, [pathname]);
-
-  const loggedIn = !!user;
 
   async function handleLogout() {
     try {
@@ -83,14 +90,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Image
                 src="/logos/predictor-03.svg"
                 alt="+FCP Predictor"
-                width={160}
-                height={40}
+                width={170}
+                height={42}
                 priority
                 className="h-7 w-auto sm:h-8 md:h-9"
               />
             </Link>
 
-            {/* NAV + Logout (desktop) */}
+            {/* NAV + User dropdown (desktop) */}
             <div className="ml-auto hidden items-center gap-6 md:flex">
               <nav className="flex gap-6 text-sm">
                 {navLinks.map((link) => (
@@ -105,13 +112,74 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </nav>
 
               {loggedIn && (
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
-                >
-                  Terminar sessão
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setProfileOpen((v) => !v)}
+                    className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1.5 text-xs hover:bg-white/10"
+                  >
+                    {/* Avatar */}
+                    <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[11px] font-semibold">
+                      {user.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={user.avatar_url}
+                          alt={user.name ?? 'avatar'}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>
+                          {user.name
+                            ?.split(' ')
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map((p) => p[0]?.toUpperCase())
+                            .join('') || 'JP'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Nome + chevron */}
+                    <span className="max-w-[9rem] truncate text-xs font-medium">
+                      {user.name ?? 'Jogador'}
+                    </span>
+                    <svg
+                      className={`h-3 w-3 transition-transform ${
+                        profileOpen ? 'rotate-180' : ''
+                      }`}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+
+                  {/* Dropdown perfil (desktop) */}
+                  {profileOpen && (
+                    <div className="absolute right-0 mt-2 w-40 rounded-2xl border border-white/10 bg-[#050b2b]/95 p-1 text-xs shadow-xl backdrop-blur">
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-red-200 hover:bg-red-500/10"
+                      >
+                        <svg
+                          className="h-3.5 w-3.5"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                          <path d="M16 17l5-5-5-5" />
+                          <path d="M21 12H9" />
+                        </svg>
+                        <span>Terminar sessão</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -123,18 +191,67 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               aria-label="Abrir menu"
             >
               <span className="sr-only">Menu</span>
-              <span className="flex h-4 w-4 flex-col justify-between">
-                <span className="h-[2px] w-full rounded bg-white" />
-                <span className="h-[2px] w-full rounded bg-white" />
-                <span className="h-[2px] w-full rounded bg-white" />
+              <span className="relative flex h-4 w-4 items-center justify-center">
+                {/* 3 barras que animam para X */}
+                <span
+                  className={`absolute h-[2px] w-full rounded bg-white transition-transform duration-200 ${
+                    menuOpen
+                      ? 'translate-y-0 rotate-45'
+                      : '-translate-y-1'
+                  }`}
+                />
+                <span
+                  className={`absolute h-[2px] w-full rounded bg-white transition-opacity duration-150 ${
+                    menuOpen ? 'opacity-0' : 'opacity-100'
+                  }`}
+                />
+                <span
+                  className={`absolute h-[2px] w-full rounded bg-white transition-transform duration-200 ${
+                    menuOpen
+                      ? 'translate-y-0 -rotate-45'
+                      : 'translate-y-1'
+                  }`}
+                />
               </span>
             </button>
           </div>
 
-          {/* DROPDOWN MOBILE */}
+          {/* DROPDOWN MOBILE com animação */}
           {menuOpen && (
-            <div className="border-t border-white/10 bg-[#050b2b]/95 backdrop-blur-sm md:hidden">
-              <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3 text-sm">
+            <div className="origin-top border-t border-white/10 bg-[#050b2b]/95 pb-3 pt-2 text-sm shadow-lg backdrop-blur-md animate-[fadeDown_0.18s_ease-out] md:hidden">
+              <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4">
+                {loggedIn && (
+                  <div className="mb-1 flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-2">
+                    <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[11px] font-semibold">
+                      {user!.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={user!.avatar_url!}
+                          alt={user!.name ?? 'avatar'}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>
+                          {user!.name
+                            ?.split(' ')
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map((p) => p[0]?.toUpperCase())
+                            .join('') || 'JP'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs opacity-70">
+                        Ligado como
+                      </span>
+                      <span className="text-sm font-medium">
+                        {user!.name ?? 'Jogador'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {navLinks.map((link) => (
                   <Link
                     key={link.href}
@@ -145,21 +262,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </Link>
                 ))}
 
-                {loggedIn && (
+                {loggedIn ? (
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="mt-1 rounded-xl px-3 py-2 text-left text-red-200 hover:bg-red-500/10"
+                    className="mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-left text-red-200 hover:bg-red-500/10"
                   >
-                    Terminar sessão
+                    <svg
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                      <path d="M16 17l5-5-5-5" />
+                      <path d="M21 12H9" />
+                    </svg>
+                    <span>Terminar sessão</span>
                   </button>
-                )}
-
-                {!loggedIn && (
+                ) : (
                   <button
                     type="button"
                     onClick={() => router.push('/auth')}
-                    className="mt-1 rounded-xl px-3 py-2 text-left hover:bg-white/10"
+                    className="mt-2 rounded-xl px-3 py-2 text-left hover:bg-white/10"
                   >
                     Entrar / Registar
                   </button>

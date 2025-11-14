@@ -164,85 +164,94 @@ export default function JogosPage() {
     })();
   }, []);
 
-    // --- carregar predictions do utilizador ---
-    useEffect(() => {
-      let abort = false;
-      (async () => {
-        try {
-          if (!userId) {
-            if (!abort) setPredictions({});
-            return;
-          }
-  
-          const res = await fetch(
-            `/api/predictions?userId=${encodeURIComponent(userId)}`,
-            { cache: 'no-store' },
-          );
-  
-          const text = await res.text();
-          console.log('RAW /api/predictions text →', text);
-  
-          if (!res.ok) {
-            throw new Error(
-              `HTTP ${res.status} ${res.statusText} em /api/predictions`,
-            );
-          }
-  
-          let list: any;
-          try {
-            list = JSON.parse(text);
-          } catch (e) {
-            throw new Error(
-              'Resposta não-JSON de /api/predictions (ver console acima)',
-            );
-          }
-  
-          const arr: PredictionDTO[] = Array.isArray(list)
-            ? list
-            : Array.isArray(list?.items)
-            ? list.items
-            : [];
-  
-          const map: Record<
-            string,
-            { home: number; away: number; points: number | null }
-          > = {};
-  
-          for (const p of arr) {
-            if (!p || typeof (p as any).fixture_id === 'undefined') continue;
-  
-            const fixtureKey = String((p as any).fixture_id);
-            const h = (p as any).home_goals;
-            const a = (p as any).away_goals;
-            const pts =
-              (p as any).points ??
-              (p as any).uefa_points ??
-              null;
-  
-            if (typeof h === 'number' && typeof a === 'number') {
-              map[fixtureKey] = {
-                home: h,
-                away: a,
-                points: typeof pts === 'number' ? pts : null,
-              };
-            }
-          }
-  
-          if (!abort) {
-            console.log('PREDICTIONS MAP 👉', map);
-            setPredictions(map);
-          }
-        } catch (err) {
-          console.error('Erro a carregar predictions', err);
+  // --- carregar predictions do utilizador ---
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      try {
+        if (!userId) {
           if (!abort) setPredictions({});
+          return;
         }
-      })();
-  
-      return () => {
-        abort = true;
-      };
-    }, [userId]);
-  
+
+        const res = await fetch(
+          `/api/predictions?userId=${encodeURIComponent(userId)}`,
+          { cache: 'no-store' },
+        );
+
+        const text = await res.text();
+        console.log('RAW /api/predictions text →', text);
+
+        if (!res.ok) {
+          throw new Error(
+            `HTTP ${res.status} ${res.statusText} em /api/predictions`,
+          );
+        }
+
+        // tenta extrair a parte JSON entre o primeiro '[' e o último ']'
+        let list: any;
+        try {
+          const start = text.indexOf('[');
+          const end = text.lastIndexOf(']');
+
+          if (start === -1 || end === -1 || end <= start) {
+            throw new Error('Formato inesperado da resposta');
+          }
+
+          const jsonSlice = text.slice(start, end + 1);
+          list = JSON.parse(jsonSlice);
+        } catch (e) {
+          console.error('Falha a extrair JSON de /api/predictions', e);
+          throw new Error(
+            'Resposta não-JSON de /api/predictions (ver RAW no console)',
+          );
+        }
+
+        const arr: PredictionDTO[] = Array.isArray(list)
+          ? list
+          : Array.isArray(list?.items)
+          ? list.items
+          : [];
+
+        const map: Record<
+          string,
+          { home: number; away: number; points: number | null }
+        > = {};
+
+        for (const p of arr) {
+          if (!p || typeof (p as any).fixture_id === 'undefined') continue;
+
+          const fixtureKey = String((p as any).fixture_id);
+          const h = (p as any).home_goals;
+          const a = (p as any).away_goals;
+          const pts =
+            (p as any).points ??
+            (p as any).uefa_points ??
+            null;
+
+          if (typeof h === 'number' && typeof a === 'number') {
+            map[fixtureKey] = {
+              home: h,
+              away: a,
+              points: typeof pts === 'number' ? pts : null,
+            };
+          }
+        }
+
+        if (!abort) {
+          console.log('PREDICTIONS MAP 👉', map);
+          setPredictions(map);
+        }
+      } catch (err) {
+        console.error('Erro a carregar predictions', err);
+        if (!abort) setPredictions({});
+      }
+    })();
+
+    return () => {
+      abort = true;
+    };
+  }, [userId]);
 
   // --- carregar dashboard (geral / mensal / último) ---
   useEffect(() => {

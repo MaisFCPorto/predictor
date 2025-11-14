@@ -61,7 +61,6 @@ export default function FixtureCard({
   const comp = compName(competition_code);
   const rnd = roundText(round_label);
 
-  // two-line helpers
   const [compL1, compL2] = useMemo(() => {
     if (!comp) return [null, null] as [string | null, string | null];
     const name = comp.trim();
@@ -77,7 +76,6 @@ export default function FixtureCard({
       }).format(new Date(kickoff_at)),
     [kickoff_at],
   );
-
   const timeStr = useMemo(() => {
     const d = new Date(kickoff_at);
     const hh = String(d.getHours()).padStart(2, '0');
@@ -89,39 +87,18 @@ export default function FixtureCard({
     const w = weekdayStr.replace(/-feira/i, '');
     return w.charAt(0).toUpperCase() + w.slice(1);
   }, [weekdayStr]);
-
   const timeColon = useMemo(() => {
     const d = new Date(kickoff_at);
     const hh = String(d.getHours()).padStart(2, '0');
     const mm = String(d.getMinutes()).padStart(2, '0');
     return `${hh}:${mm}`;
   }, [kickoff_at]);
-
   const dateOneLine = `${weekdayOne}, ${timeColon}`;
-
-  // 🔴 NOVO: label completa "Domingo, 11 de Novembro"
-  const fullDateLabel = useMemo(() => {
-    const d = new Date(kickoff_at);
-
-    let weekday = d
-      .toLocaleDateString('pt-PT', { weekday: 'long' })
-      .replace(/-feira/i, '');
-    weekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
-
-    let dayMonth = d.toLocaleDateString('pt-PT', {
-      day: '2-digit',
-      month: 'long',
-    });
-    dayMonth = dayMonth.charAt(0).toUpperCase() + dayMonth.slice(1);
-
-    return `${weekday}, ${dayMonth}`;
-  }, [kickoff_at]);
 
   const accent = compAccent(competition_code) ?? '#1e293b';
   const subtle = compSubtle(competition_code) ?? 'transparent';
   const lockedBase = !!is_locked || status === 'FINISHED';
 
-  // countdown to lock
   const [remaining, setRemaining] = useState<string | null>(null);
   const [remainMs, setRemainMs] = useState<number | null>(null);
 
@@ -137,7 +114,6 @@ export default function FixtureCard({
     parts.push(`${h}h`, `${m}m`, `${s}s`);
     return parts.join(' ');
   }
-
   function formatCompactRemaining(ms: number) {
     if (ms <= 0) return '0s';
     const total = Math.floor(ms / 1000);
@@ -149,7 +125,6 @@ export default function FixtureCard({
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m ${s}s`;
   }
-
   function urgencyClass(ms: number) {
     if (ms <= 3600_000) return 'bg-red-400/15 text-red-100';
     if (ms <= 86_400_000) return 'bg-amber-400/15 text-amber-100';
@@ -175,7 +150,6 @@ export default function FixtureCard({
   const nowLocked =
     lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0);
 
-  // estado dos inputs
   const [home, setHome] = useState<number | ''>('');
   const [away, setAway] = useState<number | ''>('');
 
@@ -190,10 +164,11 @@ export default function FixtureCard({
   const canSave =
     !nowLocked && home !== '' && away !== '' && !unchanged;
 
-  // Prefill com a prediction do user
   useEffect(() => {
-    const ph = typeof pred_home === 'number' ? pred_home : null;
-    const pa = typeof pred_away === 'number' ? pred_away : null;
+    const ph =
+      typeof pred_home === 'number' ? pred_home : null;
+    const pa =
+      typeof pred_away === 'number' ? pred_away : null;
 
     if (variant === 'past') {
       if (ph !== null) setHome(ph);
@@ -205,16 +180,21 @@ export default function FixtureCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pred_home, pred_away, variant]);
 
-  // Points badge para jogos passados
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
 
-    const ph = typeof pred_home === 'number' ? pred_home : null;
-    const pa = typeof pred_away === 'number' ? pred_away : null;
+    const ph =
+      typeof pred_home === 'number' ? pred_home : null;
+    const pa =
+      typeof pred_away === 'number' ? pred_away : null;
     const rh =
-      typeof final_home_score === 'number' ? final_home_score : null;
+      typeof final_home_score === 'number'
+        ? final_home_score
+        : null;
     const ra =
-      typeof final_away_score === 'number' ? final_away_score : null;
+      typeof final_away_score === 'number'
+        ? final_away_score
+        : null;
 
     if (ph == null || pa == null) {
       return {
@@ -233,15 +213,18 @@ export default function FixtureCard({
     if (typeof points === 'number') {
       pts = points;
     } else {
-      const signLocal = (d: number) => (d === 0 ? 0 : d > 0 ? 1 : -1);
+      const sign = (d: number) =>
+        d === 0 ? 0 : d > 0 ? 1 : -1;
       pts = 0;
-      if (signLocal(ph - pa) === signLocal(rh - ra)) pts += 3;
+      if (sign(ph - pa) === sign(rh - ra)) pts += 3;
       if (ph === rh) pts += 2;
       if (pa === ra) pts += 2;
       if (ph - pa === rh - ra) pts += 3;
     }
 
-    const label = `+${pts} ${pts === 1 ? 'ponto' : 'pontos'}`;
+    const label = `+${pts} ${
+      pts === 1 ? 'ponto' : 'pontos'
+    }`;
 
     if (pts === 0) {
       return {
@@ -275,17 +258,23 @@ export default function FixtureCard({
 
   const finalScoreText = useMemo(() => {
     const h =
-      typeof final_home_score === 'number' ? final_home_score : null;
+      typeof final_home_score === 'number'
+        ? final_home_score
+        : null;
     const a =
-      typeof final_away_score === 'number' ? final_away_score : null;
+      typeof final_away_score === 'number'
+        ? final_away_score
+        : null;
     if (variant !== 'past') return null;
     if (h == null || a == null) return null;
     return `${h}-${a}`;
   }, [variant, final_home_score, final_away_score]);
 
   const lastPredText = useMemo(() => {
-    const ph = typeof pred_home === 'number' ? pred_home : null;
-    const pa = typeof pred_away === 'number' ? pred_away : null;
+    const ph =
+      typeof pred_home === 'number' ? pred_home : null;
+    const pa =
+      typeof pred_away === 'number' ? pred_away : null;
     if (variant === 'past') return null;
     if (ph == null || pa == null) return null;
     return `${ph}-${pa}`;
@@ -293,7 +282,9 @@ export default function FixtureCard({
 
   const headerStatusLabel = useMemo(() => {
     if (variant === 'past')
-      return status === 'FINISHED' ? 'Terminado' : 'Bloqueado';
+      return status === 'FINISHED'
+        ? 'Terminado'
+        : 'Bloqueado';
     if (nowLocked) return 'Bloqueado';
     return null;
   }, [variant, status, nowLocked]);
@@ -317,9 +308,10 @@ export default function FixtureCard({
     <div
       className={clsx(
         'relative w-full',
-        'rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8',
+        'rounded-3xl border border-white/10 p-4 sm:p-6 md:p-8',
         'pb-8',
-        'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden',
+        'overflow-hidden',
+        'bg-card shadow-card animate-card',
       )}
     >
       {/* Watermark */}
@@ -366,7 +358,9 @@ export default function FixtureCard({
               'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] leading-none',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
-                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
+                : urgencyClass(
+                    remainMs ?? Number.MAX_SAFE_INTEGER,
+                  ),
             )}
           >
             {headerStatusLabel ? (
@@ -422,8 +416,7 @@ export default function FixtureCard({
 
         <div className="justify-self-center text-center">
           <div className="text-sm md:text-base text-white/90 capitalize leading-tight">
-            {/* aqui agora mostra "Domingo, 11 de Novembro" */}
-            <div>{fullDateLabel}</div>
+            <div>{weekdayStr}</div>
             <div>{timeStr}</div>
           </div>
         </div>
@@ -434,7 +427,9 @@ export default function FixtureCard({
               'rounded-full px-3 py-1 text-[12px] leading-none',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
-                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
+                : urgencyClass(
+                    remainMs ?? Number.MAX_SAFE_INTEGER,
+                  ),
             )}
           >
             {headerStatusLabel ? (
@@ -568,7 +563,7 @@ export default function FixtureCard({
 
       {/* Badge de Resultado + Pontos (jogos passados) */}
       {pointsBadge && (
-        <div className="flex justify-center mt-2 gap-2">
+        <div className="flex justify-center mt-2 gap-2 relative z-[1]">
           {finalScoreText && (
             <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
               Resultado Correto: {finalScoreText}
@@ -587,7 +582,7 @@ export default function FixtureCard({
 
       {/* Pill "Última previsão" para jogos em aberto */}
       {!pointsBadge && lastPredText && (
-        <div className="flex justify-center mt-2">
+        <div className="flex justify-center mt-2 relative z-[1]">
           <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
             Última previsão: {lastPredText}
           </span>
@@ -596,7 +591,7 @@ export default function FixtureCard({
 
       {/* Botão mobile Guardar */}
       {variant !== 'past' && (
-        <div className="md:hidden flex justify-center mt-1">
+        <div className="md:hidden flex justify-center mt-1 relative z-[1]">
           <button
             disabled={!canSave || !!saving || nowLocked}
             className={clsx(

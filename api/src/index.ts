@@ -409,24 +409,47 @@ app.post('/api/predictions', async (c) => {
 
 app.get('/api/predictions', async (c) => {
   const userId = c.req.query('userId');
-  if (!userId) return c.json([], 200);
+  if (!userId) {
+    return new Response('[]', {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+  }
 
   const { results } = await c.env.DB
     .prepare(
-      `SELECT fixture_id, home_goals, away_goals, points
-       FROM predictions
-       WHERE user_id = ?`,
+      `
+      SELECT
+        fixture_id,
+        home_goals,
+        away_goals,
+        points
+      FROM predictions
+      WHERE user_id = ?
+    `,
     )
     .bind(userId)
     .all<{
       fixture_id: string;
-      home_goals: number;
-      away_goals: number;
+      home_goals: number | null;
+      away_goals: number | null;
       points: number | null;
     }>();
 
-  return c.json(results ?? []);
+  const safe = (results ?? []).map(r => ({
+    fixture_id: r.fixture_id,
+    home_goals: r.home_goals ?? 0,
+    away_goals: r.away_goals ?? 0,
+    points: r.points ?? 0,
+  }));
+
+  // usamos Response “à mão” para garantir que não vai nada estranho no body
+  return new Response(JSON.stringify(safe), {
+    status: 200,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
 });
+
 
 
 

@@ -18,18 +18,16 @@ type Props = {
   is_locked?: boolean;
   lock_at_utc?: string | null;
   leg?: number | null;
-  // resultado final do jogo (para jogos passados)
   final_home_score?: number | null;
   final_away_score?: number | null;
-  // prediction do utilizador (se existir)
   pred_home?: number | null;
   pred_away?: number | null;
-  // pontos do utilizador neste jogo (UEFA) vindos da BD
-  points?: number | null;
+  points?: number | null;          // 👈 NOVO
   onSave: (id: string, h: number, a: number) => Promise<void> | void;
   saving?: boolean;
   variant?: 'default' | 'past';
 };
+
 
 function formatLocalDate(isoUTC: string) {
   const d = new Date(isoUTC);
@@ -172,33 +170,15 @@ export default function FixtureCard({
 
     const ph = typeof pred_home === 'number' ? pred_home : null;
     const pa = typeof pred_away === 'number' ? pred_away : null;
-    const rh = typeof final_home_score === 'number' ? final_home_score : null;
-    const ra = typeof final_away_score === 'number' ? final_away_score : null;
 
+    // sem participação
     if (ph == null || pa == null) {
       return { label: 'Sem participação', className: 'bg-red-500/25 text-red-100' };
     }
-    if (rh == null || ra == null) {
-      return { label: '+0 pontos', className: 'bg-white/5 text-gray-200' };
-    }
 
-    let pts: number;
-
-    // 1º tenta usar os pontos vindos da BD
-    if (typeof points === 'number') {
-      pts = points;
-    } else {
-      // fallback: calcula no cliente (mesma regra UEFA)
-      const winner = (n: number) => (n === 0 ? 0 : n > 0 ? 1 : -1);
-      let calc = 0;
-      if (winner(ph - pa) === winner(rh - ra)) calc += 3;         // resultado / tendência
-      if (ph === rh) calc += 2;                                   // golos home
-      if (pa === ra) calc += 2;                                   // golos away
-      if (Math.abs(ph - pa) === Math.abs(rh - ra)) calc += 3;     // diferença
-      pts = calc;
-    }
-
+    const pts = typeof points === 'number' ? points : 0;
     const label = `+${pts} ${pts === 1 ? 'ponto' : 'pontos'}`;
+
     if (pts === 0) {
       return { label, className: 'bg-amber-400/25 text-amber-50' };
     }
@@ -217,7 +197,8 @@ export default function FixtureCard({
     ];
     const idx = Math.min(Math.max(pts, 1), 10) - 1;
     return { label, className: greens[idx] };
-  }, [variant, pred_home, pred_away, final_home_score, final_away_score, points]);
+  }, [variant, pred_home, pred_away, points]);
+
 
 
   const finalScoreText = useMemo(() => {

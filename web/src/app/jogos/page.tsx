@@ -32,6 +32,7 @@ type PredictionDTO = {
   fixture_id: string;
   home_goals: number;
   away_goals: number;
+  points?: number | null; // 👈 NOVO
 };
 
 type RankRow = {
@@ -119,7 +120,9 @@ export default function JogosPage() {
   const [summaryErr, setSummaryErr] = useState<string | null>(null);
 
   // --- predictions for current user (by fixture id) ---
-  const [predictions, setPredictions] = useState<Record<string, { home: number; away: number }>>({});
+  const [predictions, setPredictions] = useState<
+    Record<string, { home: number; away: number; points: number | null }>
+  >({});
 
   // --- supabase user + SYNC NO WORKER ---
   useEffect(() => {
@@ -135,8 +138,6 @@ export default function JogosPage() {
         setUserId(user.id);
         setUserName(friendly);
 
-        // 🔄 SINCRONIZAÇÃO NO WORKER (via proxy Next)
-        // Não bloqueia o UI; erros são ignorados silenciosamente.
         fetch('/api/users/sync', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -161,17 +162,33 @@ export default function JogosPage() {
     let abort = false;
     (async () => {
       try {
-        if (!userId) { if (!abort) setPredictions({}); return; }
-        const res = await fetch(`/api/predictions?userId=${encodeURIComponent(userId)}`, { cache: 'no-store' });
-        if (!res.ok) { if (!abort) setPredictions({}); return; }
+        if (!userId) {
+          if (!abort) setPredictions({});
+          return;
+        }
+        const res = await fetch(
+          `/api/predictions?userId=${encodeURIComponent(userId)}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) {
+          if (!abort) setPredictions({});
+          return;
+        }
         const list = (await res.json()) as PredictionDTO[] | any;
-        const arr: PredictionDTO[] = Array.isArray(list) ? list : Array.isArray(list?.items) ? list.items : [];
-        const map: Record<string, { home: number; away: number }> = {};
+        const arr: PredictionDTO[] = Array.isArray(list)
+          ? list
+          : Array.isArray(list?.items)
+          ? list.items
+          : [];
+        const map: Record<string, { home: number; away: number; points: number | null }> = {};
         for (const p of arr) {
           if (p && typeof p.fixture_id === 'string') {
             const h = (p as any).home_goals;
             const a = (p as any).away_goals;
-            if (typeof h === 'number' && typeof a === 'number') map[p.fixture_id] = { home: h, away: a };
+            const pts = typeof (p as any).points === 'number' ? (p as any).points : null;
+            if (typeof h === 'number' && typeof a === 'number') {
+              map[p.fixture_id] = { home: h, away: a, points: pts };
+            }
           }
         }
         if (!abort) setPredictions(map);
@@ -179,7 +196,9 @@ export default function JogosPage() {
         if (!abort) setPredictions({});
       }
     })();
-    return () => { abort = true; };
+    return () => {
+      abort = true;
+    };
   }, [userId]);
 
   // --- carregar dashboard (geral / mensal / último) ---
@@ -222,7 +241,7 @@ export default function JogosPage() {
           if (API_BASE) {
             try {
               const lp = await fetchJson(
-                `${API_BASE}/api/users/${encodeURIComponent(userId)}/last-points`
+                `${API_BASE}/api/users/${encodeURIComponent(userId)}/last-points`,
               );
               setLastPoints(lp as LastPoints);
             } catch {
@@ -236,7 +255,9 @@ export default function JogosPage() {
         if (!abort) setSummaryErr(e?.message ?? 'Erro a carregar resumo');
       }
     })();
-    return () => { abort = true; };
+    return () => {
+      abort = true;
+    };
   }, [userId]);
 
   // --- carregar fixtures ---
@@ -247,10 +268,8 @@ export default function JogosPage() {
         setLoading(true);
         setError(null);
 
-        // 1) novo endpoint via proxy do Next
         let list: FixtureDTO[] = await fetchJson('/api/fixtures/open');
 
-        // 2) fallback para o endpoint antigo (se necessário)
         if (!Array.isArray(list) || list.length === 0) {
           list = await fetchJson('/api/matchdays/md1/fixtures');
         }
@@ -262,10 +281,12 @@ export default function JogosPage() {
         if (!abort) setLoading(false);
       }
     })();
-    return () => { abort = true; };
+    return () => {
+      abort = true;
+    };
   }, []);
 
-  // --- carregar primeiros jogos fechados (terminado ou bloqueado) — apenas 3 ---
+  // --- carregar primeiros jogos fechados ---
   useEffect(() => {
     let abort = false;
     (async () => {
@@ -280,12 +301,17 @@ export default function JogosPage() {
           setPastHasMore(list.length >= 3);
         }
       } catch {
-        if (!abort) { setPast([]); setPastHasMore(false); }
+        if (!abort) {
+          setPast([]);
+          setPastHasMore(false);
+        }
       } finally {
         if (!abort) setPastLoading(false);
       }
     })();
-    return () => { abort = true; };
+    return () => {
+      abort = true;
+    };
   }, []);
 
   // --- observer para carregar mais ao scroll (jogos fechados) ---
@@ -293,59 +319,66 @@ export default function JogosPage() {
     if (!enableAutoLoad || !pastHasMore || pastLoading) return;
     const el = loadMoreRef.current;
     if (!el) return;
-    const obs = new IntersectionObserver(async (entries) => {
-      const e = entries[0];
-      if (!e.isIntersecting) return;
-      obs.unobserve(el);
-      try {
-        setPastLoading(true);
-        const res = await fetch(`/api/fixtures/closed?limit=3&offset=${pastOffset}`, { cache: 'no-store' });
-        const more: FixtureDTO[] = (await res.json()) ?? [];
-        setPast((prev) => [...prev, ...more]);
-        setPastOffset((o) => o + more.length);
-        setPastHasMore(more.length >= 3);
-      } finally {
-        setPastLoading(false);
-      }
-    }, { rootMargin: '200px' });
+    const obs = new IntersectionObserver(
+      async (entries) => {
+        const e = entries[0];
+        if (!e.isIntersecting) return;
+        obs.unobserve(el);
+        try {
+          setPastLoading(true);
+          const res = await fetch(
+            `/api/fixtures/closed?limit=3&offset=${pastOffset}`,
+            { cache: 'no-store' },
+          );
+          const more: FixtureDTO[] = (await res.json()) ?? [];
+          setPast((prev) => [...prev, ...more]);
+          setPastOffset((o) => o + more.length);
+          setPastHasMore(more.length >= 3);
+        } finally {
+          setPastLoading(false);
+        }
+      },
+      { rootMargin: '200px' },
+    );
     obs.observe(el);
     return () => obs.disconnect();
   }, [enableAutoLoad, pastHasMore, pastLoading, pastOffset]);
 
-  // --- ativa auto-load quando o utilizador fizer scroll PARA BAIXO (rearma se for desativado), com cooldown
+  // --- ativa auto-load quando o utilizador fizer scroll PARA BAIXO ---
   useEffect(() => {
-    if (enableAutoLoad || manualLoad) return; // não rearmar se estivermos em modo manual
+    if (enableAutoLoad || manualLoad) return;
     const onScroll = () => {
       const y = window.scrollY || 0;
       const last = lastScrollYRef.current;
-      const directionDown = y > last + 4; // ignora pequenas oscilações
+      const directionDown = y > last + 4;
       lastScrollYRef.current = y;
       if (!directionDown) return;
       if (Date.now() < autoloadResumeAtRef.current) return;
       setEnableAutoLoad(true);
       window.removeEventListener('scroll', onScroll);
     };
-    // inicializa referência
     lastScrollYRef.current = window.scrollY || 0;
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, [enableAutoLoad, manualLoad]);
 
-  // permite "mostrar menos" — volta aos 3 iniciais e desarma o autoload
   function collapsePast() {
     setPast((prev) => prev.slice(0, 3));
     setPastOffset(3);
     setPastHasMore(true);
     setEnableAutoLoad(false);
-    autoloadResumeAtRef.current = Date.now() + 1000; // 1s cooldown para evitar trigger imediato
-    setManualLoad(true); // a partir daqui, só carrega ao clicar em "Mostrar mais"
+    autoloadResumeAtRef.current = Date.now() + 1000;
+    setManualLoad(true);
   }
 
   async function loadMoreManual() {
     if (pastLoading || !pastHasMore) return;
     try {
       setPastLoading(true);
-      const res = await fetch(`/api/fixtures/closed?limit=3&offset=${pastOffset}`, { cache: 'no-store' });
+      const res = await fetch(
+        `/api/fixtures/closed?limit=3&offset=${pastOffset}`,
+        { cache: 'no-store' },
+      );
       const json = await res.json();
       const more: FixtureDTO[] = Array.isArray(json) ? json : [];
       setPast((prev) => [...prev, ...more]);
@@ -356,18 +389,19 @@ export default function JogosPage() {
     }
   }
 
-  // ordenar por kickoff asc (para abertos)
   const sortedAsc = useMemo(
-    () => [...fixtures].sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime()),
-    [fixtures]
+    () =>
+      [...fixtures].sort(
+        (a, b) =>
+          new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime(),
+      ),
+    [fixtures],
   );
 
   const openFixtures = useMemo(
-    () => sortedAsc.filter(f => f.status === 'SCHEDULED' && !f.is_locked),
-    [sortedAsc]
+    () => sortedAsc.filter((f) => f.status === 'SCHEDULED' && !f.is_locked),
+    [sortedAsc],
   );
-
-  // lockedRecent no longer used; we paginate finished fixtures via API
 
   // guardar palpite
   async function onSave(fixtureId: string, home: number, away: number) {
@@ -385,7 +419,6 @@ export default function JogosPage() {
     }
   }
 
-  // anchors
   const ym = currentYM();
   const linkGeneral = '/rankings?mode=general';
   const linkMonthly = `/rankings?mode=monthly&ym=${encodeURIComponent(ym)}`;
@@ -394,8 +427,11 @@ export default function JogosPage() {
       ? `/rankings?mode=bygame&fixtureId=${encodeURIComponent(lastPoints.fixture.id)}`
       : null;
 
-  // helper para tornar card clicável se tiver href
-  const CardLink: React.FC<{ href?: string | null; children: React.ReactNode; aria?: string }> = ({ href, children, aria }) => {
+  const CardLink: React.FC<{
+    href?: string | null;
+    children: React.ReactNode;
+    aria?: string;
+  }> = ({ href, children, aria }) => {
     if (userId && href) {
       return (
         <Link
@@ -442,7 +478,9 @@ export default function JogosPage() {
                 </CardLink>
 
                 <CardLink href={linkMonthly} aria="Ir para o ranking mensal">
-                  <div className="text-sm opacity-75">Classificação Mensal - {formatYmLabel(ym)}</div>
+                  <div className="text-sm opacity-75">
+                    Classificação Mensal - {formatYmLabel(ym)}
+                  </div>
                   <div className="mt-1 text-3xl font-bold">
                     {monPos == null ? '—' : `#${monPos}`}
                   </div>
@@ -451,16 +489,23 @@ export default function JogosPage() {
                   </div>
                 </CardLink>
 
-                <CardLink href={linkByGame} aria="Ir para o ranking do último jogo">
+                <CardLink
+                  href={linkByGame}
+                  aria="Ir para o ranking do último jogo"
+                >
                   <div className="text-sm opacity-75">Último Jogo</div>
                   <div className="mt-1 text-3xl font-bold">
                     {lastPoints == null ? '—' : `${lastPoints.points ?? 0} pts`}
                   </div>
                   <div className="mt-1 text-sm opacity-75">
-                    {lastPoints?.position ? `Posição: #${lastPoints.position}` : 'Sem palpite'}
+                    {lastPoints?.position
+                      ? `Posição: #${lastPoints.position}`
+                      : 'Sem palpite'}
                   </div>
                   {!!lastPoints?.fixture && (
-                    <div className="mt-1 text-xs opacity-60">Jogo: {lastPoints.fixture.id}</div>
+                    <div className="mt-1 text-xs opacity-60">
+                      Jogo: {lastPoints.fixture.id}
+                    </div>
                   )}
                 </CardLink>
               </div>
@@ -473,7 +518,9 @@ export default function JogosPage() {
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-6">
-              <h1 className="mb-2 text-3xl font-bold tracking-tight">Convidado</h1>
+              <h1 className="mb-2 text-3xl font-bold tracking-tight">
+                Convidado
+              </h1>
               <p className="mb-4 text-sm opacity-80">
                 Entra para veres a tua classificação e começares a pontuar!
               </p>
@@ -566,6 +613,7 @@ export default function JogosPage() {
                     final_away_score={f.away_score ?? null}
                     pred_home={predictions[f.id]?.home}
                     pred_away={predictions[f.id]?.away}
+                    points={predictions[f.id]?.points ?? null} 
                     onSave={onSave}
                     saving={false}
                     variant="past"
@@ -582,7 +630,6 @@ export default function JogosPage() {
                     </button>
                   </div>
                 )}
-                {/* Modo auto (inicial) usa sentinel; modo manual mostra botão */}
                 {!manualLoad && enableAutoLoad && <div ref={loadMoreRef} />}
                 {manualLoad && pastHasMore && past.length <= 3 && (
                   <div className="flex justify-center">

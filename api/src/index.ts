@@ -2,12 +2,11 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { cors } from 'hono/cors';
-import { rankings } from './routes/rankings';
+import { rankings, scoreUEFA } from './routes/rankings';
 import { adminCompetitions } from './routes/admin/competitions';
 import { corsMiddleware } from './cors';
 import { auth } from './routes/auth';
-// importava só admin; agora trazemos também o helper:
-import { admin, recomputePointsForFixture } from './routes/admin';
+import { admin } from './routes/admin';
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -58,6 +57,67 @@ const run = (db: D1Database, sql: string, ...args: unknown[]) =>
 const all = <T>(db: D1Database, sql: string, ...args: unknown[]) =>
   db.prepare(sql).bind(...args).all<T>();
 
+const getLockMs = (c: Context<{ Bindings: Env }>) => {
+  const mins = Number(c.env.LOCK_MINUTES_BEFORE ?? '0');
+  return Number.isFinite(mins) ? mins * 60_000 : 0;
+};
+
+const isLocked = (kickoffISO: string, nowMs: number, lockMs: number) => {
+  const ko = new Date(kickoffISO).getTime();
+  return nowMs >= ko - lockMs;
+};
+
+// ----------------------------------------------------
+// Helper: recalcular pontos UEFA para um fixture
+// ----------------------------------------------------
+async function recomputePointsForFixture(db: D1Database, fixtureId: string) {
+  // 1) Buscar o resultado oficial do jogo
+  const fx = await db
+    .prepare(`
+      SELECT home_score, away_score
+      FROM fixtures
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(fixtureId)
+    .first<{ home_score: number | null; away_score: number | null }>();
+
+  // Se ainda não há resultado, não há pontos a recalcular
+  if (!fx || fx.home_score == null || fx.away_score == null) {
+    return;
+  }
+
+  // 2) Ir buscar todas as predictions desse jogo
+  const { results } = await db
+    .prepare(`
+      SELECT user_id, fixture_id, home_goals, away_goals
+      FROM predictions
+      WHERE fixture_id = ?
+    `)
+    .bind(fixtureId)
+    .all<{
+      user_id: string;
+      fixture_id: string;
+      home_goals: number | null;
+      away_goals: number | null;
+    }>();
+
+  // 3) Calcular pontos UEFA e gravar no campo "points"
+  for (const p of results ?? []) {
+    const s = scoreUEFA(p.home_goals, p.away_goals, fx.home_score, fx.away_score);
+
+    await db
+      .prepare(`
+        UPDATE predictions
+        SET points = ?
+        WHERE user_id = ?
+          AND fixture_id = ?
+      `)
+      .bind(s.points, p.user_id, p.fixture_id)
+      .run();
+  }
+}
+
 // ----------------------------------------------------
 // Utilitários e Ctes
 // ----------------------------------------------------
@@ -78,15 +138,6 @@ app.get('/routes', (c) =>
   }),
 );
 
-const getLockMs = (c: Context<{ Bindings: Env }>) => {
-  const mins = Number(c.env.LOCK_MINUTES_BEFORE ?? '0');
-  return Number.isFinite(mins) ? mins * 60_000 : 0;
-};
-const isLocked = (kickoffISO: string, nowMs: number, lockMs: number) => {
-  const ko = new Date(kickoffISO).getTime();
-  return nowMs >= ko - lockMs;
-};
-
 // ----------------------------------------------------
 // Rankings e Competitions
 // ----------------------------------------------------
@@ -105,20 +156,20 @@ async function listFixtures(c: Context<{ Bindings: Env }>, matchdayId: string) {
   const { results } = await c.env.DB
     .prepare(
       `
-    SELECT 
-      f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
-      f.competition_id, f.round_label,
-      f.leg AS leg,
-      ht.name AS home_team_name, at.name AS away_team_name,
-      ht.crest_url AS home_crest, at.crest_url AS away_crest,
-      co.code AS competition_code, co.name AS competition_name
-    FROM fixtures f
-    JOIN teams ht ON ht.id = f.home_team_id
-    JOIN teams at ON at.id = f.away_team_id
-    LEFT JOIN competitions co ON co.id = f.competition_id
-    WHERE f.status = 'SCHEDULED'
-    ORDER BY f.kickoff_at ASC
-  `,
+      SELECT 
+        f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
+        f.competition_id, f.round_label,
+        f.leg AS leg,
+        ht.name AS home_team_name, at.name AS away_team_name,
+        ht.crest_url AS home_crest, at.crest_url AS away_crest,
+        co.code AS competition_code, co.name AS competition_name
+      FROM fixtures f
+      JOIN teams ht ON ht.id = f.home_team_id
+      JOIN teams at ON at.id = f.away_team_id
+      LEFT JOIN competitions co ON co.id = f.competition_id
+      WHERE f.status = 'SCHEDULED'
+      ORDER BY f.kickoff_at ASC
+    `,
     )
     .all<{
       id: string;
@@ -137,12 +188,13 @@ async function listFixtures(c: Context<{ Bindings: Env }>, matchdayId: string) {
       away_score: number | null;
     }>();
 
+  const lockMsLocal = lockMs;
   const enriched = (results ?? []).map((f) => {
     const koMs = new Date(f.kickoff_at).getTime();
     return {
       ...f,
-      is_locked: isLocked(f.kickoff_at, now, lockMs),
-      lock_at_utc: new Date(koMs - lockMs).toISOString(),
+      is_locked: isLocked(f.kickoff_at, now, lockMsLocal),
+      lock_at_utc: new Date(koMs - lockMsLocal).toISOString(),
     };
   });
 
@@ -200,7 +252,9 @@ app.get('/api/fixtures/open', async (c) => {
   return c.json(enriched);
 });
 
-app.get('/api/matchdays/:id/fixtures', (c) => listFixtures(c, c.req.param('id')));
+app.get('/api/matchdays/:id/fixtures', (c) =>
+  listFixtures(c, c.req.param('id')),
+);
 app.get('/api/matchdays/md1/fixtures', (c) => listFixtures(c, 'md1'));
 
 // ----------------------------------------------------
@@ -442,7 +496,6 @@ app.post('/api/admin/fixtures', async (c) => {
   try {
     const b = await c.req.json();
 
-    // id curto automático (ex: g8f3a2)
     const genId = () =>
       'g' +
       crypto
@@ -502,7 +555,6 @@ app.patch('/api/admin/fixtures/:id', async (c) => {
   const id = c.req.param('id');
   const b = await c.req.json();
 
-  // vamos saber se este PATCH traz home_score/away_score
   const touchesScore = 'home_score' in b || 'away_score' in b;
 
   await run(
@@ -530,7 +582,6 @@ app.patch('/api/admin/fixtures/:id', async (c) => {
     id,
   );
 
-  // se mexeu em resultados, recalcula pontos das predictions desse jogo
   if (touchesScore) {
     await recomputePointsForFixture(c.env.DB, id);
   }
@@ -561,7 +612,6 @@ app.patch('/api/admin/fixtures/:id/result', async (c) => {
     id,
   );
 
-  // 🔥 aqui também recalculamos os pontos
   await recomputePointsForFixture(c.env.DB, id);
 
   return c.json({ ok: true });
@@ -576,8 +626,6 @@ app.patch('/api/admin/fixtures/:id/reopen', async (c) => {
     `UPDATE fixtures SET home_score=NULL, away_score=NULL, status='SCHEDULED' WHERE id=?`,
     id,
   );
-  // aqui por enquanto NÃO mexemos nos points; se quiseres,
-  // no futuro podemos também limpar points das predictions deste jogo.
   return c.json({ ok: true });
 });
 

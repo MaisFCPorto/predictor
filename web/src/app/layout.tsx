@@ -243,7 +243,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     </div>
                     <div className="flex flex-col">
                       <span className="text-xs opacity-70">
-                        Ligado como
+                        Loggado como
                       </span>
                       <span className="text-sm font-medium">
                         {user!.name ?? 'Jogador'}

@@ -1,4 +1,3 @@
-// components/FixtureCard.tsx
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
@@ -22,12 +21,11 @@ type Props = {
   final_away_score?: number | null;
   pred_home?: number | null;
   pred_away?: number | null;
-  points?: number | null;          // 👈 NOVO
+  points?: number | null;
   onSave: (id: string, h: number, a: number) => Promise<void> | void;
   saving?: boolean;
   variant?: 'default' | 'past';
 };
-
 
 function formatLocalDate(isoUTC: string) {
   const d = new Date(isoUTC);
@@ -39,15 +37,24 @@ function formatLocalDate(isoUTC: string) {
 }
 
 export default function FixtureCard({
-  id, kickoff_at, status,
-  home_team_name, away_team_name,
-  home_crest, away_crest,
-  competition_code, round_label,
-  is_locked, lock_at_utc,
-  final_home_score, final_away_score,
-  pred_home, pred_away,
+  id,
+  kickoff_at,
+  status,
+  home_team_name,
+  away_team_name,
+  home_crest,
+  away_crest,
+  competition_code,
+  round_label,
+  is_locked,
+  lock_at_utc,
+  final_home_score,
+  final_away_score,
+  pred_home,
+  pred_away,
   points,
-  onSave, saving,
+  onSave,
+  saving,
   variant = 'default',
 }: Props) {
   const dateTxt = useMemo(() => formatLocalDate(kickoff_at), [kickoff_at]);
@@ -62,8 +69,12 @@ export default function FixtureCard({
     if (i > 0) return [name.slice(0, i), name.slice(i + 1)];
     return [name, null];
   }, [comp]);
+
   const weekdayStr = useMemo(
-    () => new Intl.DateTimeFormat('pt-PT', { weekday: 'long' }).format(new Date(kickoff_at)),
+    () =>
+      new Intl.DateTimeFormat('pt-PT', {
+        weekday: 'long',
+      }).format(new Date(kickoff_at)),
     [kickoff_at],
   );
   const timeStr = useMemo(() => {
@@ -72,7 +83,7 @@ export default function FixtureCard({
     const mm = String(d.getMinutes()).padStart(2, '0');
     return `${hh}h${mm}`;
   }, [kickoff_at]);
-  // one-line mobile: "Terça, 20:00"
+
   const weekdayOne = useMemo(() => {
     const w = weekdayStr.replace(/-feira/i, '');
     return w.charAt(0).toUpperCase() + w.slice(1);
@@ -84,13 +95,15 @@ export default function FixtureCard({
     return `${hh}:${mm}`;
   }, [kickoff_at]);
   const dateOneLine = `${weekdayOne}, ${timeColon}`;
+
   const accent = compAccent(competition_code) ?? '#1e293b';
   const subtle = compSubtle(competition_code) ?? 'transparent';
-  const locked = is_locked || status === 'FINISHED';
+  const lockedBase = !!is_locked || status === 'FINISHED';
 
   // countdown to lock
   const [remaining, setRemaining] = useState<string | null>(null);
   const [remainMs, setRemainMs] = useState<number | null>(null);
+
   function formatRemaining(ms: number) {
     if (ms <= 0) return '0s';
     const total = Math.floor(ms / 1000);
@@ -98,7 +111,7 @@ export default function FixtureCard({
     const h = Math.floor((total % 86400) / 3600);
     const m = Math.floor((total % 3600) / 60);
     const s = total % 60;
-    const parts = [] as string[];
+    const parts: string[] = [];
     if (d > 0) parts.push(`${d}d`);
     parts.push(`${h}h`, `${m}m`, `${s}s`);
     return parts.join(' ');
@@ -119,8 +132,9 @@ export default function FixtureCard({
     if (ms <= 86_400_000) return 'bg-amber-400/15 text-amber-100';
     return 'bg-white/5 text-gray-200';
   }
+
   useEffect(() => {
-    if (!lock_at_utc || variant === 'past' || locked) {
+    if (!lock_at_utc || variant === 'past' || lockedBase) {
       setRemaining(null);
       setRemainMs(null);
       return;
@@ -133,31 +147,37 @@ export default function FixtureCard({
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [lock_at_utc, variant, locked]);
+  }, [lock_at_utc, variant, lockedBase]);
 
-  const nowLocked = locked || (variant !== 'past' && (remainMs ?? 1) <= 0);
+  const nowLocked =
+    lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0);
 
   // estado dos inputs
   const [home, setHome] = useState<number | ''>('');
   const [away, setAway] = useState<number | ''>('');
-  const hasPred = typeof pred_home === 'number' && typeof pred_away === 'number';
+
+  const hasPred =
+    typeof pred_home === 'number' && typeof pred_away === 'number';
+
   const unchanged =
     hasPred && typeof home === 'number' && typeof away === 'number'
       ? home === pred_home && away === pred_away
       : false;
-  const canSave = !nowLocked && home !== '' && away !== '' && !unchanged;
+
+  const canSave =
+    !nowLocked && home !== '' && away !== '' && !unchanged;
 
   // Prefill com a prediction do user
   useEffect(() => {
-    const ph = typeof pred_home === 'number' ? pred_home : null;
-    const pa = typeof pred_away === 'number' ? pred_away : null;
+    const ph =
+      typeof pred_home === 'number' ? pred_home : null;
+    const pa =
+      typeof pred_away === 'number' ? pred_away : null;
 
     if (variant === 'past') {
-      // em jogos passados, reflete sempre o palpite do user
       if (ph !== null) setHome(ph);
       if (pa !== null) setAway(pa);
     } else {
-      // em jogos em aberto, só preenche se o input ainda estiver vazio
       if (home === '' && ph !== null) setHome(ph);
       if (away === '' && pa !== null) setAway(pa);
     }
@@ -167,37 +187,57 @@ export default function FixtureCard({
   // Points badge para jogos passados (usa pontos da BD se existirem)
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
-  
-    const ph = typeof pred_home === 'number' ? pred_home : null;
-    const pa = typeof pred_away === 'number' ? pred_away : null;
-    const rh = typeof final_home_score === 'number' ? final_home_score : null;
-    const ra = typeof final_away_score === 'number' ? final_away_score : null;
-  
+
+    const ph =
+      typeof pred_home === 'number' ? pred_home : null;
+    const pa =
+      typeof pred_away === 'number' ? pred_away : null;
+    const rh =
+      typeof final_home_score === 'number'
+        ? final_home_score
+        : null;
+    const ra =
+      typeof final_away_score === 'number'
+        ? final_away_score
+        : null;
+
     if (ph == null || pa == null) {
-      return { label: 'Sem participação', className: 'bg-red-500/25 text-red-100' };
+      return {
+        label: 'Sem participação',
+        className: 'bg-red-500/25 text-red-100',
+      };
     }
     if (rh == null || ra == null) {
-      return { label: '+0 pontos', className: 'bg-white/5 text-gray-200' };
+      return {
+        label: '+0 pontos',
+        className: 'bg-white/5 text-gray-200',
+      };
     }
-  
+
     let pts: number;
     if (typeof points === 'number') {
       pts = points;
     } else {
-      // fallback: cálculo UEFA no front
-      const sign = (d: number) => (d === 0 ? 0 : d > 0 ? 1 : -1);
+      const sign = (d: number) =>
+        d === 0 ? 0 : d > 0 ? 1 : -1;
       pts = 0;
       if (sign(ph - pa) === sign(rh - ra)) pts += 3;
       if (ph === rh) pts += 2;
       if (pa === ra) pts += 2;
       if (ph - pa === rh - ra) pts += 3;
     }
-  
-    const label = `+${pts} ${pts === 1 ? 'ponto' : 'pontos'}`;
+
+    const label = `+${pts} ${
+      pts === 1 ? 'ponto' : 'pontos'
+    }`;
+
     if (pts === 0) {
-      return { label, className: 'bg-amber-400/25 text-amber-50' };
+      return {
+        label,
+        className: 'bg-amber-400/25 text-amber-50',
+      };
     }
-  
+
     const greens = [
       'bg-green-500/[0.12] text-green-100',
       'bg-green-500/[0.16] text-green-100',
@@ -212,30 +252,44 @@ export default function FixtureCard({
     ];
     const idx = Math.min(Math.max(pts, 1), 10) - 1;
     return { label, className: greens[idx] };
-  }, [variant, pred_home, pred_away, final_home_score, final_away_score, points]);
-  
-
-
+  }, [
+    variant,
+    pred_home,
+    pred_away,
+    final_home_score,
+    final_away_score,
+    points,
+  ]);
 
   const finalScoreText = useMemo(() => {
-    const h = typeof final_home_score === 'number' ? final_home_score : null;
-    const a = typeof final_away_score === 'number' ? final_away_score : null;
+    const h =
+      typeof final_home_score === 'number'
+        ? final_home_score
+        : null;
+    const a =
+      typeof final_away_score === 'number'
+        ? final_away_score
+        : null;
     if (variant !== 'past') return null;
     if (h == null || a == null) return null;
     return `${h}-${a}`;
   }, [variant, final_home_score, final_away_score]);
 
   const lastPredText = useMemo(() => {
-    const ph = typeof pred_home === 'number' ? pred_home : null;
-    const pa = typeof pred_away === 'number' ? pred_away : null;
+    const ph =
+      typeof pred_home === 'number' ? pred_home : null;
+    const pa =
+      typeof pred_away === 'number' ? pred_away : null;
     if (variant === 'past') return null;
     if (ph == null || pa == null) return null;
     return `${ph}-${pa}`;
   }, [variant, pred_home, pred_away]);
 
-  // status label shown in header right pill
   const headerStatusLabel = useMemo(() => {
-    if (variant === 'past') return status === 'FINISHED' ? 'Terminado' : 'Bloqueado';
+    if (variant === 'past')
+      return status === 'FINISHED'
+        ? 'Terminado'
+        : 'Bloqueado';
     if (nowLocked) return 'Bloqueado';
     return null;
   }, [variant, status, nowLocked]);
@@ -260,7 +314,7 @@ export default function FixtureCard({
       className={clsx(
         'relative w-full',
         'rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8',
-        variant !== 'past' ? 'pb-8' : 'pb-8',
+        'pb-8',
         'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden',
       )}
     >
@@ -308,7 +362,9 @@ export default function FixtureCard({
               'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] leading-none',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
-                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
+                : urgencyClass(
+                    remainMs ?? Number.MAX_SAFE_INTEGER,
+                  ),
             )}
           >
             {headerStatusLabel ? (
@@ -323,10 +379,16 @@ export default function FixtureCard({
                   strokeWidth="2"
                 >
                   <circle cx="12" cy="12" r="9" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 7v5l3 3"
+                  />
                 </svg>
                 <span className="tabular-nums">
-                  {remainMs != null ? formatCompactRemaining(remainMs) : '0s'}
+                  {remainMs != null
+                    ? formatCompactRemaining(remainMs)
+                    : '0s'}
                 </span>
               </>
             )}
@@ -369,7 +431,9 @@ export default function FixtureCard({
               'rounded-full px-3 py-1 text-[12px] leading-none',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
-                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
+                : urgencyClass(
+                    remainMs ?? Number.MAX_SAFE_INTEGER,
+                  ),
             )}
           >
             {headerStatusLabel ? (
@@ -385,9 +449,16 @@ export default function FixtureCard({
                   strokeWidth="2"
                 >
                   <circle cx="12" cy="12" r="9" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 7v5l3 3"
+                  />
                 </svg>
-                <span className="tabular-nums" aria-live="polite">
+                <span
+                  className="tabular-nums"
+                  aria-live="polite"
+                >
                   {remaining}
                 </span>
               </>
@@ -409,10 +480,20 @@ export default function FixtureCard({
         {/* SCORE */}
         <div className="flex items-center justify-center w-[45%]">
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-            <ScoreBox disabled={nowLocked} value={home} onChange={(v) => setHome(v)} />
-            <span className="opacity-60 text-white text-xl sm:text-2xl">–</span>
+            <ScoreBox
+              disabled={nowLocked}
+              value={home}
+              onChange={(v) => setHome(v)}
+            />
+            <span className="opacity-60 text-white text-xl sm:text-2xl">
+              –
+            </span>
             <div className="relative flex items-center">
-              <ScoreBox disabled={locked} value={away} onChange={(v) => setAway(v)} />
+              <ScoreBox
+                disabled={nowLocked}
+                value={away}
+                onChange={(v) => setAway(v)}
+              />
               {variant !== 'past' && (
                 <button
                   type="button"
@@ -425,7 +506,10 @@ export default function FixtureCard({
                       : 'bg-white/10 hover:bg-white/15 text-white',
                   )}
                   onClick={() => {
-                    if (typeof home === 'number' && typeof away === 'number') {
+                    if (
+                      typeof home === 'number' &&
+                      typeof away === 'number'
+                    ) {
                       onSave(id, home, away);
                     }
                   }}
@@ -459,7 +543,11 @@ export default function FixtureCard({
                       strokeWidth="2"
                       viewBox="0 0 24 24"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 12l2 2 4-4"
+                      />
                     </svg>
                   )}
                 </button>
@@ -506,23 +594,30 @@ export default function FixtureCard({
       )}
 
       {/* Botão mobile Guardar */}
-      {variant !== 'past' && canSave && (
+      {variant !== 'past' && (
         <div className="md:hidden flex justify-center mt-1">
           <button
-            disabled={!canSave || !!saving}
+            disabled={!canSave || !!saving || nowLocked}
             className={clsx(
               'rounded-full px-4 py-2 text-sm font-medium',
-              !canSave || saving
+              !canSave || saving || nowLocked
                 ? 'bg-white/5 text-white/50 cursor-not-allowed'
                 : 'bg-white/10 hover:bg-white/15 text-white',
             )}
             onClick={() => {
-              if (typeof home === 'number' && typeof away === 'number') {
+              if (
+                typeof home === 'number' &&
+                typeof away === 'number'
+              ) {
                 onSave(id, home, away);
               }
             }}
           >
-            {locked ? 'Bloqueado' : saving ? 'A guardar…' : 'Guardar'}
+            {nowLocked
+              ? 'Bloqueado'
+              : saving
+              ? 'A guardar…'
+              : 'Guardar'}
           </button>
         </div>
       )}
@@ -532,7 +627,13 @@ export default function FixtureCard({
 
 /* ---------- Sub-componentes ---------- */
 
-function Crest({ src, alt }: { src?: string | null; alt: string }) {
+function Crest({
+  src,
+  alt,
+}: {
+  src?: string | null;
+  alt: string;
+}) {
   return (
     <div className="flex-shrink-0">
       <div className="h-12 sm:h-14 md:h-16 px-1.5 sm:px-2 flex items-center justify-center">
@@ -571,7 +672,8 @@ function ScoreBox({
         const v = e.target.value;
         if (v === '') return onChange('');
         const n = Number(v);
-        if (Number.isFinite(n) && n >= 0 && n <= 99) onChange(n);
+        if (Number.isFinite(n) && n >= 0 && n <= 99)
+          onChange(n);
       }}
       className={clsx(
         'no-spinner text-center tabular-nums rounded-2xl border placeholder:text-white/70',

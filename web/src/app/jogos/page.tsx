@@ -179,34 +179,13 @@ export default function JogosPage() {
           { cache: 'no-store' },
         );
 
-        const text = await res.text();
-        console.log('RAW /api/predictions text →', text);
-
         if (!res.ok) {
           throw new Error(
             `HTTP ${res.status} ${res.statusText} em /api/predictions`,
           );
         }
 
-        // tenta extrair a parte JSON entre o primeiro '[' e o último ']'
-        let list: any;
-        try {
-          const start = text.indexOf('[');
-          const end = text.lastIndexOf(']');
-
-          if (start === -1 || end === -1 || end <= start) {
-            throw new Error('Formato inesperado da resposta');
-          }
-
-          const jsonSlice = text.slice(start, end + 1);
-          list = JSON.parse(jsonSlice);
-        } catch (e) {
-          console.error('Falha a extrair JSON de /api/predictions', e);
-          throw new Error(
-            'Resposta não-JSON de /api/predictions (ver RAW no console)',
-          );
-        }
-
+        const list = (await res.json()) as PredictionDTO[] | any;
         const arr: PredictionDTO[] = Array.isArray(list)
           ? list
           : Array.isArray(list?.items)

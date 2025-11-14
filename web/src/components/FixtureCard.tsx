@@ -167,22 +167,37 @@ export default function FixtureCard({
   // Points badge para jogos passados (usa pontos da BD se existirem)
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
-
+  
     const ph = typeof pred_home === 'number' ? pred_home : null;
     const pa = typeof pred_away === 'number' ? pred_away : null;
-
-    // sem participação
+    const rh = typeof final_home_score === 'number' ? final_home_score : null;
+    const ra = typeof final_away_score === 'number' ? final_away_score : null;
+  
     if (ph == null || pa == null) {
       return { label: 'Sem participação', className: 'bg-red-500/25 text-red-100' };
     }
-
-    const pts = typeof points === 'number' ? points : 0;
+    if (rh == null || ra == null) {
+      return { label: '+0 pontos', className: 'bg-white/5 text-gray-200' };
+    }
+  
+    let pts: number;
+    if (typeof points === 'number') {
+      pts = points;
+    } else {
+      // fallback: cálculo UEFA no front
+      const sign = (d: number) => (d === 0 ? 0 : d > 0 ? 1 : -1);
+      pts = 0;
+      if (sign(ph - pa) === sign(rh - ra)) pts += 3;
+      if (ph === rh) pts += 2;
+      if (pa === ra) pts += 2;
+      if (ph - pa === rh - ra) pts += 3;
+    }
+  
     const label = `+${pts} ${pts === 1 ? 'ponto' : 'pontos'}`;
-
     if (pts === 0) {
       return { label, className: 'bg-amber-400/25 text-amber-50' };
     }
-
+  
     const greens = [
       'bg-green-500/[0.12] text-green-100',
       'bg-green-500/[0.16] text-green-100',
@@ -197,7 +212,8 @@ export default function FixtureCard({
     ];
     const idx = Math.min(Math.max(pts, 1), 10) - 1;
     return { label, className: greens[idx] };
-  }, [variant, pred_home, pred_away, points]);
+  }, [variant, pred_home, pred_away, final_home_score, final_away_score, points]);
+  
 
 
 

@@ -125,6 +125,7 @@ export default function JogosPage() {
 >({});
 
 
+
   // --- supabase user + SYNC NO WORKER ---
   useEffect(() => {
     (async () => {
@@ -182,20 +183,21 @@ export default function JogosPage() {
           ? list.items
           : [];
           const map: Record<string, { home: number; away: number; points: number | null }> = {};
-          for (const p of arr) {
-            if (p && typeof p.fixture_id === 'string') {
-              const h = (p as any).home_goals;
-              const a = (p as any).away_goals;
-              const pts = (p as any).points;
-              if (typeof h === 'number' && typeof a === 'number') {
-                map[p.fixture_id] = {
-                  home: h,
-                  away: a,
-                  points: typeof pts === 'number' ? pts : null,
-                };
-              }
-            }
-          }
+for (const p of arr) {
+  if (p && typeof p.fixture_id === 'string') {
+    const h = (p as any).home_goals;
+    const a = (p as any).away_goals;
+    const pts = (p as any).points;
+    if (typeof h === 'number' && typeof a === 'number') {
+      map[p.fixture_id] = {
+        home: h,
+        away: a,
+        points: typeof pts === 'number' ? pts : null,
+      };
+    }
+  }
+}
+
           
         if (!abort) setPredictions(map);
       } catch {
@@ -605,30 +607,30 @@ export default function JogosPage() {
             ) : (
               <div className="space-y-4">
                 {past.map((f) => (
-                  <FixtureCard
-                    key={f.id}
-                    id={f.id}
-                    kickoff_at={f.kickoff_at}
-                    status={f.status}
-                    home_team_name={f.home_team_name}
-                    away_team_name={f.away_team_name}
-                    home_crest={f.home_crest}
-                    away_crest={f.away_crest}
-                    competition_code={f.competition_code}
-                    round_label={f.round_label}
-                    leg={f.leg}
-                    is_locked={true}
-                    lock_at_utc={null}
-                    final_home_score={f.home_score ?? null}
-                    final_away_score={f.away_score ?? null}
-                    pred_home={predictions[f.id]?.home}
-                    pred_away={predictions[f.id]?.away}
-                    points={predictions[f.id]?.points ?? null} 
-                    onSave={onSave}
-                    saving={false}
-                    variant="past"
-                  />
-                ))}
+  <FixtureCard
+    key={f.id}
+    id={f.id}
+    kickoff_at={f.kickoff_at}
+    status={f.status}
+    home_team_name={f.home_team_name}
+    away_team_name={f.away_team_name}
+    home_crest={f.home_crest}
+    away_crest={f.away_crest}
+    competition_code={f.competition_code}
+    round_label={f.round_label}
+    leg={f.leg}
+    is_locked={true}
+    lock_at_utc={null}
+    final_home_score={f.home_score ?? null}
+    final_away_score={f.away_score ?? null}
+    pred_home={predictions[f.id]?.home}
+    pred_away={predictions[f.id]?.away}
+    points={predictions[f.id]?.points ?? null}
+    onSave={onSave}
+    saving={false}
+    variant="past"
+  />
+))}
                 {past.length > 3 && (
                   <div className="flex justify-center">
                     <button

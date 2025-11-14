@@ -1,3 +1,4 @@
+// apps/web/src/app/jogos/page.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -19,11 +20,10 @@ type FixtureDTO = {
   away_crest: string | null;
   competition_id: string | null;
   competition_code: string | null; // LP/LE/TP/TL…
-  round_label: string | null;      // J1, QF, SF, F, M1…
+  round_label: string | null; // J1, QF, SF, F, M1…
   leg: number | null;
   is_locked: boolean;
   lock_at_utc?: string | null;
-  // optional final result from API when available
   home_score?: number | null;
   away_score?: number | null;
 };
@@ -99,6 +99,7 @@ export default function JogosPage() {
   const [fixtures, setFixtures] = useState<FixtureDTO[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   // past fixtures infinite list
   const [past, setPast] = useState<FixtureDTO[]>([]);
   const [pastOffset, setPastOffset] = useState(0);
@@ -179,13 +180,33 @@ export default function JogosPage() {
           { cache: 'no-store' },
         );
 
+        const text = await res.text();
+        console.log('RAW /api/predictions text →', text);
+
         if (!res.ok) {
           throw new Error(
             `HTTP ${res.status} ${res.statusText} em /api/predictions`,
           );
         }
 
-        const list = (await res.json()) as PredictionDTO[] | any;
+        let list: any;
+        try {
+          const start = text.indexOf('[');
+          const end = text.lastIndexOf(']');
+
+          if (start === -1 || end === -1 || end <= start) {
+            throw new Error('Formato inesperado da resposta');
+          }
+
+          const jsonSlice = text.slice(start, end + 1);
+          list = JSON.parse(jsonSlice);
+        } catch (e) {
+          console.error('Falha a extrair JSON de /api/predictions', e);
+          throw new Error(
+            'Resposta não-JSON de /api/predictions (ver RAW no console)',
+          );
+        }
+
         const arr: PredictionDTO[] = Array.isArray(list)
           ? list
           : Array.isArray(list?.items)
@@ -492,21 +513,21 @@ export default function JogosPage() {
         <Link
           href={href}
           aria-label={aria}
-          className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+          className="h-full rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
         >
           {children}
         </Link>
       );
     }
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <div className="h-full rounded-2xl border border-white/10 bg-white/[0.04] p-4">
         {children}
       </div>
     );
   };
 
   return (
-    <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-10">
+    <main className="px-2 py-10 sm:px-4 md:px-6 lg:px-10">
       <Toaster position="top-center" />
 
       <div className="mx-auto w-full max-w-6xl space-y-8">
@@ -523,20 +544,20 @@ export default function JogosPage() {
                 {userName}
               </h1>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* AGORA 3 QUADRADOS EM LINHA, INCL. MOBILE */}
+              <div className="grid grid-cols-3 gap-3">
                 <CardLink
                   href={linkGeneral}
                   aria="Ir para o ranking geral"
                 >
-                  <div className="text-sm opacity-75">
+                  <div className="text-xs opacity-75 sm:text-sm">
                     Classificação Geral
                   </div>
-                  <div className="mt-1 text-3xl font-bold">
+                  <div className="mt-1 text-2xl font-bold sm:text-3xl">
                     {genPos == null ? '—' : `#${genPos}`}
                   </div>
-                  <div className="mt-1 text-sm opacity-75">
-                    Pontos:{' '}
-                    {genPoints == null ? '—' : genPoints}
+                  <div className="mt-1 text-xs opacity-75 sm:text-sm">
+                    Pontos: {genPoints == null ? '—' : genPoints}
                   </div>
                 </CardLink>
 
@@ -544,15 +565,14 @@ export default function JogosPage() {
                   href={linkMonthly}
                   aria="Ir para o ranking mensal"
                 >
-                  <div className="text-sm opacity-75">
+                  <div className="text-xs opacity-75 sm:text-sm">
                     Classificação Mensal - {formatYmLabel(ym)}
                   </div>
-                  <div className="mt-1 text-3xl font-bold">
+                  <div className="mt-1 text-2xl font-bold sm:text-3xl">
                     {monPos == null ? '—' : `#${monPos}`}
                   </div>
-                  <div className="mt-1 text-sm opacity-75">
-                    Pontos:{' '}
-                    {monPoints == null ? '—' : monPoints}
+                  <div className="mt-1 text-xs opacity-75 sm:text-sm">
+                    Pontos: {monPoints == null ? '—' : monPoints}
                   </div>
                 </CardLink>
 
@@ -560,21 +580,21 @@ export default function JogosPage() {
                   href={linkByGame}
                   aria="Ir para o ranking do último jogo"
                 >
-                  <div className="text-sm opacity-75">
+                  <div className="text-xs opacity-75 sm:text-sm">
                     Último Jogo
                   </div>
-                  <div className="mt-1 text-3xl font-bold">
+                  <div className="mt-1 text-2xl font-bold sm:text-3xl">
                     {lastPoints == null
                       ? '—'
                       : `${lastPoints.points ?? 0} pts`}
                   </div>
-                  <div className="mt-1 text-sm opacity-75">
+                  <div className="mt-1 text-xs opacity-75 sm:text-sm">
                     {lastPoints?.position
                       ? `Posição: #${lastPoints.position}`
                       : 'Sem palpite'}
                   </div>
                   {!!lastPoints?.fixture && (
-                    <div className="mt-1 text-xs opacity-60">
+                    <div className="mt-1 text-[10px] opacity-60 sm:text-xs">
                       Jogo: {lastPoints.fixture.id}
                     </div>
                   )}
@@ -598,7 +618,7 @@ export default function JogosPage() {
               </p>
               <button
                 onClick={() => router.push('/auth')}
-                className="rounded-2xl border border-white/10 bg-white/[0.10] px-6 py-3 text-base font-medium hover:bg-white/[0.15] transition"
+                className="rounded-2xl border border-white/10 bg-white/[0.10] px-6 py-3 text-base font-medium transition hover:bg-white/[0.15]"
               >
                 🔐 Entrar / Criar Conta
               </button>
@@ -608,7 +628,7 @@ export default function JogosPage() {
 
         {/* Erro geral (fixtures) */}
         {error && (
-          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm break-words">
+          <div className="break-words rounded border border-red-500/40 bg-red-500/10 p-3 text-sm">
             {error}
           </div>
         )}
@@ -625,7 +645,7 @@ export default function JogosPage() {
         {/* Jogos em aberto */}
         {!loading && (
           <section>
-            <h2 className="text-2xl font-bold mb-4">
+            <h2 className="mb-4 text-2xl font-bold">
               Jogos em aberto
             </h2>
             {openFixtures.length === 0 ? (
@@ -667,7 +687,7 @@ export default function JogosPage() {
         {/* Jogos passados (scroll infinito) */}
         {!loading && (
           <section>
-            <h2 className="text-2xl font-bold mb-4">
+            <h2 className="mb-4 text-2xl font-bold">
               Jogos passados
             </h2>
             {past.length === 0 && pastLoading ? (

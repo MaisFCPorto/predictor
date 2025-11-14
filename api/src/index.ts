@@ -410,14 +410,24 @@ app.post('/api/predictions', async (c) => {
 app.get('/api/predictions', async (c) => {
   const userId = c.req.query('userId');
   if (!userId) return c.json([], 200);
+
   const { results } = await c.env.DB
     .prepare(
-      `SELECT fixture_id, home_goals, away_goals FROM predictions WHERE user_id = ?`,
+      `SELECT fixture_id, home_goals, away_goals, points
+       FROM predictions
+       WHERE user_id = ?`,
     )
     .bind(userId)
-    .all<{ fixture_id: string; home_goals: number; away_goals: number }>();
+    .all<{
+      fixture_id: string;
+      home_goals: number;
+      away_goals: number;
+      points: number | null;
+    }>();
+
   return c.json(results ?? []);
 });
+
 
 // ----------------------------------------------------
 // PUBLIC: Sync Users

@@ -18,12 +18,14 @@ type Props = {
   is_locked?: boolean;
   lock_at_utc?: string | null;
   leg?: number | null;
-  // optional final result from database (for past fixtures)
+  // resultado final do jogo (para jogos passados)
   final_home_score?: number | null;
   final_away_score?: number | null;
-  // optional user's prediction values
+  // prediction do utilizador (se existir)
   pred_home?: number | null;
   pred_away?: number | null;
+  // pontos do utilizador neste jogo (UEFA) vindos da BD
+  points?: number | null;
   onSave: (id: string, h: number, a: number) => Promise<void> | void;
   saving?: boolean;
   variant?: 'default' | 'past';
@@ -46,6 +48,7 @@ export default function FixtureCard({
   is_locked, lock_at_utc,
   final_home_score, final_away_score,
   pred_home, pred_away,
+  points,
   onSave, saving,
   variant = 'default',
 }: Props) {
@@ -61,7 +64,10 @@ export default function FixtureCard({
     if (i > 0) return [name.slice(0, i), name.slice(i + 1)];
     return [name, null];
   }, [comp]);
-  const weekdayStr = useMemo(() => new Intl.DateTimeFormat('pt-PT', { weekday: 'long' }).format(new Date(kickoff_at)), [kickoff_at]);
+  const weekdayStr = useMemo(
+    () => new Intl.DateTimeFormat('pt-PT', { weekday: 'long' }).format(new Date(kickoff_at)),
+    [kickoff_at],
+  );
   const timeStr = useMemo(() => {
     const d = new Date(kickoff_at);
     const hh = String(d.getHours()).padStart(2, '0');
@@ -132,65 +138,96 @@ export default function FixtureCard({
   }, [lock_at_utc, variant, locked]);
 
   const nowLocked = locked || (variant !== 'past' && (remainMs ?? 1) <= 0);
+
+  // estado dos inputs
   const [home, setHome] = useState<number | ''>('');
   const [away, setAway] = useState<number | ''>('');
   const hasPred = typeof pred_home === 'number' && typeof pred_away === 'number';
-  const unchanged = hasPred && typeof home === 'number' && typeof away === 'number'
-    ? (home === pred_home && away === pred_away)
-    : false;
+  const unchanged =
+    hasPred && typeof home === 'number' && typeof away === 'number'
+      ? home === pred_home && away === pred_away
+      : false;
   const canSave = !nowLocked && home !== '' && away !== '' && !unchanged;
 
-  // Prefill from user's prediction. For past fixtures, always reflect prediction.
-  // For open fixtures, only initialize when empty to avoid clobbering user typing.
+  // Prefill com a prediction do user
   useEffect(() => {
     const ph = typeof pred_home === 'number' ? pred_home : null;
     const pa = typeof pred_away === 'number' ? pred_away : null;
+
     if (variant === 'past') {
+      // em jogos passados, reflete sempre o palpite do user
       if (ph !== null) setHome(ph);
       if (pa !== null) setAway(pa);
     } else {
+      // em jogos em aberto, só preenche se o input ainda estiver vazio
       if (home === '' && ph !== null) setHome(ph);
       if (away === '' && pa !== null) setAway(pa);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pred_home, pred_away, variant]);
 
-  // Points display for past fixtures (based on prediction vs final score)
+  // Points badge para jogos passados (usa pontos da BD se existirem)
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
+
     const ph = typeof pred_home === 'number' ? pred_home : null;
     const pa = typeof pred_away === 'number' ? pred_away : null;
     const rh = typeof final_home_score === 'number' ? final_home_score : null;
     const ra = typeof final_away_score === 'number' ? final_away_score : null;
-    if (ph == null || pa == null) return { label: 'Sem participação', className: 'bg-red-500/25 text-red-100' };
-    if (rh == null || ra == null) return { label: '+0 pontos', className: 'bg-white/5 text-gray-200' };
 
-    const winner = (n: number) => (n === 0 ? 0 : n > 0 ? 1 : -1);
-    let pts = 0;
-    if (winner(ph - pa) === winner(rh - ra)) pts += 3;                  // Correct result (winner/draw)
-    if (ph === rh) pts += 2;                                            // Correct home goals
-    if (pa === ra) pts += 2;                                            // Correct away goals
-    if (Math.abs(ph - pa) === Math.abs(rh - ra)) pts += 3;              // Correct goal difference
+    if (ph == null || pa == null) {
+      // Sem linha em predictions → Sem participação
+      return { label: 'Sem participação', className: 'bg-rose-500/25 text-rose-100' };
+    }
+    if (rh == null || ra == null) {
+      // Jogo ainda não tem resultado definitivo
+      return { label: '+0 pontos', className: 'bg-white/5 text-gray-200' };
+    }
+
+    let pts: number;
+    if (typeof points === 'number') {
+      // ✅ usamos os pontos calculados e guardados em BD
+      pts = points;
+    } else {
+      // fallback: calculo em front com a mesma lógica UEFA usada no backend
+      const pd = ph - pa;
+      const rd = rh - ra;
+      const sign = (d: number) => (d === 0 ? 0 : d > 0 ? 1 : -1);
+
+      const sameWinner = sign(pd) === sign(rd);
+      const correctHome = ph === rh;
+      const correctAway = pa === ra;
+      const correctDiff = pd === rd; // diferença exata (sem abs)
+      // const isExact = ph === rh && pa === ra; // já está implícito na soma dos critérios
+
+      pts = 0;
+      if (sameWinner) pts += 3;      // vencedor / empate correto
+      if (correctHome) pts += 2;     // golos da casa corretos
+      if (correctAway) pts += 2;     // golos de fora corretos
+      if (correctDiff) pts += 3;     // diferença correta
+    }
 
     const label = `+${pts} ${pts === 1 ? 'ponto' : 'pontos'}`;
     if (pts === 0) {
       return { label, className: 'bg-amber-400/25 text-amber-50' };
     }
-    // Green scale 1..10 (darker as points increase)
+
     const greens = [
-      'bg-green-500/[0.12] text-green-100', // 1
-      'bg-green-500/[0.16] text-green-100', // 2
-      'bg-green-500/[0.20] text-green-100', // 3
-      'bg-green-500/[0.24] text-green-100', // 4
-      'bg-green-500/[0.28] text-green-100', // 5
-      'bg-green-500/[0.32] text-green-50',  // 6
-      'bg-green-600/[0.36] text-green-50',  // 7
-      'bg-green-600/[0.40] text-green-50',  // 8
-      'bg-green-700/[0.48] text-green-50',  // 9
-      'bg-green-700/[0.56] text-green-50',  // 10
+      'bg-green-500/[0.12] text-green-100',
+      'bg-green-500/[0.16] text-green-100',
+      'bg-green-500/[0.20] text-green-100',
+      'bg-green-500/[0.24] text-green-100',
+      'bg-green-500/[0.28] text-green-100',
+      'bg-green-500/[0.32] text-green-50',
+      'bg-green-600/[0.36] text-green-50',
+      'bg-green-600/[0.40] text-green-50',
+      'bg-green-700/[0.48] text-green-50',
+      'bg-green-700/[0.56] text-green-50',
     ];
     const idx = Math.min(Math.max(pts, 1), 10) - 1;
+
     return { label, className: greens[idx] };
-  }, [variant, pred_home, pred_away, final_home_score, final_away_score]);
+  }, [variant, pred_home, pred_away, final_home_score, final_away_score, points]);
 
   const finalScoreText = useMemo(() => {
     const h = typeof final_home_score === 'number' ? final_home_score : null;
@@ -233,14 +270,13 @@ export default function FixtureCard({
   return (
     <div
       className={clsx(
-        // ⇩⇩⇩ AQUI: sem vw para não “ultrapassar” o viewport
         'relative w-full',
         'rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8',
         variant !== 'past' ? 'pb-8' : 'pb-8',
-        'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden'
+        'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden',
       )}
     >
-      {/* Watermark by competition (TP, LE, LP, TL) */}
+      {/* Watermark */}
       {watermarkUrl && (
         <div
           aria-hidden
@@ -253,9 +289,9 @@ export default function FixtureCard({
           }}
         />
       )}
-      {/* Cabeçalho mobile (Option D): ícone competição à esquerda, data centrada, badge à direita */}
+
+      {/* Cabeçalho mobile */}
       <div className="md:hidden relative flex items-center justify-center">
-        {/* Trophy icon (white) on the left if competition exists */}
         <div className="absolute left-0 top-1/2 -translate-y-1/2 pl-1">
           {comp && (
             <svg
@@ -273,36 +309,45 @@ export default function FixtureCard({
             </svg>
           )}
         </div>
-        {/* Centered one-line date */}
-        <div className="text-center text-sm text-white/90 capitalize px-14 truncate">{dateOneLine}</div>
-        {/* Right compact badge */}
+
+        <div className="text-center text-sm text-white/90 capitalize px-14 truncate">
+          {dateOneLine}
+        </div>
+
         <div className="absolute right-0 top-1/2 -translate-y-1/2 pr-1">
           <span
             className={clsx(
               'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] leading-none',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
-                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER)
+                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
             )}
           >
             {headerStatusLabel ? (
               headerStatusLabel
             ) : (
               <>
-                <svg className="inline h-3 w-3 mr-1 align-[-2px] opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  className="inline h-3 w-3 mr-1 align-[-2px] opacity-80"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <circle cx="12" cy="12" r="9" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
                 </svg>
-                <span className="tabular-nums">{remainMs != null ? formatCompactRemaining(remainMs) : '0s'}</span>
+                <span className="tabular-nums">
+                  {remainMs != null ? formatCompactRemaining(remainMs) : '0s'}
+                </span>
               </>
             )}
           </span>
         </div>
       </div>
 
-      {/* Cabeçalho desktop (3 zonas: esquerda pill competição, centro data, direita estado/contador) */}
+      {/* Cabeçalho desktop */}
       <div className="hidden md:grid grid-cols-[1fr_auto_1fr] items-start gap-3">
-        {/* Esquerda: competição */}
         <div className="min-w-0 justify-self-start">
           {comp && (
             <span
@@ -317,28 +362,26 @@ export default function FixtureCard({
               }}
               title={comp + (rnd ? ` — ${rnd}` : '')}
             >
-              {comp}{rnd ? ` — ${rnd}` : ''}
+              {comp}
+              {rnd ? ` — ${rnd}` : ''}
             </span>
           )}
         </div>
 
-        {/* Centro: data/hora (duas linhas) */}
         <div className="justify-self-center text-center">
           <div className="text-sm md:text-base text-white/90 capitalize leading-tight">
             <div>{weekdayStr}</div>
             <div>{timeStr}</div>
           </div>
-          {/* Mobile: o estado/contador está na linha acima; nada aqui */}
         </div>
 
-        {/* Direita: estado/contador só em desktop */}
         <div className="justify-self-end hidden md:block">
           <span
             className={clsx(
               'rounded-full px-3 py-1 text-[12px] leading-none',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
-                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER)
+                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
             )}
           >
             {headerStatusLabel ? (
@@ -346,8 +389,13 @@ export default function FixtureCard({
             ) : (
               <>
                 <span className="mr-1">Fecha em</span>
-                {/* clock icon */}
-                <svg className="inline h-3.5 w-3.5 mr-1 align-[-2px] opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  className="inline h-3.5 w-3.5 mr-1 align-[-2px] opacity-80"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <circle cx="12" cy="12" r="9" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
                 </svg>
@@ -361,7 +409,7 @@ export default function FixtureCard({
       </div>
 
       {/* Layout principal */}
-      <div className={clsx('mt-6 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap mb-8')}>
+      <div className="mt-6 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap mb-8">
         {/* HOME */}
         <div className="flex flex-col items-center w-[25%] min-w-[60px]">
           <Crest src={home_crest} alt={home_team_name} />
@@ -373,29 +421,20 @@ export default function FixtureCard({
         {/* SCORE */}
         <div className="flex items-center justify-center w-[45%]">
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-            <ScoreBox
-              disabled={nowLocked}
-              value={home}
-              onChange={(v) => setHome(v)}
-            />
+            <ScoreBox disabled={nowLocked} value={home} onChange={(v) => setHome(v)} />
             <span className="opacity-60 text-white text-xl sm:text-2xl">–</span>
             <div className="relative flex items-center">
-              <ScoreBox
-                disabled={locked}
-                value={away}
-                onChange={(v) => setAway(v)}
-              />
-              {/* Save icon on wider screens (right of away score, absolute to avoid layout shift) */}
+              <ScoreBox disabled={locked} value={away} onChange={(v) => setAway(v)} />
               {variant !== 'past' && (
                 <button
                   type="button"
                   disabled={!canSave || !!saving}
                   className={clsx(
                     'hidden md:flex absolute left-full top-1/2 -translate-y-1/2 items-center justify-center w-10 h-10 rounded-full transition ml-2',
-                    !canSave ? 'md:hidden' : '', // hide icon unless both inputs are filled
+                    !canSave ? 'md:hidden' : '',
                     saving
                       ? 'bg-white/5 text-white/40 cursor-not-allowed'
-                      : 'bg-white/10 hover:bg-white/15 text-white'
+                      : 'bg-white/10 hover:bg-white/15 text-white',
                   )}
                   onClick={() => {
                     if (typeof home === 'number' && typeof away === 'number') {
@@ -405,12 +444,33 @@ export default function FixtureCard({
                   title="Guardar palpite"
                 >
                   {saving ? (
-                    <svg className="animate-spin h-5 w-5 text-white/60" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    <svg
+                      className="animate-spin h-5 w-5 text-white/60"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
                     </svg>
                   ) : (
-                    <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <svg
+                      className="h-8 w-8"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
                     </svg>
                   )}
@@ -429,7 +489,7 @@ export default function FixtureCard({
         </div>
       </div>
 
-      {/* Points badge for past fixtures (status now shown in header) */}
+      {/* Badge de Resultado + Pontos (jogos passados) */}
       {pointsBadge && (
         <div className="flex justify-center mt-2 gap-2">
           {finalScoreText && (
@@ -437,13 +497,18 @@ export default function FixtureCard({
               Resultado Correto: {finalScoreText}
             </span>
           )}
-          <span className={clsx('inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none', pointsBadge.className)}>
+          <span
+            className={clsx(
+              'inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none',
+              pointsBadge.className,
+            )}
+          >
             {pointsBadge.label}
           </span>
         </div>
       )}
 
-      {/* Last prediction pill for open fixtures */}
+      {/* Pill "Última previsão" para jogos em aberto */}
       {!pointsBadge && lastPredText && (
         <div className="flex justify-center mt-2">
           <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
@@ -452,7 +517,7 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Mobile Guardar button centered below score (only when canSave) */}
+      {/* Botão mobile Guardar */}
       {variant !== 'past' && canSave && (
         <div className="md:hidden flex justify-center mt-1">
           <button
@@ -461,7 +526,7 @@ export default function FixtureCard({
               'rounded-full px-4 py-2 text-sm font-medium',
               !canSave || saving
                 ? 'bg-white/5 text-white/50 cursor-not-allowed'
-                : 'bg-white/10 hover:bg-white/15 text-white'
+                : 'bg-white/10 hover:bg-white/15 text-white',
             )}
             onClick={() => {
               if (typeof home === 'number' && typeof away === 'number') {
@@ -473,7 +538,6 @@ export default function FixtureCard({
           </button>
         </div>
       )}
-
     </div>
   );
 }
@@ -500,7 +564,15 @@ function Crest({ src, alt }: { src?: string | null; alt: string }) {
   );
 }
 
-function ScoreBox({ disabled, value, onChange }: { disabled?: boolean; value: number | ''; onChange: (v: number | '') => void }) {
+function ScoreBox({
+  disabled,
+  value,
+  onChange,
+}: {
+  disabled?: boolean;
+  value: number | '';
+  onChange: (v: number | '') => void;
+}) {
   return (
     <input
       type="number"
@@ -518,7 +590,7 @@ function ScoreBox({ disabled, value, onChange }: { disabled?: boolean; value: nu
         'h-12 w-12 text-xl sm:h-14 sm:w-14 sm:text-2xl md:h-16 md:w-16 md:text-3xl',
         disabled
           ? 'border-white/10 bg-white/[0.09] text-white/40'
-          : 'border-white/20 bg-[#010436] text-white hover:bg-[#010436] focus:outline-none focus:ring-2 focus:ring-white/20'
+          : 'border-white/20 bg-[#010436] text-white hover:bg-[#010436] focus:outline-none focus:ring-2 focus:ring-white/20',
       )}
       disabled={disabled}
       placeholder=""

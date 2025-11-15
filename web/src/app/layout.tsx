@@ -13,6 +13,82 @@ type UserInfo = {
   avatar_url: string | null;
 };
 
+// --- CONSTS COM OS IFRAME SRC ------------------------------------------------
+
+const BETANO_DESKTOP_IFRAME =
+  'https://gml-grp.com/I.ashx?btag=a_15985b_4105c_&affid=5177&siteid=15985&adid=4105&c=';
+
+const BETANO_MOBILE_IFRAME =
+  'https://gml-grp.com/I.ashx?btag=a_15985b_4115c_&affid=5177&siteid=15985&adid=4115&c=';
+
+// --- COMPONENTES DE BANNERS --------------------------------------------------
+
+function BetanoSideRails() {
+  return (
+    <div className="pointer-events-none fixed inset-y-0 left-0 right-0 z-[40] hidden justify-between md:flex">
+      {/* LEFT */}
+      <div className="pointer-events-auto ml-2 mt-24">
+        <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+          <iframe
+            src={BETANO_DESKTOP_IFRAME}
+            width="160"
+            height="600"
+            style={{ border: '0px', padding: 0, margin: 0 }}
+          />
+        </div>
+      </div>
+
+      {/* RIGHT (usa o mesmo criativo; se quiseres outro, mudamos o src) */}
+      <div className="pointer-events-auto mr-2 mt-24">
+        <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+          <iframe
+            src={BETANO_DESKTOP_IFRAME}
+            width="160"
+            height="600"
+            style={{ border: '0px', padding: 0, margin: 0 }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BetanoMobileBanner() {
+  const [open, setOpen] = useState(true);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[60] flex justify-center px-3 pb-3 md:hidden">
+      <div className="relative w-full max-w-xs overflow-hidden rounded-2xl bg-black/45 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-md">
+        {/* botão fechar */}
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-[11px] text-white/80 shadow hover:bg-black/70"
+          aria-label="Fechar banner"
+        >
+          ✕
+        </button>
+
+        <iframe
+          src={BETANO_MOBILE_IFRAME}
+          width="320"
+          height="100"
+          style={{
+            border: '0px',
+            padding: 0,
+            margin: 0,
+            display: 'block',
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// --- ROOT LAYOUT -------------------------------------------------------------
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -89,6 +165,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt">
       <body className="min-h-screen bg-[#0a1e7a] bg-no-repeat bg-cover bg-fixed bg-center text-white">
+        {/* BANNERS BETANO */}
+        <BetanoSideRails />
+        <BetanoMobileBanner />
+
         {/* NAVBAR */}
         <header className="nav-glass sticky top-0 z-50">
           <div className="relative mx-auto flex h-14 w-full max-w-6xl items-center px-4">
@@ -114,7 +194,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   key={link.href}
                   href={link.href}
                   className={
-                    'relative pb-0.5 transition-colors ' +
+                    'relative pb-0.5 transition-colors group ' +
                     (isActive(link.href)
                       ? 'text-white font-medium'
                       : 'text-white/75 hover:text-white')
@@ -124,7 +204,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   {/* sublinhado suave */}
                   <span
                     className={
-                      'absolute left-0 right-0 -bottom-0.5 h-[2px] origin-center scale-x-0 rounded-full bg-white/70 transition-transform duration-200 ' +
+                      'pointer-events-none absolute left-0 right-0 -bottom-0.5 h-[2px] origin-center scale-x-0 rounded-full bg-white/70 transition-transform duration-200 ' +
                       (isActive(link.href) ? 'scale-x-100' : 'group-hover:scale-x-100')
                     }
                   />

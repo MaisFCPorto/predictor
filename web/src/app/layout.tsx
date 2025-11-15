@@ -1,51 +1,46 @@
 'use client';
 
-import './globals.css';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import clsx from 'clsx';
 import { supabasePKCE } from '@/utils/supabase/client';
 
-type UserInfo = {
+type UserMini = {
   id: string;
   name: string | null;
   avatar_url: string | null;
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const router = useRouter();
-
-  const [user, setUser] = useState<UserInfo | null>(null);
+  const [user, setUser] = useState<UserMini | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // carregar user do supabase
   useEffect(() => {
     let ignore = false;
 
     (async () => {
       try {
-        const {
-          data: { user },
-        } = await supabasePKCE.auth.getUser();
-
-        if (ignore) return;
-
-        if (user) {
-          const friendlyName =
-            (user.user_metadata?.name as string | undefined) ??
-            user.email?.split('@')[0] ??
+        const { data } = await supabasePKCE.auth.getUser();
+        const u = data.user;
+        if (!ignore && u) {
+          const friendly =
+            (u.user_metadata?.name as string | undefined) ??
+            u.email?.split('@')[0] ??
             'Jogador';
 
           setUser({
-            id: user.id,
-            name: friendlyName,
+            id: u.id,
+            name: friendly,
             avatar_url:
-              (user.user_metadata?.avatar_url as string | undefined) ?? null,
+              (u.user_metadata?.avatar_url as string | null) ?? null,
           });
-        } else {
-          setUser(null);
         }
       } finally {
         if (!ignore) setLoadingUser(false);
@@ -57,209 +52,197 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     };
   }, []);
 
+  // sempre que muda de página, fecha o menu mobile
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   async function handleLogout() {
-    try {
-      await supabasePKCE.auth.signOut();
-    } finally {
-      setUser(null);
-      setMobileOpen(false);
-      router.push('/auth');
-    }
+    await supabasePKCE.auth.signOut();
+    setUser(null);
+    router.push('/auth');
   }
 
-  const navLinks = [
+  const navItems = [
     { href: '/jogos', label: 'Jogos' },
     { href: '/rankings', label: 'Rankings' },
     { href: '/premios', label: 'Prémios' },
     { href: '/regras', label: 'Regras' },
   ];
 
-  const isActive = (href: string) =>
-    pathname === href ||
-    (href !== '/jogos' && pathname?.startsWith(href ?? ''));
+  const isAuthPage = pathname?.startsWith('/auth');
 
   const initials =
-    (user?.name ?? '')
-      .split(' ')
+    user?.name
+      ?.split(' ')
       .filter(Boolean)
       .slice(0, 2)
       .map((p) => p[0]!.toUpperCase())
-      .join('') || 'M';
+      .join('') ?? 'M';
 
   return (
     <html lang="pt">
       <body className="min-h-screen bg-[#0a1e7a] bg-no-repeat bg-cover bg-fixed bg-center text-white">
         {/* NAVBAR */}
         <header className="nav-glass sticky top-0 z-50">
-          <div className="relative mx-auto flex h-14 w-full max-w-6xl items-center px-4">
-            {/* LOGO – centrado em mobile, à esquerda em desktop */}
+          <div className="mx-auto flex h-14 w-full max-w-6xl items-center px-4">
+            {/* LOGO */}
             <Link
               href="/jogos"
-              className="group mx-auto flex items-center gap-2 transition-transform duration-200 md:mx-0 md:translate-x-0 hover:translate-y-[1px]"
+              className="flex flex-1 items-center justify-center gap-2 sm:justify-start"
             >
               <Image
                 src="/logos/predictor-03.svg"
                 alt="+FCP Predictor"
-                width={160}
-                height={40}
+                width={140}
+                height={36}
                 priority
-                className="h-7 w-auto sm:h-8 transition-transform duration-200 group-hover:scale-[1.05]"
+                className="h-7 w-auto sm:h-8 md:h-9 transition-transform duration-300 ease-out hover:scale-[1.03]"
               />
             </Link>
 
-            {/* NAV DESKTOP (direita) */}
-            <nav className="ml-auto hidden items-center gap-6 text-sm md:flex">
-              {navLinks.map((link) => (
+            {/* NAV DESKTOP */}
+            <nav className="hidden md:flex ml-auto items-center gap-6 text-sm">
+              {navItems.map((item) => (
                 <Link
-                  key={link.href}
-                  href={link.href}
-                  className={
-                    'relative pb-0.5 transition-colors ' +
-                    (isActive(link.href)
+                  key={item.href}
+                  href={item.href}
+                  className={clsx(
+                    'transition-colors',
+                    pathname === item.href
                       ? 'text-white font-medium'
-                      : 'text-white/75 hover:text-white')
-                  }
+                      : 'text-white/75 hover:text-white',
+                  )}
                 >
-                  {link.label}
-                  {/* sublinhado suave */}
-                  <span
-                    className={
-                      'absolute left-0 right-0 -bottom-0.5 h-[2px] origin-center scale-x-0 rounded-full bg-white/70 transition-transform duration-200 ' +
-                      (isActive(link.href) ? 'scale-x-100' : 'group-hover:scale-x-100')
-                    }
-                  />
+                  {item.label}
                 </Link>
               ))}
 
-              {/* chip com user */}
-              {user && (
+              {/* user loggado */}
+              {!loadingUser && user && (
                 <>
-                  <div className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-[11px] font-semibold">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold">
                       {initials}
                     </div>
-                    <span className="max-w-[120px] truncate">{user.name}</span>
+                    <span className="max-w-[120px] truncate">
+                      {user.name}
+                    </span>
                   </div>
-
                   <button
+                    type="button"
                     onClick={handleLogout}
-                    className="inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs text-rose-100 shadow-[0_0_0_1px_rgba(248,113,113,0.25)] transition hover:bg-white/10"
+                    className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-white/80 hover:bg-white/10"
                   >
-                    <span className="text-[13px]">↪</span>
+                    <span>⏏</span>
                     <span>Terminar sessão</span>
                   </button>
                 </>
               )}
 
-              {!user && !loadingUser && (
+              {/* sem user → Entrar */}
+              {!loadingUser && !user && !isAuthPage && (
                 <button
+                  type="button"
                   onClick={() => router.push('/auth')}
-                  className="rounded-full bg-white/10 px-3 py-1 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-white/15"
+                  className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-1.5 text-xs font-medium hover:bg-white/[0.14]"
                 >
                   Entrar
                 </button>
               )}
             </nav>
 
-            {/* BOTÃO MOBILE: hamburger → X */}
+            {/* BOTÃO HAMBURGUER (MOBILE) */}
             <button
               type="button"
-              className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white/90 shadow-md backdrop-blur-sm transition-transform duration-150 hover:scale-105 md:hidden"
+              className="md:hidden ml-auto inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/40 backdrop-blur-sm"
+              aria-label="Abrir menu"
               onClick={() => setMobileOpen((v) => !v)}
-              aria-label={mobileOpen ? 'Fechar menu' : 'Abrir menu'}
             >
               <span className="relative block h-4 w-4">
                 <span
-                  className={
-                    'absolute left-0 right-0 h-[2px] rounded-full bg-current transition-transform duration-200 ' +
-                    (mobileOpen
-                      ? 'top-1/2 -translate-y-1/2 rotate-45'
-                      : 'top-[2px]')
-                  }
+                  className={clsx(
+                    'absolute left-0 top-0 h-[2px] w-full bg-white transition-transform duration-200',
+                    mobileOpen ? 'translate-y-[6px] rotate-45' : '',
+                  )}
                 />
                 <span
-                  className={
-                    'absolute left-0 right-0 h-[2px] rounded-full bg-current transition-all duration-200 ' +
-                    (mobileOpen
-                      ? 'top-1/2 -translate-y-1/2 opacity-0'
-                      : 'top-1/2 -translate-y-1/2 opacity-100')
-                  }
+                  className={clsx(
+                    'absolute left-0 top-1/2 h-[2px] w-full bg-white transition-opacity duration-150',
+                    mobileOpen ? 'opacity-0' : 'opacity-100',
+                  )}
                 />
                 <span
-                  className={
-                    'absolute left-0 right-0 h-[2px] rounded-full bg-current transition-transform duration-200 ' +
-                    (mobileOpen
-                      ? 'top-1/2 -translate-y-1/2 -rotate-45'
-                      : 'bottom-[2px]')
-                  }
+                  className={clsx(
+                    'absolute left-0 bottom-0 h-[2px] w-full bg-white transition-transform duration-200',
+                    mobileOpen ? '-translate-y-[6px] -rotate-45' : '',
+                  )}
                 />
               </span>
             </button>
           </div>
 
-          {/* SHEET MOBILE */}
-          <div
-            className={
-              'md:hidden overflow-hidden transition-[max-height,opacity] duration-200 ' +
-              (mobileOpen ? 'max-height-anim-open opacity-100 max-h-[420px]' : 'max-h-0 opacity-0')
-            }
-          >
-            <div className="mx-auto w-full max-w-6xl px-4 pb-4 pt-2 space-y-4">
-              {/* cartão user */}
-              <div className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-white/80 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
-                <div className="text-xs text-white/60">
-                  {user ? 'Ligado como' : 'Não autenticado'}
-                </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold">
-                    {user ? initials : '?'}
+          {/* MENU MOBILE */}
+          {mobileOpen && (
+            <div className="md:hidden border-t border-white/10 bg-[#050826]/95 backdrop-blur-xl">
+              <div className="mx-auto max-w-6xl px-4 py-4 space-y-4">
+                {/* bloco user */}
+                {!loadingUser && user && (
+                  <div className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-semibold">
+                      {initials}
+                    </div>
+                    <div className="flex flex-col text-xs">
+                      <span className="text-white/60">Ligado como</span>
+                      <span className="font-medium text-white truncate">
+                        {user.name}
+                      </span>
+                    </div>
                   </div>
-                  <div className="truncate text-sm font-medium">
-                    {user ? user.name : 'Entra para começar a jogar'}
-                  </div>
+                )}
+
+                {/* links */}
+                <div className="flex flex-col gap-1 text-base">
+                  {navItems.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={clsx(
+                        'rounded-xl px-3 py-2',
+                        pathname === item.href
+                          ? 'bg-white/10 font-medium'
+                          : 'hover:bg-white/5',
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
                 </div>
-              </div>
 
-              {/* links */}
-              <div className="space-y-1 text-base">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={() => setMobileOpen(false)}
-                    className={
-                      'block rounded-xl px-4 py-2 transition-colors ' +
-                      (isActive(link.href)
-                        ? 'bg-white/10 font-medium'
-                        : 'hover:bg-white/5')
-                    }
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-
-                {user ? (
+                {/* logout / entrar */}
+                {!loadingUser && user && (
                   <button
+                    type="button"
                     onClick={handleLogout}
-                    className="mt-2 flex w-full items-center gap-2 rounded-xl bg-rose-500/10 px-4 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/15"
+                    className="mt-1 inline-flex items-center gap-2 rounded-xl bg-red-500/20 px-3 py-2 text-sm text-red-100"
                   >
-                    <span className="text-lg">↪</span>
+                    <span>⏏</span>
                     <span>Terminar sessão</span>
                   </button>
-                ) : (
+                )}
+
+                {!loadingUser && !user && !isAuthPage && (
                   <button
-                    onClick={() => {
-                      setMobileOpen(false);
-                      router.push('/auth');
-                    }}
-                    className="mt-2 flex w-full items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-left text-sm transition hover:bg-white/15"
+                    type="button"
+                    onClick={() => router.push('/auth')}
+                    className="mt-1 inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/15"
                   >
-                    Entrar / Registar
+                    Entrar
                   </button>
                 )}
               </div>
             </div>
-          </div>
+          )}
         </header>
 
         {/* CONTEÚDO */}
@@ -267,7 +250,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* FOOTER */}
         <footer className="mt-10 border-t border-white/10">
-          <div className="mx-auto w-full max-w-6xl px-4 py-6 text-center text-xs leading-relaxed text-white/70">
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 text-xs leading-relaxed text-white/70 text-center">
             <div className="opacity-80">
               © {new Date().getFullYear()} +FCPorto Predictor. Todos os direitos
               reservados.

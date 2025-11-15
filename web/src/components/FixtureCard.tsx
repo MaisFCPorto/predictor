@@ -61,6 +61,7 @@ export default function FixtureCard({
   const comp = compName(competition_code);
   const rnd = roundText(round_label);
 
+  // two-line helpers
   const [compL1, compL2] = useMemo(() => {
     if (!comp) return [null, null] as [string | null, string | null];
     const name = comp.trim();
@@ -69,14 +70,14 @@ export default function FixtureCard({
     return [name, null];
   }, [comp]);
 
+  // --- NOVO: data por extenso + hora --------------------
   const fullDateLabel = useMemo(() => {
     const d = new Date(kickoff_at);
-    // exemplo: "domingo, 9 de fevereiro"
     return new Intl.DateTimeFormat('pt-PT', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
-    }).format(d);
+    }).format(d); // ex: "domingo, 9 de fevereiro"
   }, [kickoff_at]);
 
   const timeLabel = useMemo(() => {
@@ -85,13 +86,13 @@ export default function FixtureCard({
     const mm = String(d.getMinutes()).padStart(2, '0');
     return `${hh}h${mm}`;
   }, [kickoff_at]);
-
+  // ------------------------------------------------------
 
   const accent = compAccent(competition_code) ?? '#1e293b';
   const subtle = compSubtle(competition_code) ?? 'transparent';
   const lockedBase = !!is_locked || status === 'FINISHED';
 
-  // countdown
+  // countdown to lock
   const [remaining, setRemaining] = useState<string | null>(null);
   const [remainMs, setRemainMs] = useState<number | null>(null);
 
@@ -158,7 +159,7 @@ export default function FixtureCard({
   const canSave =
     !nowLocked && home !== '' && away !== '' && !unchanged;
 
-  // Prefill prediction
+  // Prefill com a prediction do user
   useEffect(() => {
     const ph =
       typeof pred_home === 'number' ? pred_home : null;
@@ -175,7 +176,7 @@ export default function FixtureCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pred_home, pred_away, variant]);
 
-  // Points badge
+  // Points badge para jogos passados (usa pontos da BD se existirem)
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
 
@@ -303,16 +304,19 @@ export default function FixtureCard({
   return (
     <div
       className={clsx(
-        'group relative w-full rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8 pb-8',
+        // ROOT como "group" para animar emblemas no hover
+        'group relative w-full',
+        'rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8 pb-8',
         'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden',
-        'transition-transform duration-200 hover:-translate-y-1 hover:shadow-[0_20px_60px_rgba(0,0,0,0.55)]',
+        'transition-colors duration-200',
+        'hover:border-white/20 hover:bg-white/[0.03]',
       )}
     >
       {/* Watermark */}
       {watermarkUrl && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 z-0 bg-center bg-contain bg-no-repeat opacity-[0.05] transition-opacity duration-300 group-hover:opacity-10"
+          className="pointer-events-none absolute inset-0 z-0 opacity-5 bg-center bg-contain bg-no-repeat"
           style={{
             backgroundImage: `url('${watermarkUrl}')`,
             filter: 'grayscale(1) brightness(0) invert(1)',
@@ -556,7 +560,7 @@ export default function FixtureCard({
         </div>
       </div>
 
-      {/* Badge Resultado + Pontos */}
+      {/* Badge de Resultado + Pontos (jogos passados) */}
       {pointsBadge && (
         <div className="flex justify-center mt-2 gap-2">
           {finalScoreText && (
@@ -575,7 +579,7 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Última previsão */}
+      {/* Pill "Última previsão" para jogos em aberto */}
       {!pointsBadge && lastPredText && (
         <div className="flex justify-center mt-2">
           <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
@@ -590,7 +594,7 @@ export default function FixtureCard({
           <button
             disabled={!canSave || !!saving || nowLocked}
             className={clsx(
-              'rounded-full px-4 py-2 text-sm font-medium transition',
+              'rounded-full px-4 py-2 text-sm font-medium',
               !canSave || saving || nowLocked
                 ? 'bg-white/5 text-white/50 cursor-not-allowed'
                 : 'bg-white/10 hover:bg-white/15 text-white',
@@ -627,17 +631,29 @@ function Crest({
 }) {
   return (
     <div className="flex-shrink-0">
-      <div className="h-12 sm:h-14 md:h-16 px-1.5 sm:px-2 flex items-center justify-center">
+      <div className="relative h-12 sm:h-14 md:h-16 px-1.5 sm:px-2 flex items-center justify-center">
+        {/* glow suave por baixo no hover */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full opacity-0 scale-95
+                     bg-white/5 blur-md transition-all duration-300 ease-out
+                     md:group-hover:opacity-100 md:group-hover:scale-105"
+        />
         {src ? (
           <img
             src={src}
             alt={alt}
-            className="block max-h-full w-auto max-w-[80px] sm:max-w-[96px] md:max-w-[112px] object-contain transition-transform duration-200 group-hover:scale-[1.05]"
+            className={clsx(
+              'relative block max-h-full w-auto max-w-[80px] sm:max-w-[96px] md:max-w-[112px] object-contain',
+              // animação só em desktop para não chatear no touch
+              'transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]',
+              'md:group-hover:scale-[1.06] md:group-hover:-translate-y-0.5 md:group-hover:-rotate-2',
+            )}
             loading="lazy"
             decoding="async"
           />
         ) : (
-          <div className="h-8 w-8 rounded bg-white/10" />
+          <div className="relative h-8 w-8 rounded bg-white/10" />
         )}
       </div>
     </div>
@@ -669,10 +685,9 @@ function ScoreBox({
       className={clsx(
         'no-spinner text-center tabular-nums rounded-2xl border placeholder:text-white/70',
         'h-12 w-12 text-xl sm:h-14 sm:w-14 sm:text-2xl md:h-16 md:w-16 md:text-3xl',
-        'transition-colors',
         disabled
           ? 'border-white/10 bg-white/[0.09] text-white/40'
-          : 'border-white/20 bg-[#010436] text-white hover:bg-[#020547] focus:outline-none focus:ring-2 focus:ring-white/20',
+          : 'border-white/20 bg-[#010436] text-white hover:bg-[#010436] focus:outline-none focus:ring-2 focus:ring-white/20',
       )}
       disabled={disabled}
       placeholder=""

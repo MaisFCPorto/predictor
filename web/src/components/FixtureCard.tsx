@@ -69,31 +69,23 @@ export default function FixtureCard({
     return [name, null];
   }, [comp]);
 
-  const weekdayStr = useMemo(
-    () =>
-      new Intl.DateTimeFormat('pt-PT', {
-        weekday: 'long',
-      }).format(new Date(kickoff_at)),
-    [kickoff_at],
-  );
-  const timeStr = useMemo(() => {
+  const fullDateLabel = useMemo(() => {
+    const d = new Date(kickoff_at);
+    // exemplo: "domingo, 9 de fevereiro"
+    return new Intl.DateTimeFormat('pt-PT', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    }).format(d);
+  }, [kickoff_at]);
+
+  const timeLabel = useMemo(() => {
     const d = new Date(kickoff_at);
     const hh = String(d.getHours()).padStart(2, '0');
     const mm = String(d.getMinutes()).padStart(2, '0');
     return `${hh}h${mm}`;
   }, [kickoff_at]);
 
-  const weekdayOne = useMemo(() => {
-    const w = weekdayStr.replace(/-feira/i, '');
-    return w.charAt(0).toUpperCase() + w.slice(1);
-  }, [weekdayStr]);
-  const timeColon = useMemo(() => {
-    const d = new Date(kickoff_at);
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
-  }, [kickoff_at]);
-  const dateOneLine = `${weekdayOne}, ${timeColon}`;
 
   const accent = compAccent(competition_code) ?? '#1e293b';
   const subtle = compSubtle(competition_code) ?? 'transparent';
@@ -350,8 +342,9 @@ export default function FixtureCard({
           )}
         </div>
 
-        <div className="text-center text-sm text-white/90 capitalize px-14 truncate">
-          {dateOneLine}
+        <div className="text-center text-sm text-white/90 px-14">
+          <div className="leading-tight">{fullDateLabel}</div>
+          <div className="text-xs text-white/70">{timeLabel}</div>
         </div>
 
         <div className="absolute right-0 top-1/2 -translate-y-1/2 pr-1">
@@ -417,9 +410,9 @@ export default function FixtureCard({
         </div>
 
         <div className="justify-self-center text-center">
-          <div className="text-sm md:text-base text-white/90 capitalize leading-tight">
-            <div>{weekdayStr}</div>
-            <div>{timeStr}</div>
+          <div className="text-sm md:text-base text-white/90 leading-tight">
+            <div>{fullDateLabel}</div>
+            <div>{timeLabel}</div>
           </div>
         </div>
 

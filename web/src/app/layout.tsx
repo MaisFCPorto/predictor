@@ -76,35 +76,42 @@ function BetanoSideRails() {
     // só mostra em >= 1280px (xl) para não esmagar layout em portáteis pequenos
     <div className="pointer-events-none fixed inset-y-0 left-0 right-0 z-[40] hidden items-center justify-between xl:flex">
       {/* LEFT */}
-      <div className="pointer-events-auto pl-2">
-        <div className="flex flex-col items-start justify-center">
-          <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
-            <iframe
-              src={cfg.src}
-              width={cfg.width}
-              height={cfg.height}
-              style={{ border: '0px', padding: 0, margin: 0, display: 'block' }}
-            />
-          </div>
+      <div className="pointer-events-auto pl-3">
+        <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+          <iframe
+            src={cfg.src}
+            width={cfg.width}
+            height={cfg.height}
+            style={{
+              border: '0px',
+              padding: 0,
+              margin: 0,
+              display: 'block',
+            }}
+          />
         </div>
       </div>
 
       {/* RIGHT */}
-      <div className="pointer-events-auto pr-2">
-        <div className="flex flex-col items-end justify-center">
-          <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
-            <iframe
-              src={cfg.src}
-              width={cfg.width}
-              height={cfg.height}
-              style={{ border: '0px', padding: 0, margin: 0, display: 'block' }}
-            />
-          </div>
+      <div className="pointer-events-auto pr-3">
+        <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+          <iframe
+            src={cfg.src}
+            width={cfg.width}
+            height={cfg.height}
+            style={{
+              border: '0px',
+              padding: 0,
+              margin: 0,
+              display: 'block',
+            }}
+          />
         </div>
       </div>
     </div>
   );
 }
+
 
 /* ------------------------------------------------------------------
    MOBILE BOTTOM BANNER

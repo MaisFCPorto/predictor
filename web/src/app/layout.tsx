@@ -3,8 +3,8 @@
 import './globals.css';
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
 import { supabasePKCE } from '@/utils/supabase/client';
 
 type UserInfo = {
@@ -13,299 +13,411 @@ type UserInfo = {
   avatar_url: string | null;
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserInfo | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const router = useRouter();
-  const pathname = usePathname();
+/* ------------------------------------------------------------------
+   BETANO CREATIVES (IFRAME SRC)
+------------------------------------------------------------------- */
 
-  const loggedIn = !!user;
+// 120x600 – mais estreito
+const BETANO_DESKTOP_IFRAME_120 =
+  'https://gml-grp.com/I.ashx?btag=a_15985b_4104c_&affid=5177&siteid=15985&adid=4104&c=';
 
-  // Buscar user autenticado
+// 160x600 – o que já tinhas
+const BETANO_DESKTOP_IFRAME_160 =
+  'https://gml-grp.com/I.ashx?btag=a_15985b_4105c_&affid=5177&siteid=15985&adid=4105&c=';
+
+// 300x600 – mais largo
+const BETANO_DESKTOP_IFRAME_300 =
+  'https://gml-grp.com/I.ashx?btag=a_15985b_4111c_&affid=5177&siteid=15985&adid=4111&c=';
+
+// Mobile 320x100
+const BETANO_MOBILE_IFRAME =
+  'https://gml-grp.com/I.ashx?btag=a_15985b_4115c_&affid=5177&siteid=15985&adid=4115&c=';
+
+/* ------------------------------------------------------------------
+   SIDE RAILS (DESKTOP)
+------------------------------------------------------------------- */
+
+type RailVariant = '120' | '160' | '300';
+
+const RAIL_CONFIG: Record<
+  RailVariant,
+  { src: string; width: number; height: number }
+> = {
+  '120': { src: BETANO_DESKTOP_IFRAME_120, width: 120, height: 600 },
+  '160': { src: BETANO_DESKTOP_IFRAME_160, width: 160, height: 600 },
+  '300': { src: BETANO_DESKTOP_IFRAME_300, width: 300, height: 600 },
+};
+
+function pickVariant(width: number): RailVariant {
+  // podes afinar estes valores se quiseres
+  if (width >= 1900) return '300'; // écrans bem largos → 300x600
+  if (width >= 1500) return '160'; // intermédio → 160x600
+  return '120';                    // mais justo → 120x600
+}
+
+function BetanoSideRails() {
+  const [variant, setVariant] = useState<RailVariant>('160');
+
   useEffect(() => {
-    let mounted = true;
+    if (typeof window === 'undefined') return;
+
+    const update = () => {
+      setVariant(pickVariant(window.innerWidth));
+    };
+
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  const cfg = RAIL_CONFIG[variant];
+
+  return (
+    // só mostra em >= 1280px (xl) para não esmagar layout em portáteis pequenos
+    <div className="pointer-events-none fixed inset-y-0 left-0 right-0 z-[40] hidden items-center justify-between xl:flex">
+      {/* LEFT */}
+      <div className="pointer-events-auto pl-3">
+        <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+          <iframe
+            src={cfg.src}
+            width={cfg.width}
+            height={cfg.height}
+            style={{
+              border: '0px',
+              padding: 0,
+              margin: 0,
+              display: 'block',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* RIGHT */}
+      <div className="pointer-events-auto pr-3">
+        <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+          <iframe
+            src={cfg.src}
+            width={cfg.width}
+            height={cfg.height}
+            style={{
+              border: '0px',
+              padding: 0,
+              margin: 0,
+              display: 'block',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ------------------------------------------------------------------
+   MOBILE BOTTOM BANNER
+------------------------------------------------------------------- */
+
+function BetanoMobileBanner() {
+  const [open, setOpen] = useState(true);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[60] flex justify-center px-3 pb-3 md:hidden">
+      <div className="relative w-full max-w-xs overflow-hidden rounded-2xl bg-black/45 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-[11px] text-white/80 shadow hover:bg-black/70"
+          aria-label="Fechar banner"
+        >
+          ✕
+        </button>
+
+        <iframe
+          src={BETANO_MOBILE_IFRAME}
+          width="320"
+          height="100"
+          style={{
+            border: '0px',
+            padding: 0,
+            margin: 0,
+            display: 'block',
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------
+   ROOT LAYOUT
+------------------------------------------------------------------- */
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
 
     (async () => {
       try {
-        const { data } = await supabasePKCE.auth.getUser();
-        if (!mounted) return;
+        const {
+          data: { user },
+        } = await supabasePKCE.auth.getUser();
 
-        if (data?.user) {
-          const u = data.user;
-          const friendly =
-            (u.user_metadata as any)?.name ||
-            u.email?.split('@')[0] ||
+        if (ignore) return;
+
+        if (user) {
+          const friendlyName =
+            (user.user_metadata?.name as string | undefined) ??
+            user.email?.split('@')[0] ??
             'Jogador';
 
           setUser({
-            id: u.id,
-            name: friendly,
-            avatar_url: (u.user_metadata as any)?.avatar_url ?? null,
+            id: user.id,
+            name: friendlyName,
+            avatar_url:
+              (user.user_metadata?.avatar_url as string | undefined) ?? null,
           });
         } else {
           setUser(null);
         }
-      } catch {
-        if (mounted) setUser(null);
+      } finally {
+        if (!ignore) setLoadingUser(false);
       }
     })();
 
     return () => {
-      mounted = false;
+      ignore = true;
     };
   }, []);
-
-  // Fecha menus ao mudar de rota
-  useEffect(() => {
-    setMenuOpen(false);
-    setProfileOpen(false);
-  }, [pathname]);
 
   async function handleLogout() {
     try {
       await supabasePKCE.auth.signOut();
     } finally {
       setUser(null);
+      setMobileOpen(false);
       router.push('/auth');
     }
   }
 
   const navLinks = [
+    { href: '/jogos', label: 'Jogos' },
     { href: '/rankings', label: 'Rankings' },
     { href: '/premios', label: 'Prémios' },
     { href: '/regras', label: 'Regras' },
   ];
 
+  const isActive = (href: string) =>
+    pathname === href ||
+    (href !== '/jogos' && pathname?.startsWith(href ?? ''));
+
+  const initials =
+    (user?.name ?? '')
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]!.toUpperCase())
+      .join('') || 'M';
+
   return (
     <html lang="pt">
       <body className="min-h-screen bg-[#0a1e7a] bg-no-repeat bg-cover bg-fixed bg-center text-white">
+        {/* BANNERS BETANO */}
+        <BetanoSideRails />
+        <BetanoMobileBanner />
+
+        {/* NAVBAR */}
         <header className="nav-glass sticky top-0 z-50">
           <div className="relative mx-auto flex h-14 w-full max-w-6xl items-center px-4">
-            {/* LOGO — centrado em mobile, à esquerda em desktop */}
+            {/* LOGO – centrado em mobile, à esquerda em desktop */}
             <Link
-              href={loggedIn ? '/jogos' : '/auth'}
-              className="mx-auto flex items-center gap-2 md:mx-0 md:mr-6"
+              href="/jogos"
+              className="group mx-auto flex items-center gap-2 transition-transform duration-200 md:mx-0 md:translate-x-0 hover:translate-y-[1px]"
             >
               <Image
                 src="/logos/predictor-03.svg"
                 alt="+FCP Predictor"
-                width={170}
-                height={42}
+                width={160}
+                height={40}
                 priority
-                className="h-7 w-auto sm:h-8 md:h-9"
+                className="h-7 w-auto sm:h-8 transition-transform duration-200 group-hover:scale-[1.05]"
               />
             </Link>
 
-            {/* NAV + User dropdown (desktop) */}
-            <div className="ml-auto hidden items-center gap-6 md:flex">
-              <nav className="flex gap-6 text-sm">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="transition-colors hover:text-white/90"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </nav>
+            {/* NAV DESKTOP (direita) */}
+            <nav className="ml-auto hidden items-center gap-6 text-sm md:flex">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={
+                    'relative pb-0.5 transition-colors group ' +
+                    (isActive(link.href)
+                      ? 'text-white font-medium'
+                      : 'text-white/75 hover:text-white')
+                  }
+                >
+                  {link.label}
+                  <span
+                    className={
+                      'pointer-events-none absolute left-0 right-0 -bottom-0.5 h-[2px] origin-center scale-x-0 rounded-full bg-white/70 transition-transform duration-200 ' +
+                      (isActive(link.href) ? 'scale-x-100' : 'group-hover:scale-x-100')
+                    }
+                  />
+                </Link>
+              ))}
 
-              {loggedIn && (
-                <div className="relative">
+              {user && (
+                <>
+                  <div className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-[11px] font-semibold">
+                      {initials}
+                    </div>
+                    <span className="max-w-[120px] truncate">{user.name}</span>
+                  </div>
+
                   <button
-                    type="button"
-                    onClick={() => setProfileOpen((v) => !v)}
-                    className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1.5 text-xs hover:bg-white/10"
+                    onClick={handleLogout}
+                    className="inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs text-rose-100 shadow-[0_0_0_1px_rgba(248,113,113,0.25)] transition hover:bg-white/10"
                   >
-                    {/* Avatar */}
-                    <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[11px] font-semibold">
-                      {user.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={user.avatar_url}
-                          alt={user.name ?? 'avatar'}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span>
-                          {user.name
-                            ?.split(' ')
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .map((p) => p[0]?.toUpperCase())
-                            .join('') || 'JP'}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Nome + chevron */}
-                    <span className="max-w-[9rem] truncate text-xs font-medium">
-                      {user.name ?? 'Jogador'}
-                    </span>
-                    <svg
-                      className={`h-3 w-3 transition-transform ${
-                        profileOpen ? 'rotate-180' : ''
-                      }`}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
+                    <span className="text-[13px]">↪</span>
+                    <span>Terminar sessão</span>
                   </button>
-
-                  {/* Dropdown perfil (desktop) */}
-                  {profileOpen && (
-                    <div className="absolute right-0 mt-2 w-40 rounded-2xl border border-white/10 bg-[#050b2b]/95 p-1 text-xs shadow-xl backdrop-blur">
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-red-200 hover:bg-red-500/10"
-                      >
-                        <svg
-                          className="h-3.5 w-3.5"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                          <path d="M16 17l5-5-5-5" />
-                          <path d="M21 12H9" />
-                        </svg>
-                        <span>Terminar sessão</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                </>
               )}
-            </div>
 
-            {/* HAMBURGER (mobile) */}
+              {!user && !loadingUser && (
+                <button
+                  onClick={() => router.push('/auth')}
+                  className="rounded-full bg-white/10 px-3 py-1 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.12)] hover:bg:white/15 hover:bg-white/15"
+                >
+                  Entrar
+                </button>
+              )}
+            </nav>
+
+            {/* BOTÃO MOBILE: hamburger → X */}
             <button
               type="button"
-              className="absolute right-4 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/40 md:hidden"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Abrir menu"
+              className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white/90 shadow-md backdrop-blur-sm transition-transform duration-150 hover:scale-105 md:hidden"
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-label={mobileOpen ? 'Fechar menu' : 'Abrir menu'}
             >
-              <span className="sr-only">Menu</span>
-              <span className="relative flex h-4 w-4 items-center justify-center">
-                {/* 3 barras que animam para X */}
+              <span className="relative block h-4 w-4">
                 <span
-                  className={`absolute h-[2px] w-full rounded bg-white transition-transform duration-200 ${
-                    menuOpen
-                      ? 'translate-y-0 rotate-45'
-                      : '-translate-y-1'
-                  }`}
+                  className={
+                    'absolute left-0 right-0 h-[2px] rounded-full bg-current transition-transform duration-200 ' +
+                    (mobileOpen
+                      ? 'top-1/2 -translate-y-1/2 rotate-45'
+                      : 'top-[2px]')
+                  }
                 />
                 <span
-                  className={`absolute h-[2px] w-full rounded bg-white transition-opacity duration-150 ${
-                    menuOpen ? 'opacity-0' : 'opacity-100'
-                  }`}
+                  className={
+                    'absolute left-0 right-0 h-[2px] rounded-full bg-current transition-all duration-200 ' +
+                    (mobileOpen
+                      ? 'top-1/2 -translate-y-1/2 opacity-0'
+                      : 'top-1/2 -translate-y-1/2 opacity-100')
+                  }
                 />
                 <span
-                  className={`absolute h-[2px] w-full rounded bg-white transition-transform duration-200 ${
-                    menuOpen
-                      ? 'translate-y-0 -rotate-45'
-                      : 'translate-y-1'
-                  }`}
+                  className={
+                    'absolute left-0 right-0 h-[2px] rounded-full bg-current transition-transform duration-200 ' +
+                    (mobileOpen
+                      ? 'top-1/2 -translate-y-1/2 -rotate-45'
+                      : 'bottom-[2px]')
+                  }
                 />
               </span>
             </button>
           </div>
 
-          {/* DROPDOWN MOBILE com animação */}
-          {menuOpen && (
-            <div className="origin-top border-t border-white/10 bg-[#050b2b]/95 pb-3 pt-2 text-sm shadow-lg backdrop-blur-md animate-[fadeDown_0.18s_ease-out] md:hidden">
-              <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4">
-                {loggedIn && (
-                  <div className="mb-1 flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-2">
-                    <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[11px] font-semibold">
-                      {user!.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={user!.avatar_url!}
-                          alt={user!.name ?? 'avatar'}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span>
-                          {user!.name
-                            ?.split(' ')
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .map((p) => p[0]?.toUpperCase())
-                            .join('') || 'JP'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-xs opacity-70">
-                        Loggado como
-                      </span>
-                      <span className="text-sm font-medium">
-                        {user!.name ?? 'Jogador'}
-                      </span>
-                    </div>
+          {/* SHEET MOBILE */}
+          <div
+            className={
+              'md:hidden overflow-hidden transition-[max-height,opacity] duration-200 ' +
+              (mobileOpen ? 'max-height-anim-open opacity-100 max-h-[420px]' : 'max-h-0 opacity-0')
+            }
+          >
+            <div className="mx-auto w-full max-w-6xl px-4 pb-4 pt-2 space-y-4">
+              <div className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-white/80 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
+                <div className="text-xs text-white/60">
+                  {user ? 'Ligado como' : 'Não autenticado'}
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg:white/10 bg-white/10 text-[11px] font-semibold">
+                    {user ? initials : '?'}
                   </div>
-                )}
+                  <div className="truncate text-sm font-medium">
+                    {user ? user.name : 'Entra para começar a jogar'}
+                  </div>
+                </div>
+              </div>
 
+              <div className="space-y-1 text-base">
                 {navLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="rounded-xl px-3 py-2 hover:bg-white/10"
+                    onClick={() => setMobileOpen(false)}
+                    className={
+                      'block rounded-xl px-4 py-2 transition-colors ' +
+                      (isActive(link.href)
+                        ? 'bg-white/10 font-medium'
+                        : 'hover:bg-white/5')
+                    }
                   >
                     {link.label}
                   </Link>
                 ))}
 
-                {loggedIn ? (
+                {user ? (
                   <button
-                    type="button"
                     onClick={handleLogout}
-                    className="mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-left text-red-200 hover:bg-red-500/10"
+                    className="mt-2 flex w-full items-center gap-2 rounded-xl bg-rose-500/10 px-4 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/15"
                   >
-                    <svg
-                      className="h-4 w-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                      <path d="M16 17l5-5-5-5" />
-                      <path d="M21 12H9" />
-                    </svg>
+                    <span className="text-lg">↪</span>
                     <span>Terminar sessão</span>
                   </button>
                 ) : (
                   <button
-                    type="button"
-                    onClick={() => router.push('/auth')}
-                    className="mt-2 rounded-xl px-3 py-2 text-left hover:bg-white/10"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      router.push('/auth');
+                    }}
+                    className="mt-2 flex w-full items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-left text-sm transition hover:bg-white/15"
                   >
                     Entrar / Registar
                   </button>
                 )}
               </div>
             </div>
-          )}
+          </div>
         </header>
 
+        {/* CONTEÚDO */}
         <main className="mx-auto w-full max-w-6xl px-4">{children}</main>
 
+        {/* FOOTER */}
         <footer className="mt-10 border-t border-white/10">
           <div className="mx-auto w-full max-w-6xl px-4 py-6 text-center text-xs leading-relaxed text-white/70">
             <div className="opacity-80">
-              © {new Date().getFullYear()} +FCPorto Predictor. Todos os direitos reservados.
+              © {new Date().getFullYear()} +FCPorto Predictor. Todos os direitos
+              reservados.
             </div>
             <div className="mt-1">
-              As marcas, nomes e logótipos do +FCPorto e da Betano são propriedade dos respetivos
-              titulares e estão protegidos por direitos de autor e/ou marcas registadas. Não é
-              permitida a utilização para fins comerciais sem autorização.
+              As marcas, nomes e logótipos do +FCPorto e da Betano são
+              propriedade dos respetivos titulares e estão protegidos por
+              direitos de autor e/ou marcas registadas. Não é permitida a
+              utilização para fins comerciais sem autorização.
             </div>
             <div className="mt-1">
               A utilização deste site implica a aceitação dos{' '}

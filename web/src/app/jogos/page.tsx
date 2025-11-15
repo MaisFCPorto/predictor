@@ -1,4 +1,3 @@
-// apps/web/src/app/jogos/page.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -139,7 +138,7 @@ export default function JogosPage() {
 
       if (user) {
         const friendly =
-          user.user_metadata?.name ||
+          (user.user_metadata as any)?.name ||
           user.email?.split('@')[0] ||
           'Jogador';
 
@@ -153,7 +152,7 @@ export default function JogosPage() {
             id: user.id,
             email: user.email ?? null,
             name: friendly,
-            avatar_url: user.user_metadata?.avatar_url ?? null,
+            avatar_url: (user.user_metadata as any)?.avatar_url ?? null,
           }),
         }).catch(() => {});
       } else {
@@ -193,11 +192,9 @@ export default function JogosPage() {
         try {
           const start = text.indexOf('[');
           const end = text.lastIndexOf(']');
-
           if (start === -1 || end === -1 || end <= start) {
             throw new Error('Formato inesperado da resposta');
           }
-
           const jsonSlice = text.slice(start, end + 1);
           list = JSON.parse(jsonSlice);
         } catch (e) {
@@ -225,9 +222,7 @@ export default function JogosPage() {
           const h = (p as any).home_goals;
           const a = (p as any).away_goals;
           const pts =
-            (p as any).points ??
-            (p as any).uefa_points ??
-            null;
+            (p as any).points ?? (p as any).uefa_points ?? null;
 
           if (typeof h === 'number' && typeof a === 'number') {
             map[fixtureKey] = {
@@ -352,10 +347,9 @@ export default function JogosPage() {
     (async () => {
       try {
         setPastLoading(true);
-        const res = await fetch(
-          `/api/fixtures/closed?limit=3&offset=0`,
-          { cache: 'no-store' },
-        );
+        const res = await fetch(`/api/fixtures/closed?limit=3&offset=0`, {
+          cache: 'no-store',
+        });
         const json = await res.json();
         const list: FixtureDTO[] = Array.isArray(json) ? json : [];
         if (!abort) {
@@ -503,61 +497,62 @@ export default function JogosPage() {
       )}`
     : null;
 
-  const CardLink: React.FC<{
-    href?: string | null;
-    children: React.ReactNode;
-    aria?: string;
-  }> = ({ href, children, aria }) => {
-    if (userId && href) {
-      return (
-        <Link
-          href={href}
-          aria-label={aria}
-          className="h-full rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:bg-white/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-        >
-          {children}
-        </Link>
-      );
-    }
-    return (
-      <div className="h-full rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-        {children}
-      </div>
-    );
-  };
+    const CardLink: React.FC<{
+      href?: string | null;
+      children: React.ReactNode;
+      aria?: string;
+    }> = ({ href, children, aria }) => {
+      const base =
+        'group rounded-2xl border border-white/10 bg-white/[0.04] p-4 ' +
+        'transition-all duration-200 hover:bg-white/[0.07] ' +
+        'hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.45)]';
+  
+      if (userId && href) {
+        return (
+          <Link
+            href={href}
+            aria-label={aria}
+            className={base}
+          >
+            {children}
+          </Link>
+        );
+      }
+      return <div className={base}>{children}</div>;
+    };
 
   return (
-    <main className="px-2 py-10 sm:px-4 md:px-6 lg:px-10">
+    <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-6 sm:py-8">
       <Toaster position="top-center" />
 
       <div className="mx-auto w-full max-w-6xl space-y-8">
         {/* Header + mini dashboard OU botão de login */}
         <header className="space-y-4">
           {authLoading ? (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm opacity-80">
+            <div className="bg-card shadow-card rounded-2xl border border-white/10 p-4 text-sm opacity-80">
               A carregar utilizador…
             </div>
           ) : userId ? (
             <>
               <div className="text-sm opacity-80">Bem-vindo,</div>
-              <h1 className="text-3xl font-bold tracking-tight">
+              <h1 className="text-3xl font-bold tracking-tight text-gradient">
                 {userName}
               </h1>
 
-              {/* AGORA 3 QUADRADOS EM LINHA, INCL. MOBILE */}
               <div className="grid grid-cols-3 gap-3">
                 <CardLink
                   href={linkGeneral}
                   aria="Ir para o ranking geral"
                 >
-                  <div className="text-xs opacity-75 sm:text-sm">
+                  <div className="text-xs opacity-75">
                     Classificação Geral
                   </div>
-                  <div className="mt-1 text-2xl font-bold sm:text-3xl">
+                  <div className="mt-1 text-2xl sm:text-3xl font-bold">
                     {genPos == null ? '—' : `#${genPos}`}
                   </div>
-                  <div className="mt-1 text-xs opacity-75 sm:text-sm">
-                    Pontos: {genPoints == null ? '—' : genPoints}
+                  <div className="mt-1 text-xs opacity-75">
+                    Pontos:{' '}
+                    {genPoints == null ? '—' : genPoints}
                   </div>
                 </CardLink>
 
@@ -565,14 +560,15 @@ export default function JogosPage() {
                   href={linkMonthly}
                   aria="Ir para o ranking mensal"
                 >
-                  <div className="text-xs opacity-75 sm:text-sm">
+                  <div className="text-xs opacity-75">
                     Classificação Mensal - {formatYmLabel(ym)}
                   </div>
-                  <div className="mt-1 text-2xl font-bold sm:text-3xl">
+                  <div className="mt-1 text-2xl sm:text-3xl font-bold">
                     {monPos == null ? '—' : `#${monPos}`}
                   </div>
-                  <div className="mt-1 text-xs opacity-75 sm:text-sm">
-                    Pontos: {monPoints == null ? '—' : monPoints}
+                  <div className="mt-1 text-xs opacity-75">
+                    Pontos:{' '}
+                    {monPoints == null ? '—' : monPoints}
                   </div>
                 </CardLink>
 
@@ -580,21 +576,21 @@ export default function JogosPage() {
                   href={linkByGame}
                   aria="Ir para o ranking do último jogo"
                 >
-                  <div className="text-xs opacity-75 sm:text-sm">
+                  <div className="text-xs opacity-75">
                     Último Jogo
                   </div>
-                  <div className="mt-1 text-2xl font-bold sm:text-3xl">
+                  <div className="mt-1 text-2xl sm:text-3xl font-bold">
                     {lastPoints == null
                       ? '—'
                       : `${lastPoints.points ?? 0} pts`}
                   </div>
-                  <div className="mt-1 text-xs opacity-75 sm:text-sm">
+                  <div className="mt-1 text-xs opacity-75">
                     {lastPoints?.position
                       ? `Posição: #${lastPoints.position}`
                       : 'Sem palpite'}
                   </div>
                   {!!lastPoints?.fixture && (
-                    <div className="mt-1 text-[10px] opacity-60 sm:text-xs">
+                    <div className="mt-1 text-[11px] opacity-60">
                       Jogo: {lastPoints.fixture.id}
                     </div>
                   )}
@@ -609,7 +605,7 @@ export default function JogosPage() {
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-6">
-              <h1 className="mb-2 text-3xl font-bold tracking-tight">
+              <h1 className="mb-2 text-3xl font-bold tracking-tight text-gradient">
                 Convidado
               </h1>
               <p className="mb-4 text-sm opacity-80">
@@ -618,7 +614,7 @@ export default function JogosPage() {
               </p>
               <button
                 onClick={() => router.push('/auth')}
-                className="rounded-2xl border border-white/10 bg-white/[0.10] px-6 py-3 text-base font-medium transition hover:bg-white/[0.15]"
+                className="rounded-2xl border border-white/10 bg-white/[0.10] px-6 py-3 text-base font-medium hover:bg-white/[0.15] transition shadow-card"
               >
                 🔐 Entrar / Criar Conta
               </button>
@@ -628,7 +624,7 @@ export default function JogosPage() {
 
         {/* Erro geral (fixtures) */}
         {error && (
-          <div className="break-words rounded border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm break-words">
             {error}
           </div>
         )}
@@ -645,7 +641,7 @@ export default function JogosPage() {
         {/* Jogos em aberto */}
         {!loading && (
           <section>
-            <h2 className="mb-4 text-2xl font-bold">
+            <h2 className="text-2xl font-bold mb-4 text-gradient">
               Jogos em aberto
             </h2>
             {openFixtures.length === 0 ? (
@@ -687,7 +683,7 @@ export default function JogosPage() {
         {/* Jogos passados (scroll infinito) */}
         {!loading && (
           <section>
-            <h2 className="mb-4 text-2xl font-bold">
+            <h2 className="text-2xl font-bold mb-4 text-gradient">
               Jogos passados
             </h2>
             {past.length === 0 && pastLoading ? (

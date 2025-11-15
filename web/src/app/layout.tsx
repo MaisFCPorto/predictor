@@ -13,45 +13,102 @@ type UserInfo = {
   avatar_url: string | null;
 };
 
-// --- CONSTS COM OS IFRAME SRC ------------------------------------------------
+/* ------------------------------------------------------------------
+   BETANO CREATIVES (IFRAME SRC)
+------------------------------------------------------------------- */
 
-const BETANO_DESKTOP_IFRAME =
+// 120x600 – mais estreito
+const BETANO_DESKTOP_IFRAME_120 =
+  'https://gml-grp.com/I.ashx?btag=a_15985b_4104c_&affid=5177&siteid=15985&adid=4104&c=';
+
+// 160x600 – o que já tinhas
+const BETANO_DESKTOP_IFRAME_160 =
   'https://gml-grp.com/I.ashx?btag=a_15985b_4105c_&affid=5177&siteid=15985&adid=4105&c=';
 
+// 300x600 – mais largo
+const BETANO_DESKTOP_IFRAME_300 =
+  'https://gml-grp.com/I.ashx?btag=a_15985b_4111c_&affid=5177&siteid=15985&adid=4111&c=';
+
+// Mobile 320x100
 const BETANO_MOBILE_IFRAME =
   'https://gml-grp.com/I.ashx?btag=a_15985b_4115c_&affid=5177&siteid=15985&adid=4115&c=';
 
-// --- COMPONENTES DE BANNERS --------------------------------------------------
+/* ------------------------------------------------------------------
+   SIDE RAILS (DESKTOP)
+------------------------------------------------------------------- */
+
+type RailVariant = '120' | '160' | '300';
+
+const RAIL_CONFIG: Record<
+  RailVariant,
+  { src: string; width: number; height: number }
+> = {
+  '120': { src: BETANO_DESKTOP_IFRAME_120, width: 120, height: 600 },
+  '160': { src: BETANO_DESKTOP_IFRAME_160, width: 160, height: 600 },
+  '300': { src: BETANO_DESKTOP_IFRAME_300, width: 300, height: 600 },
+};
+
+function pickVariant(width: number): RailVariant {
+  // podes afinar estes valores se quiseres
+  if (width >= 1900) return '300'; // écrans bem largos → 300x600
+  if (width >= 1500) return '160'; // intermédio → 160x600
+  return '120';                    // mais justo → 120x600
+}
 
 function BetanoSideRails() {
+  const [variant, setVariant] = useState<RailVariant>('160');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const update = () => {
+      setVariant(pickVariant(window.innerWidth));
+    };
+
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  const cfg = RAIL_CONFIG[variant];
+
   return (
-    <div className="pointer-events-none fixed inset-y-0 left-0 right-0 z-[40] hidden justify-between md:flex">
+    // só mostra em >= 1280px (xl) para não esmagar layout em portáteis pequenos
+    <div className="pointer-events-none fixed inset-y-0 left-0 right-0 z-[40] hidden items-center justify-between xl:flex">
       {/* LEFT */}
-      <div className="pointer-events-auto ml-2 mt-24">
-        <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
-          <iframe
-            src={BETANO_DESKTOP_IFRAME}
-            width="160"
-            height="600"
-            style={{ border: '0px', padding: 0, margin: 0 }}
-          />
+      <div className="pointer-events-auto pl-2">
+        <div className="flex flex-col items-start justify-center">
+          <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+            <iframe
+              src={cfg.src}
+              width={cfg.width}
+              height={cfg.height}
+              style={{ border: '0px', padding: 0, margin: 0, display: 'block' }}
+            />
+          </div>
         </div>
       </div>
 
-      {/* RIGHT (usa o mesmo criativo; se quiseres outro, mudamos o src) */}
-      <div className="pointer-events-auto mr-2 mt-24">
-        <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
-          <iframe
-            src={BETANO_DESKTOP_IFRAME}
-            width="160"
-            height="600"
-            style={{ border: '0px', padding: 0, margin: 0 }}
-          />
+      {/* RIGHT */}
+      <div className="pointer-events-auto pr-2">
+        <div className="flex flex-col items-end justify-center">
+          <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+            <iframe
+              src={cfg.src}
+              width={cfg.width}
+              height={cfg.height}
+              style={{ border: '0px', padding: 0, margin: 0, display: 'block' }}
+            />
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+/* ------------------------------------------------------------------
+   MOBILE BOTTOM BANNER
+------------------------------------------------------------------- */
 
 function BetanoMobileBanner() {
   const [open, setOpen] = useState(true);
@@ -61,7 +118,6 @@ function BetanoMobileBanner() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-[60] flex justify-center px-3 pb-3 md:hidden">
       <div className="relative w-full max-w-xs overflow-hidden rounded-2xl bg-black/45 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-md">
-        {/* botão fechar */}
         <button
           type="button"
           onClick={() => setOpen(false)}
@@ -87,7 +143,9 @@ function BetanoMobileBanner() {
   );
 }
 
-// --- ROOT LAYOUT -------------------------------------------------------------
+/* ------------------------------------------------------------------
+   ROOT LAYOUT
+------------------------------------------------------------------- */
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -201,7 +259,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   }
                 >
                   {link.label}
-                  {/* sublinhado suave */}
                   <span
                     className={
                       'pointer-events-none absolute left-0 right-0 -bottom-0.5 h-[2px] origin-center scale-x-0 rounded-full bg-white/70 transition-transform duration-200 ' +
@@ -211,7 +268,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               ))}
 
-              {/* chip com user */}
               {user && (
                 <>
                   <div className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
@@ -234,7 +290,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {!user && !loadingUser && (
                 <button
                   onClick={() => router.push('/auth')}
-                  className="rounded-full bg-white/10 px-3 py-1 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-white/15"
+                  className="rounded-full bg-white/10 px-3 py-1 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.12)] hover:bg:white/15 hover:bg-white/15"
                 >
                   Entrar
                 </button>
@@ -285,13 +341,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }
           >
             <div className="mx-auto w-full max-w-6xl px-4 pb-4 pt-2 space-y-4">
-              {/* cartão user */}
               <div className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-white/80 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
                 <div className="text-xs text-white/60">
                   {user ? 'Ligado como' : 'Não autenticado'}
                 </div>
                 <div className="mt-1 flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg:white/10 bg-white/10 text-[11px] font-semibold">
                     {user ? initials : '?'}
                   </div>
                   <div className="truncate text-sm font-medium">
@@ -300,7 +355,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
               </div>
 
-              {/* links */}
               <div className="space-y-1 text-base">
                 {navLinks.map((link) => (
                   <Link

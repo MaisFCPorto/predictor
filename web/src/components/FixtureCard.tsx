@@ -99,6 +99,7 @@ export default function FixtureCard({
   const subtle = compSubtle(competition_code) ?? 'transparent';
   const lockedBase = !!is_locked || status === 'FINISHED';
 
+  // countdown
   const [remaining, setRemaining] = useState<string | null>(null);
   const [remainMs, setRemainMs] = useState<number | null>(null);
 
@@ -150,6 +151,7 @@ export default function FixtureCard({
   const nowLocked =
     lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0);
 
+  // estado dos inputs
   const [home, setHome] = useState<number | ''>('');
   const [away, setAway] = useState<number | ''>('');
 
@@ -164,6 +166,7 @@ export default function FixtureCard({
   const canSave =
     !nowLocked && home !== '' && away !== '' && !unchanged;
 
+  // Prefill prediction
   useEffect(() => {
     const ph =
       typeof pred_home === 'number' ? pred_home : null;
@@ -180,6 +183,7 @@ export default function FixtureCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pred_home, pred_away, variant]);
 
+  // Points badge
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
 
@@ -307,18 +311,16 @@ export default function FixtureCard({
   return (
     <div
       className={clsx(
-        'relative w-full',
-        'rounded-3xl border border-white/10 p-4 sm:p-6 md:p-8',
-        'pb-8',
-        'overflow-hidden',
-        'bg-card shadow-card animate-card',
+        'group relative w-full rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8 pb-8',
+        'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden',
+        'transition-transform duration-200 hover:-translate-y-1 hover:shadow-[0_20px_60px_rgba(0,0,0,0.55)]',
       )}
     >
       {/* Watermark */}
       {watermarkUrl && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 z-0 opacity-5 bg-center bg-contain bg-no-repeat"
+          className="pointer-events-none absolute inset-0 z-0 bg-center bg-contain bg-no-repeat opacity-[0.05] transition-opacity duration-300 group-hover:opacity-10"
           style={{
             backgroundImage: `url('${watermarkUrl}')`,
             filter: 'grayscale(1) brightness(0) invert(1)',
@@ -561,9 +563,9 @@ export default function FixtureCard({
         </div>
       </div>
 
-      {/* Badge de Resultado + Pontos (jogos passados) */}
+      {/* Badge Resultado + Pontos */}
       {pointsBadge && (
-        <div className="flex justify-center mt-2 gap-2 relative z-[1]">
+        <div className="flex justify-center mt-2 gap-2">
           {finalScoreText && (
             <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
               Resultado Correto: {finalScoreText}
@@ -580,9 +582,9 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Pill "Última previsão" para jogos em aberto */}
+      {/* Última previsão */}
       {!pointsBadge && lastPredText && (
-        <div className="flex justify-center mt-2 relative z-[1]">
+        <div className="flex justify-center mt-2">
           <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
             Última previsão: {lastPredText}
           </span>
@@ -591,11 +593,11 @@ export default function FixtureCard({
 
       {/* Botão mobile Guardar */}
       {variant !== 'past' && (
-        <div className="md:hidden flex justify-center mt-1 relative z-[1]">
+        <div className="md:hidden flex justify-center mt-1">
           <button
             disabled={!canSave || !!saving || nowLocked}
             className={clsx(
-              'rounded-full px-4 py-2 text-sm font-medium',
+              'rounded-full px-4 py-2 text-sm font-medium transition',
               !canSave || saving || nowLocked
                 ? 'bg-white/5 text-white/50 cursor-not-allowed'
                 : 'bg-white/10 hover:bg-white/15 text-white',
@@ -637,7 +639,7 @@ function Crest({
           <img
             src={src}
             alt={alt}
-            className="block max-h-full w-auto max-w-[80px] sm:max-w-[96px] md:max-w-[112px] object-contain"
+            className="block max-h-full w-auto max-w-[80px] sm:max-w-[96px] md:max-w-[112px] object-contain transition-transform duration-200 group-hover:scale-[1.05]"
             loading="lazy"
             decoding="async"
           />
@@ -674,9 +676,10 @@ function ScoreBox({
       className={clsx(
         'no-spinner text-center tabular-nums rounded-2xl border placeholder:text-white/70',
         'h-12 w-12 text-xl sm:h-14 sm:w-14 sm:text-2xl md:h-16 md:w-16 md:text-3xl',
+        'transition-colors',
         disabled
           ? 'border-white/10 bg-white/[0.09] text-white/40'
-          : 'border-white/20 bg-[#010436] text-white hover:bg-[#010436] focus:outline-none focus:ring-2 focus:ring-white/20',
+          : 'border-white/20 bg-[#010436] text-white hover:bg-[#020547] focus:outline-none focus:ring-2 focus:ring-white/20',
       )}
       disabled={disabled}
       placeholder=""

@@ -21,9 +21,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [loadingUser, setLoadingUser] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // -------------------------------------------------
-  // Ler user do Supabase
-  // -------------------------------------------------
   useEffect(() => {
     let ignore = false;
 
@@ -98,7 +95,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* LOGO – centrado em mobile, à esquerda em desktop */}
             <Link
               href="/jogos"
-              className="mx-auto flex items-center gap-2 transition-transform duration-150 hover:scale-[1.03] md:mx-0"
+              className="group mx-auto flex items-center gap-2 transition-transform duration-200 md:mx-0 md:translate-x-0 hover:translate-y-[1px]"
             >
               <Image
                 src="/logos/predictor-03.svg"
@@ -106,7 +103,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 width={160}
                 height={40}
                 priority
-                className="h-7 w-auto sm:h-8"
+                className="h-7 w-auto sm:h-8 transition-transform duration-200 group-hover:scale-[1.05]"
               />
             </Link>
 
@@ -117,20 +114,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   key={link.href}
                   href={link.href}
                   className={
-                    'transition-colors ' +
+                    'relative pb-0.5 transition-colors ' +
                     (isActive(link.href)
                       ? 'text-white font-medium'
                       : 'text-white/75 hover:text-white')
                   }
                 >
                   {link.label}
+                  {/* sublinhado suave */}
+                  <span
+                    className={
+                      'absolute left-0 right-0 -bottom-0.5 h-[2px] origin-center scale-x-0 rounded-full bg-white/70 transition-transform duration-200 ' +
+                      (isActive(link.href) ? 'scale-x-100' : 'group-hover:scale-x-100')
+                    }
+                  />
                 </Link>
               ))}
 
               {/* chip com user */}
               {user && (
                 <>
-                  <div className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-white/80">
+                  <div className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-[11px] font-semibold">
                       {initials}
                     </div>
@@ -139,7 +143,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
                   <button
                     onClick={handleLogout}
-                    className="inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs text-rose-100 transition hover:bg-white/10"
+                    className="inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs text-rose-100 shadow-[0_0_0_1px_rgba(248,113,113,0.25)] transition hover:bg-white/10"
                   >
                     <span className="text-[13px]">↪</span>
                     <span>Terminar sessão</span>
@@ -150,7 +154,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {!user && !loadingUser && (
                 <button
                   onClick={() => router.push('/auth')}
-                  className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/15"
+                  className="rounded-full bg-white/10 px-3 py-1 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-white/15"
                 >
                   Entrar
                 </button>
@@ -197,12 +201,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div
             className={
               'md:hidden overflow-hidden transition-[max-height,opacity] duration-200 ' +
-              (mobileOpen ? 'max-h-[420px] opacity-100' : 'max-h-0 opacity-0')
+              (mobileOpen ? 'max-height-anim-open opacity-100 max-h-[420px]' : 'max-h-0 opacity-0')
             }
           >
             <div className="mx-auto w-full max-w-6xl px-4 pb-4 pt-2 space-y-4">
               {/* cartão user */}
-              <div className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-white/80">
+              <div className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-white/80 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
                 <div className="text-xs text-white/60">
                   {user ? 'Ligado como' : 'Não autenticado'}
                 </div>
@@ -224,7 +228,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     href={link.href}
                     onClick={() => setMobileOpen(false)}
                     className={
-                      'block rounded-xl px-4 py-2 ' +
+                      'block rounded-xl px-4 py-2 transition-colors ' +
                       (isActive(link.href)
                         ? 'bg-white/10 font-medium'
                         : 'hover:bg-white/5')
@@ -237,7 +241,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 {user ? (
                   <button
                     onClick={handleLogout}
-                    className="mt-2 flex w-full items-center gap-2 rounded-xl bg-rose-500/10 px-4 py-2 text-left text-sm text-rose-100 hover:bg-rose-500/15"
+                    className="mt-2 flex w-full items-center gap-2 rounded-xl bg-rose-500/10 px-4 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/15"
                   >
                     <span className="text-lg">↪</span>
                     <span>Terminar sessão</span>
@@ -248,7 +252,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                       setMobileOpen(false);
                       router.push('/auth');
                     }}
-                    className="mt-2 flex w-full items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-left text-sm hover:bg-white/15"
+                    className="mt-2 flex w-full items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-left text-sm transition hover:bg-white/15"
                   >
                     Entrar / Registar
                   </button>

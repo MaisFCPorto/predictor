@@ -497,27 +497,29 @@ export default function JogosPage() {
       )}`
     : null;
 
-  const CardLink: React.FC<{
-    href?: string | null;
-    children: React.ReactNode;
-    aria?: string;
-  }> = ({ href, children, aria }) => {
-    const baseClasses =
-      'bg-card shadow-card rounded-2xl border border-white/10 p-4 transition-transform duration-150 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl';
-
-    if (userId && href) {
-      return (
-        <Link
-          href={href}
-          aria-label={aria}
-          className={baseClasses}
-        >
-          {children}
-        </Link>
-      );
-    }
-    return <div className={baseClasses}>{children}</div>;
-  };
+    const CardLink: React.FC<{
+      href?: string | null;
+      children: React.ReactNode;
+      aria?: string;
+    }> = ({ href, children, aria }) => {
+      const base =
+        'group rounded-2xl border border-white/10 bg-white/[0.04] p-4 ' +
+        'transition-all duration-200 hover:bg-white/[0.07] ' +
+        'hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.45)]';
+  
+      if (userId && href) {
+        return (
+          <Link
+            href={href}
+            aria-label={aria}
+            className={base}
+          >
+            {children}
+          </Link>
+        );
+      }
+      return <div className={base}>{children}</div>;
+    };
 
   return (
     <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-6 sm:py-8">

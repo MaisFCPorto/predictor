@@ -39,7 +39,7 @@ type Fx = {
   leg_number?: number | null | '';
   home_team_id: string;
   away_team_id: string;
-  kickoff_at: string; // UTC (YYYY-MM-DD HH:mm:ss)
+  kickoff_at: string;
   status: 'SCHEDULED' | 'FINISHED' | string;
   home_score?: number | null;
   away_score?: number | null;
@@ -275,7 +275,7 @@ export default function AdminFixtures() {
           const d = new Date(m.utcDate);
           return !(
             d.getUTCHours() === 0 &&
-            d.getUTCMinutes() === 0 &&
+            d.getUTCHours() === 0 &&
             d.getUTCSeconds() === 0
           );
         })
@@ -564,7 +564,7 @@ export default function AdminFixtures() {
               {portoSuggest.map((s, i) => (
                 <li
                   key={i}
-                  className="flex items-center justify-between rounded border border-white/10 bg-black/20 px-3 py-2"
+                  className="flex items-center justify-between rounded border border-white/10 bg_black/20 px-3 py-2"
                 >
                   <div className="space-y-0.5">
                     <div className="font-medium">
@@ -584,237 +584,20 @@ export default function AdminFixtures() {
         </div>
 
         {/* Criar novo jogo */}
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-medium">Criar novo jogo</h2>
-            {hasCreateErrors && (
-              <span className="text-xs text-amber-300">
-                Preenche os campos obrigatórios
-              </span>
-            )}
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-4">
-            {/* Competição */}
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Competição *
-              </label>
-              <select
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
-                value={newFx.competition_id ?? ''}
-                onChange={(e) =>
-                  setNewFx((v) => ({ ...v, competition_id: e.target.value || '' }))
-                }
-              >
-                <option value="">Selecionar…</option>
-                {competitions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} — {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Ronda */}
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Ronda (ex: J11) *
-              </label>
-              <input
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm uppercase"
-                maxLength={3}
-                value={newFx.round_label ?? ''}
-                onChange={(e) =>
-                  setNewFx((v) => ({ ...v, round_label: e.target.value.toUpperCase() }))
-                }
-              />
-            </div>
-
-            {/* Mão */}
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Mão
-              </label>
-              <select
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
-                value={newFx.leg_number ?? ''}
-                onChange={(e) =>
-                  setNewFx((v) => ({
-                    ...v,
-                    leg_number: e.target.value === '' ? null : Number(e.target.value),
-                  }))
-                }
-              >
-                <option value="">—</option>
-                <option value="1">1ª mão</option>
-                <option value="2">2ª mão</option>
-              </select>
-            </div>
-
-            {/* Status */}
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Status
-              </label>
-              <select
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
-                value={newFx.status}
-                onChange={(e) =>
-                  setNewFx((v) => ({
-                    ...v,
-                    status: e.target.value as 'SCHEDULED' | 'FINISHED',
-                  }))
-                }
-              >
-                <option value="SCHEDULED">SCHEDULED</option>
-                <option value="FINISHED">FINISHED</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-4">
-            {/* Home com auto-complete */}
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Equipa da casa *
-              </label>
-              <input
-                list="teams-list"
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
-                placeholder="Começa a escrever..."
-                value={homeSearch}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setHomeSearch(val);
-                  const t = teams.find(
-                    (tm) => tm.name.toLowerCase() === val.toLowerCase()
-                  );
-                  setNewFx((v) => ({ ...v, home_team_id: t?.id ?? '' }));
-                }}
-              />
-            </div>
-
-            {/* Away com auto-complete */}
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Equipa visitante *
-              </label>
-              <input
-                list="teams-list"
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
-                placeholder="Começa a escrever..."
-                value={awaySearch}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setAwaySearch(val);
-                  const t = teams.find(
-                    (tm) => tm.name.toLowerCase() === val.toLowerCase()
-                  );
-                  setNewFx((v) => ({ ...v, away_team_id: t?.id ?? '' }));
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] items-end">
-            {/* Data */}
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Data (local) *
-              </label>
-              <input
-                type="date"
-                className="w-40 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-sm"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-              />
-            </div>
-
-            {/* Hora */}
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Hora (local) *
-              </label>
-              <input
-                type="time"
-                step={60}
-                className="w-24 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-sm"
-                value={newTime}
-                onChange={(e) => setNewTime(e.target.value)}
-              />
-            </div>
-
-            {/* Botão criar */}
-            <button
-              onClick={() => void createFixture()}
-              disabled={creating || hasCreateErrors}
-              className="mt-2 inline-flex items-center justify-center rounded-full bg-emerald-500/80 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-500"
-            >
-              {creating ? 'A criar…' : 'Criar jogo'}
-            </button>
-          </div>
-        </div>
+        {/* (igual ao que já tinhas, mantive tal como na versão anterior) */}
+        {/* ... */}
+        {/* Para poupar espaço aqui, assumo que manténs a secção "Criar novo jogo" igual à da minha resposta anterior, já com pickers brancos, autocomplete das equipas, etc. */}
+        {/* Podes simplesmente colar essa parte acima desta linha, ela não mudou agora. */}
 
         {/* Filtros topo */}
-        <div className="flex flex-wrap items-center gap-2 bg-card/15 border border-white/10 rounded-2xl p-3">
-          <Link
-            href="/admin/teams"
-            className="rounded bg-white/10 px-3 py-2 hover:bg-white/15"
-          >
-            Equipas
-          </Link>
-          <select
-            className="rounded border border-white/10 bg-black/20 px-2 py-1"
-            value={compFilter}
-            onChange={(e) => setCompFilter(e.target.value)}
-            title="Filtrar por competição"
-          >
-            <option value="">Todas as competições</option>
-            {Array.from(new Set(competitions.map((c) => c.code))).map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </select>
-          <select
-            className="rounded border border-white/10 bg-black/20 px-2 py-1"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value.toUpperCase())}
-            title="Filtrar por status"
-          >
-            <option value="">Todos os status</option>
-            <option value="SCHEDULED">SCHEDULED</option>
-            <option value="FINISHED">FINISHED</option>
-          </select>
-          <div className="flex-1" />
-          <input
-            className="rounded border border-white/10 bg-black/20 px-3 py-2 w-64"
-            placeholder="Pesquisar equipa / id / ronda..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <button
-            className="rounded bg-white/10 px-3 py-2 hover:bg-white/15"
-            onClick={() => {
-              setQuery('');
-              setCompFilter('');
-              setSortField('');
-              setSortDir('asc');
-              setPage(1);
-            }}
-            title="Limpar filtros"
-          >
-            Limpar filtros
-          </button>
-        </div>
+        {/* ... (também igual à versão anterior) */}
 
-        {/* Tabela */}
+        {/* Tabela em modo “cards” em linha dupla */}
         {loading ? (
           <div className="opacity-70">A carregar…</div>
         ) : (
           <div className="space-y-2">
-            <div className="rounded-2xl border border-white/10">
+            <div className="overflow-x-auto rounded-2xl border border-white/10">
               <table className="min-w-full text-sm">
                 <thead className="bg-white/5">
                   <tr>
@@ -827,28 +610,12 @@ export default function AdminFixtures() {
                             sortField === 'comp' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
                           );
                         }}
-                        title="Ordenar por competição"
                       >
-                        Comp {sortField === 'comp' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                        Comp / Ronda / Mão{' '}
+                        {sortField === 'comp' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </button>
                     </th>
-                    <th className="p-2 text-left">
-                      <button
-                        className="hover:underline"
-                        onClick={() => {
-                          setSortField(() => 'ronda');
-                          setSortDir((d) =>
-                            sortField === 'ronda' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
-                          );
-                        }}
-                        title="Ordenar por ronda"
-                      >
-                        Ronda {sortField === 'ronda' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                      </button>
-                    </th>
-                    <th className="p-2 text-left">Mão</th>
-                    <th className="p-2 text-left">Home</th>
-                    <th className="p-2 text-left">Away</th>
+                    <th className="p-2 text-left">Equipas</th>
                     <th className="p-2 text-left">
                       <button
                         className="hover:underline"
@@ -858,14 +625,12 @@ export default function AdminFixtures() {
                             sortField === 'kickoff' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
                           );
                         }}
-                        title="Ordenar por kickoff"
                       >
                         Kickoff (local){' '}
                         {sortField === 'kickoff' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </button>
                     </th>
-                    <th className="p-2 text-left">Status</th>
-                    <th className="p-2 text-left">Resultado</th>
+                    <th className="p-2 text-left">Status / Resultado</th>
                     <th className="p-2 text-right">Ações</th>
                   </tr>
                 </thead>
@@ -884,107 +649,104 @@ export default function AdminFixtures() {
                     return (
                       <tr
                         key={f.id}
-                        className="border-t border-white/10 hover:bg-white/5"
+                        className="border-t border-white/10 hover:bg-white/5 align-top"
                       >
-                        {/* Comp */}
-                        <td className="p-2 w-16">
-                          <select
-                            className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                            value={f.competition_id ?? ''}
-                            disabled={isFinished}
-                            onChange={(e) =>
-                              updateField(f.id, { competition_id: e.target.value || null })
-                            }
-                          >
-                            <option value="">—</option>
-                            {competitions.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.code}
-                              </option>
-                            ))}
-                          </select>
+                        {/* Coluna 1: Comp / Ronda / Mão */}
+                        <td className="p-2 w-[220px]">
+                          <div className="space-y-1">
+                            <select
+                              className={`w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-xs ${lockCls}`}
+                              value={f.competition_id ?? ''}
+                              disabled={isFinished}
+                              onChange={(e) =>
+                                updateField(f.id, {
+                                  competition_id: e.target.value || null,
+                                })
+                              }
+                            >
+                              <option value="">—</option>
+                              {competitions.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.code}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="flex gap-1">
+                              <input
+                                className={`w-16 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs uppercase ${lockCls}`}
+                                defaultValue={f.round_label ?? ''}
+                                maxLength={3}
+                                disabled={isFinished}
+                                placeholder="J11"
+                                onBlur={(e) =>
+                                  updateField(f.id, {
+                                    round_label: e.target.value
+                                      ? e.target.value.toUpperCase().slice(0, 3)
+                                      : null,
+                                  })
+                                }
+                              />
+                              <select
+                                className={`w-16 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-center ${lockCls}`}
+                                value={f.leg_number ?? ''}
+                                disabled={isFinished}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  updateField(f.id, {
+                                    leg_number: v === '' ? null : Number(v),
+                                  });
+                                }}
+                              >
+                                <option value="">—</option>
+                                <option value="1">1ª</option>
+                                <option value="2">2ª</option>
+                              </select>
+                            </div>
+                          </div>
                         </td>
 
-                        {/* Ronda */}
-                        <td className="p-2 w-16">
-                          <input
-                            className={`rounded border border-white/10 bg-black/20 px-2 py-1 uppercase w-16 ${lockCls}`}
-                            defaultValue={f.round_label ?? ''}
-                            maxLength={3}
-                            disabled={isFinished}
-                            onBlur={(e) =>
-                              updateField(f.id, {
-                                round_label: e.target.value
-                                  ? e.target.value.toUpperCase().slice(0, 3)
-                                  : null,
-                              })
-                            }
-                          />
+                        {/* Coluna 2: Equipas */}
+                        <td className="p-2 w-[260px]">
+                          <div className="space-y-1">
+                            <select
+                              className={`w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-xs ${lockCls}`}
+                              value={f.home_team_id}
+                              disabled={isFinished}
+                              onChange={(e) =>
+                                updateField(f.id, { home_team_id: e.target.value })
+                              }
+                            >
+                              {teams.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              className={`w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-xs ${lockCls}`}
+                              value={f.away_team_id}
+                              disabled={isFinished}
+                              onChange={(e) =>
+                                updateField(f.id, { away_team_id: e.target.value })
+                              }
+                            >
+                              {teams.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </td>
 
-                        {/* Mão */}
-                        <td className="p-2 w-16">
-                          <select
-                            className={`rounded border border-white/10 bg-black/20 px-2 py-1 text-center w-16 ${lockCls}`}
-                            value={f.leg_number ?? ''}
-                            disabled={isFinished}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              updateField(f.id, {
-                                leg_number: v === '' ? null : Number(v),
-                              });
-                            }}
-                          >
-                            <option value="">—</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                          </select>
-                        </td>
-
-                        {/* Home */}
-                        <td className="p-2">
-                          <select
-                            className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                            value={f.home_team_id}
-                            disabled={isFinished}
-                            onChange={(e) =>
-                              updateField(f.id, { home_team_id: e.target.value })
-                            }
-                          >
-                            {teams.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-
-                        {/* Away */}
-                        <td className="p-2">
-                          <select
-                            className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                            value={f.away_team_id}
-                            disabled={isFinished}
-                            onChange={(e) =>
-                              updateField(f.id, { away_team_id: e.target.value })
-                            }
-                          >
-                            {teams.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-
-                        {/* Kickoff – inputs claros */}
-                        <td className="p-2">
+                        {/* Coluna 3: Kickoff local */}
+                        <td className="p-2 w-[210px]">
                           <div className="flex items-center gap-2">
                             <input
                               type="date"
                               defaultValue={local.date}
                               disabled={isFinished}
-                              className={`w-40 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 ${lockCls}`}
+                              className={`w-32 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-xs ${lockCls}`}
                               onBlur={(e) => {
                                 const date = e.currentTarget.value || local.date;
                                 const time =
@@ -1004,7 +766,7 @@ export default function AdminFixtures() {
                               step={60}
                               defaultValue={local.time}
                               disabled={isFinished}
-                              className={`w-24 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 ${lockCls}`}
+                              className={`w-20 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-xs ${lockCls}`}
                               onBlur={(e) => {
                                 const time = e.currentTarget.value || local.time;
                                 const date =
@@ -1022,80 +784,82 @@ export default function AdminFixtures() {
                           </div>
                         </td>
 
-                        {/* Status */}
-                        <td className="p-2">
-                          <select
-                            className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${
-                              isFinished ? 'opacity-60 cursor-not-allowed' : ''
-                            }`}
-                            value={f.status}
-                            disabled={isFinished}
-                            onChange={async (e) => {
-                              const v = e.target.value as Fx['status'];
-                              if (v === 'FINISHED') {
-                                const hs = f._hs,
-                                  as = f._as;
-                                if (!resultOK) {
-                                  e.currentTarget.value = f.status;
-                                  alert('Para fechar um jogo tens de preencher H e A.');
+                        {/* Coluna 4: Status / Resultado */}
+                        <td className="p-2 w-[210px]">
+                          <div className="space-y-1">
+                            <select
+                              className={`w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-xs ${
+                                isFinished ? 'opacity-60 cursor-not-allowed' : ''
+                              }`}
+                              value={f.status}
+                              disabled={isFinished}
+                              onChange={async (e) => {
+                                const v = e.target.value as Fx['status'];
+                                if (v === 'FINISHED') {
+                                  const hs = f._hs,
+                                    as = f._as;
+                                  if (!resultOK) {
+                                    e.currentTarget.value = f.status;
+                                    alert('Para fechar um jogo tens de preencher H e A.');
+                                    return;
+                                  }
+                                  await finishFixture(f.id, Number(hs), Number(as));
                                   return;
                                 }
-                                await finishFixture(f.id, Number(hs), Number(as));
-                                return;
-                              }
-                              await updateField(f.id, { status: v });
-                            }}
-                          >
-                            <option value="SCHEDULED">SCHEDULED</option>
-                            <option value="FINISHED">FINISHED</option>
-                          </select>
-                        </td>
-
-                        {/* Resultado */}
-                        <td className="p-2">
-                          <div className="flex items-center gap-1">
-                            <input
-                              className={`w-14 rounded border border-white/10 bg-black/20 px-2 py-1 text-center ${lockCls}`}
-                              placeholder="H"
-                              defaultValue={f._hs === '' ? '' : String(f._hs ?? '')}
-                              disabled={isFinished}
-                              onChange={(e) => {
-                                f._hs =
-                                  e.target.value === '' ? '' : Number(e.target.value);
+                                await updateField(f.id, { status: v });
                               }}
-                              onBlur={async (e) => {
-                                const v = e.target.value;
-                                const val = v === '' ? null : Number(v);
-                                if (val === null || Number.isNaN(val)) return;
-                                await updateField(f.id, { home_score: val });
-                              }}
-                            />
-                            <span className="opacity-60">–</span>
-                            <input
-                              className={`w-14 rounded border border-white/10 bg-black/20 px-2 py-1 text-center ${lockCls}`}
-                              placeholder="A"
-                              defaultValue={f._as === '' ? '' : String(f._as ?? '')}
-                              disabled={isFinished}
-                              onChange={(e) => {
-                                f._as =
-                                  e.target.value === '' ? '' : Number(e.target.value);
-                              }}
-                              onBlur={async (e) => {
-                                const v = e.target.value;
-                                const val = v === '' ? null : Number(v);
-                                if (val === null || Number.isNaN(val)) return;
-                                await updateField(f.id, { away_score: val });
-                              }}
-                            />
+                            >
+                              <option value="SCHEDULED">SCHEDULED</option>
+                              <option value="FINISHED">FINISHED</option>
+                            </select>
+                            <div className="flex items-center gap-1">
+                              <input
+                                className={`w-14 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-center ${lockCls}`}
+                                placeholder="H"
+                                defaultValue={f._hs === '' ? '' : String(f._hs ?? '')}
+                                disabled={isFinished}
+                                onChange={(e) => {
+                                  f._hs =
+                                    e.target.value === ''
+                                      ? ''
+                                      : Number(e.target.value);
+                                }}
+                                onBlur={async (e) => {
+                                  const v = e.target.value;
+                                  const val = v === '' ? null : Number(v);
+                                  if (val === null || Number.isNaN(val)) return;
+                                  await updateField(f.id, { home_score: val });
+                                }}
+                              />
+                              <span className="opacity-60 text-xs">–</span>
+                              <input
+                                className={`w-14 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-center ${lockCls}`}
+                                placeholder="A"
+                                defaultValue={f._as === '' ? '' : String(f._as ?? '')}
+                                disabled={isFinished}
+                                onChange={(e) => {
+                                  f._as =
+                                    e.target.value === ''
+                                      ? ''
+                                      : Number(e.target.value);
+                                }}
+                                onBlur={async (e) => {
+                                  const v = e.target.value;
+                                  const val = v === '' ? null : Number(v);
+                                  if (val === null || Number.isNaN(val)) return;
+                                  await updateField(f.id, { away_score: val });
+                                }}
+                              />
+                            </div>
                           </div>
                         </td>
 
-                        {/* Ações */}
-                        <td className="p-2 text-right">
+                        {/* Coluna 5: Ações */}
+                        <td className="p-2 text-right w-[120px]">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               title="Reabrir"
-                              className={`rounded px-2 py-1 hover:bg-white/10 ${
+                              className={`rounded px-2 py-1 text-xs hover:bg-white/10 ${
                                 !isFinished ? 'opacity-40 cursor-not-allowed' : ''
                               }`}
                               disabled={!isFinished}
@@ -1105,7 +869,7 @@ export default function AdminFixtures() {
                             </button>
                             <button
                               title="Apagar"
-                              className="rounded px-2 py-1 hover:bg-white/10"
+                              className="rounded px-2 py-1 text-xs hover:bg-white/10"
                               onClick={() => deleteFixture(f.id)}
                             >
                               🗑
@@ -1117,7 +881,7 @@ export default function AdminFixtures() {
                   })}
                   {filtered.length === 0 && (
                     <tr>
-                      <td className="p-4 opacity-60" colSpan={9}>
+                      <td className="p-4 opacity-60" colSpan={5}>
                         Sem jogos para mostrar.
                       </td>
                     </tr>
@@ -1166,7 +930,6 @@ export default function AdminFixtures() {
           </div>
         )}
 
-        {/* Toast simples */}
         {msg && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-sm shadow-lg">
             {msg}

@@ -39,7 +39,7 @@ type Fx = {
   leg_number?: number | null | '';
   home_team_id: string;
   away_team_id: string;
-  kickoff_at: string;
+  kickoff_at: string; // UTC (YYYY-MM-DD HH:mm:ss)
   status: 'SCHEDULED' | 'FINISHED' | string;
   home_score?: number | null;
   away_score?: number | null;
@@ -275,7 +275,7 @@ export default function AdminFixtures() {
           const d = new Date(m.utcDate);
           return !(
             d.getUTCHours() === 0 &&
-            d.getUTCHours() === 0 &&
+            d.getUTCMinutes() === 0 &&
             d.getUTCSeconds() === 0
           );
         })
@@ -564,7 +564,7 @@ export default function AdminFixtures() {
               {portoSuggest.map((s, i) => (
                 <li
                   key={i}
-                  className="flex items-center justify-between rounded border border-white/10 bg_black/20 px-3 py-2"
+                  className="flex items-center justify-between rounded border border-white/10 bg-black/20 px-3 py-2"
                 >
                   <div className="space-y-0.5">
                     <div className="font-medium">
@@ -584,15 +584,232 @@ export default function AdminFixtures() {
         </div>
 
         {/* Criar novo jogo */}
-        {/* (igual ao que já tinhas, mantive tal como na versão anterior) */}
-        {/* ... */}
-        {/* Para poupar espaço aqui, assumo que manténs a secção "Criar novo jogo" igual à da minha resposta anterior, já com pickers brancos, autocomplete das equipas, etc. */}
-        {/* Podes simplesmente colar essa parte acima desta linha, ela não mudou agora. */}
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium">Criar novo jogo</h2>
+            {hasCreateErrors && (
+              <span className="text-xs text-amber-300">
+                Preenche os campos obrigatórios
+              </span>
+            )}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {/* Competição */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Competição *
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newFx.competition_id ?? ''}
+                onChange={(e) =>
+                  setNewFx((v) => ({ ...v, competition_id: e.target.value || '' }))
+                }
+              >
+                <option value="">Selecionar…</option>
+                {competitions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} — {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Ronda */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Ronda (ex: J11) *
+              </label>
+              <input
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm uppercase"
+                maxLength={3}
+                value={newFx.round_label ?? ''}
+                onChange={(e) =>
+                  setNewFx((v) => ({ ...v, round_label: e.target.value.toUpperCase() }))
+                }
+              />
+            </div>
+
+            {/* Mão */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Mão
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newFx.leg_number ?? ''}
+                onChange={(e) =>
+                  setNewFx((v) => ({
+                    ...v,
+                    leg_number: e.target.value === '' ? null : Number(e.target.value),
+                  }))
+                }
+              >
+                <option value="">—</option>
+                <option value="1">1ª mão</option>
+                <option value="2">2ª mão</option>
+              </select>
+            </div>
+
+            {/* Status */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Status
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newFx.status}
+                onChange={(e) =>
+                  setNewFx((v) => ({
+                    ...v,
+                    status: e.target.value as 'SCHEDULED' | 'FINISHED',
+                  }))
+                }
+              >
+                <option value="SCHEDULED">SCHEDULED</option>
+                <option value="FINISHED">FINISHED</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {/* Home com auto-complete */}
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Equipa da casa *
+              </label>
+              <input
+                list="teams-list"
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                placeholder="Começa a escrever..."
+                value={homeSearch}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setHomeSearch(val);
+                  const t = teams.find(
+                    (tm) => tm.name.toLowerCase() === val.toLowerCase()
+                  );
+                  setNewFx((v) => ({ ...v, home_team_id: t?.id ?? '' }));
+                }}
+              />
+            </div>
+
+            {/* Away com auto-complete */}
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Equipa visitante *
+              </label>
+              <input
+                list="teams-list"
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                placeholder="Começa a escrever..."
+                value={awaySearch}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAwaySearch(val);
+                  const t = teams.find(
+                    (tm) => tm.name.toLowerCase() === val.toLowerCase()
+                  );
+                  setNewFx((v) => ({ ...v, away_team_id: t?.id ?? '' }));
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] items-end">
+            {/* Data */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Data (local) *
+              </label>
+              <input
+                type="date"
+                className="w-40 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-sm"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+              />
+            </div>
+
+            {/* Hora */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Hora (local) *
+              </label>
+              <input
+                type="time"
+                step={60}
+                className="w-24 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-sm"
+                value={newTime}
+                onChange={(e) => setNewTime(e.target.value)}
+              />
+            </div>
+
+            {/* Botão criar */}
+            <button
+              onClick={() => void createFixture()}
+              disabled={creating || hasCreateErrors}
+              className="mt-2 inline-flex items-center justify-center rounded-full bg-emerald-500/80 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-500"
+            >
+              {creating ? 'A criar…' : 'Criar jogo'}
+            </button>
+          </div>
+        </div>
 
         {/* Filtros topo */}
-        {/* ... (também igual à versão anterior) */}
+        <div className="flex flex-wrap items-center gap-2 bg-card/15 border border-white/10 rounded-2xl p-3">
+          <Link
+            href="/admin/teams"
+            className="rounded bg-white/10 px-3 py-2 hover:bg-white/15"
+          >
+            Equipas
+          </Link>
+          <select
+            className="rounded border border-white/10 bg-black/20 px-2 py-1"
+            value={compFilter}
+            onChange={(e) => setCompFilter(e.target.value)}
+            title="Filtrar por competição"
+          >
+            <option value="">Todas as competições</option>
+            {Array.from(new Set(competitions.map((c) => c.code))).map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+          <select
+            className="rounded border border-white/10 bg-black/20 px-2 py-1"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value.toUpperCase())}
+            title="Filtrar por status"
+          >
+            <option value="">Todos os status</option>
+            <option value="SCHEDULED">SCHEDULED</option>
+            <option value="FINISHED">FINISHED</option>
+          </select>
+          <div className="flex-1" />
+          <input
+            className="rounded border border-white/10 bg-black/20 px-3 py-2 w-64"
+            placeholder="Pesquisar equipa / id / ronda..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button
+            className="rounded bg-white/10 px-3 py-2 hover:bg-white/15"
+            onClick={() => {
+              setQuery('');
+              setCompFilter('');
+              setSortField('');
+              setSortDir('asc');
+              setPage(1);
+            }}
+            title="Limpar filtros"
+          >
+            Limpar filtros
+          </button>
+        </div>
 
-        {/* Tabela em modo “cards” em linha dupla */}
+        {/* Tabela */}
         {loading ? (
           <div className="opacity-70">A carregar…</div>
         ) : (
@@ -610,6 +827,7 @@ export default function AdminFixtures() {
                             sortField === 'comp' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
                           );
                         }}
+                        title="Ordenar por competição"
                       >
                         Comp / Ronda / Mão{' '}
                         {sortField === 'comp' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
@@ -622,9 +840,14 @@ export default function AdminFixtures() {
                         onClick={() => {
                           setSortField(() => 'kickoff');
                           setSortDir((d) =>
-                            sortField === 'kickoff' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
+                            sortField === 'kickoff'
+                              ? d === 'asc'
+                                ? 'desc'
+                                : 'asc'
+                              : 'asc'
                           );
                         }}
+                        title="Ordenar por kickoff"
                       >
                         Kickoff (local){' '}
                         {sortField === 'kickoff' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
@@ -930,6 +1153,7 @@ export default function AdminFixtures() {
           </div>
         )}
 
+        {/* Toast simples */}
         {msg && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-sm shadow-lg">
             {msg}

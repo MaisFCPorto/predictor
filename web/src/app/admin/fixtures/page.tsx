@@ -417,7 +417,6 @@ export default function AdminFixtures() {
   }
 
   /* -------------------- Filtro + Ordenação + Paginação -------------------- */
-  // total após filtros (sem paginação)
   const totalCount = useMemo(() => {
     const q = query.trim().toLowerCase();
     const byIdToCode = new Map(competitions.map((c) => [c.id, c.code]));
@@ -475,7 +474,6 @@ export default function AdminFixtures() {
         const norm = (s?: string | null) => (s ?? '').toUpperCase();
         const ar = norm(a.round_label);
         const br = norm(b.round_label);
-        // tenta comparar Jx numericamente
         const aj = /^J(\d+)$/i.exec(ar);
         const bj = /^J(\d+)$/i.exec(br);
         if (aj && bj) return (Number(aj[1]) - Number(bj[1])) * dir;
@@ -506,7 +504,6 @@ export default function AdminFixtures() {
     pageSize,
   ]);
 
-  // reset página quando filtros/ordenação mudam
   useEffect(() => {
     setPage(1);
   }, [query, compFilter, statusFilter, sortField, sortDir]);
@@ -536,10 +533,7 @@ export default function AdminFixtures() {
     const kickoff_local = toLocalDTValue(s.utcDate);
     setNewFx((v) => ({
       ...v,
-      // força a competição para Liga Portugal (LP) usando o respetivo ID
-      competition_id:
-        competitions.find((c) => c.code === 'LP')?.id || '',
-      // converte o matchday num formato de ronda "J11" em vez de "MD"
+      competition_id: competitions.find((c) => c.code === 'LP')?.id || '',
       round_label: s.round
         ? `J${String(s.round)}`.toUpperCase().slice(0, 3)
         : '',
@@ -550,6 +544,8 @@ export default function AdminFixtures() {
       status: 'SCHEDULED',
     }));
   }
+
+  const newLocal = splitLocal(newFx.kickoff_local || '');
 
   /* -------------------- Render -------------------- */
   return (
@@ -600,6 +596,204 @@ export default function AdminFixtures() {
               ))}
             </ul>
           )}
+        </div>
+
+        {/* Criar novo jogo */}
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium">Criar novo jogo</h2>
+            {hasCreateErrors && (
+              <span className="text-xs text-amber-300">
+                Preenche os campos obrigatórios
+              </span>
+            )}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {/* Competição */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Competição *
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newFx.competition_id ?? ''}
+                onChange={(e) =>
+                  setNewFx((v) => ({
+                    ...v,
+                    competition_id: e.target.value || '',
+                  }))
+                }
+              >
+                <option value="">Selecionar…</option>
+                {competitions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} — {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Ronda */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Ronda (ex: J11) *
+              </label>
+              <input
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm uppercase"
+                maxLength={3}
+                value={newFx.round_label ?? ''}
+                onChange={(e) =>
+                  setNewFx((v) => ({
+                    ...v,
+                    round_label: e.target.value.toUpperCase(),
+                  }))
+                }
+              />
+            </div>
+
+            {/* Mão */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Mão
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newFx.leg_number ?? ''}
+                onChange={(e) =>
+                  setNewFx((v) => ({
+                    ...v,
+                    leg_number:
+                      e.target.value === ''
+                        ? null
+                        : Number(e.target.value),
+                  }))
+                }
+              >
+                <option value="">—</option>
+                <option value="1">1ª mão</option>
+                <option value="2">2ª mão</option>
+              </select>
+            </div>
+
+            {/* Status */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Status
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newFx.status}
+                onChange={(e) =>
+                  setNewFx((v) => ({
+                    ...v,
+                    status: e.target.value as 'SCHEDULED' | 'FINISHED',
+                  }))
+                }
+              >
+                <option value="SCHEDULED">SCHEDULED</option>
+                <option value="FINISHED">FINISHED</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {/* Home */}
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Equipa da casa *
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newFx.home_team_id}
+                onChange={(e) =>
+                  setNewFx((v) => ({
+                    ...v,
+                    home_team_id: e.target.value,
+                  }))
+                }
+              >
+                <option value="">Selecionar equipa…</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Away */}
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Equipa visitante *
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newFx.away_team_id}
+                onChange={(e) =>
+                  setNewFx((v) => ({
+                    ...v,
+                    away_team_id: e.target.value,
+                  }))
+                }
+              >
+                <option value="">Selecionar equipa…</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] items-end">
+            {/* Data */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Data (local) *
+              </label>
+              <input
+                type="date"
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newLocal.date}
+                onChange={(e) => {
+                  const date = e.target.value;
+                  const time = newLocal.time || '21:00';
+                  const local = joinLocal(date, time);
+                  setNewFx((v) => ({ ...v, kickoff_local: local }));
+                }}
+              />
+            </div>
+
+            {/* Hora */}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-wide opacity-70">
+                Hora (local) *
+              </label>
+              <input
+                type="time"
+                step={60}
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newLocal.time}
+                onChange={(e) => {
+                  const time = e.target.value;
+                  const date = newLocal.date || new Date().toISOString().slice(0, 10);
+                  const local = joinLocal(date, time);
+                  setNewFx((v) => ({ ...v, kickoff_local: local }));
+                }}
+              />
+            </div>
+
+            {/* Botão criar */}
+            <button
+              onClick={() => void createFixture()}
+              disabled={creating || hasCreateErrors}
+              className="mt-2 inline-flex items-center justify-center rounded-full bg-emerald-500/80 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-500"
+            >
+              {creating ? 'A criar…' : 'Criar jogo'}
+            </button>
+          </div>
         </div>
 
         {/* Filtros topo */}
@@ -758,9 +952,6 @@ export default function AdminFixtures() {
                       !Number.isNaN(Number(f._as));
 
                     const local = splitLocal(toLocalDTValue(f.kickoff_at));
-                    const readableKickoff = formatReadableLocal(
-                      f.kickoff_at
-                    );
 
                     return (
                       <tr
@@ -771,7 +962,7 @@ export default function AdminFixtures() {
                         <td className="p-2 w-16">
                           <select
                             className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                            value={f.competition_id ?? ''} // <- usa ID
+                            value={f.competition_id ?? ''}
                             disabled={isFinished}
                             onChange={(e) =>
                               updateField(f.id, {
@@ -867,71 +1058,66 @@ export default function AdminFixtures() {
                           </select>
                         </td>
 
-                        {/* Kickoff – label legível + Data + Hora */}
-                        <td className="p-2 align-top">
-                          <div className="flex flex-col gap-1">
-                            <div className="text-xs text-white/60">
-                              {readableKickoff}
-                            </div>
-                            <div className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-2 gap-2 items-center">
-                              <input
-                                type="date"
-                                defaultValue={local.date}
-                                disabled={isFinished}
-                                className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                                onBlur={(e) => {
-                                  const date =
-                                    e.currentTarget.value ||
-                                    local.date;
-                                  const time =
-                                    (
-                                      e.currentTarget.parentElement?.querySelector(
-                                        'input[type="time"]'
-                                      ) as HTMLInputElement
-                                    )?.value || local.time;
-                                  const localDT =
-                                    joinLocal(date, time);
-                                  const utc =
-                                    fromLocalDTValue(localDT);
-                                  if (
-                                    utc &&
-                                    utc !== f.kickoff_at
-                                  )
-                                    updateField(f.id, {
-                                      kickoff_at: utc,
-                                    });
-                                }}
-                              />
-                              <input
-                                type="time"
-                                step={60}
-                                defaultValue={local.time}
-                                disabled={isFinished}
-                                className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                                onBlur={(e) => {
-                                  const time =
-                                    e.currentTarget.value ||
-                                    local.time;
-                                  const date =
-                                    (
-                                      e.currentTarget.parentElement?.querySelector(
-                                        'input[type="date"]'
-                                      ) as HTMLInputElement
-                                    )?.value || local.date;
-                                  const localDT =
-                                    joinLocal(date, time);
-                                  const utc =
-                                    fromLocalDTValue(localDT);
-                                  if (
-                                    utc &&
-                                    utc !== f.kickoff_at
-                                  )
-                                    updateField(f.id, {
-                                      kickoff_at: utc,
-                                    });
-                                }}
-                              />
-                            </div>
+                        {/* Kickoff – só inputs data/hora */}
+                        <td className="p-2">
+                          <div className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-2 gap-2 items-center">
+                            <input
+                              type="date"
+                              defaultValue={local.date}
+                              disabled={isFinished}
+                              className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
+                              onBlur={(e) => {
+                                const date =
+                                  e.currentTarget.value ||
+                                  local.date;
+                                const time =
+                                  (
+                                    e.currentTarget.parentElement?.querySelector(
+                                      'input[type="time"]'
+                                    ) as HTMLInputElement
+                                  )?.value || local.time;
+                                const localDT =
+                                  joinLocal(date, time);
+                                const utc =
+                                  fromLocalDTValue(localDT);
+                                if (
+                                  utc &&
+                                  utc !== f.kickoff_at
+                                )
+                                  updateField(f.id, {
+                                    kickoff_at: utc,
+                                  });
+                              }}
+                            />
+                            <input
+                              type="time"
+                              step={60}
+                              defaultValue={local.time}
+                              disabled={isFinished}
+                              className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
+                              onBlur={(e) => {
+                                const time =
+                                  e.currentTarget.value ||
+                                  local.time;
+                                const date =
+                                  (
+                                    e.currentTarget.parentElement?.querySelector(
+                                      'input[type="date"]'
+                                    ) as HTMLInputElement
+                                  )?.value || local.date;
+                                const localDT =
+                                  joinLocal(date, time);
+                                const utc =
+                                  fromLocalDTValue(localDT);
+                                if (
+                                  utc &&
+                                  utc !== f.kickoff_at
+                                )
+                                  updateField(f.id, {
+                                    kickoff_at: utc,
+                                  });
+                              }}
+                            />
                           </div>
                         </td>
 
@@ -1144,7 +1330,7 @@ export default function AdminFixtures() {
           </div>
         )}
 
-        {/* Mensagem toast simples */}
+        {/* Toast simples */}
         {msg && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-sm shadow-lg">
             {msg}

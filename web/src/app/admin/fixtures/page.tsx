@@ -104,7 +104,9 @@ export default function AdminFixtures() {
   const [msg, setMsg] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [compFilter, setCompFilter] = useState<string>('');
-  const [sortField, setSortField] = useState<'comp' | 'ronda' | 'kickoff' | ''>('');
+  const [sortField, setSortField] = useState<'comp' | 'ronda' | 'kickoff' | ''>(
+    ''
+  );
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -160,7 +162,11 @@ export default function AdminFixtures() {
     errs.ronda = newFx.round_label ? null : 'Obrigatório';
     errs.home = newFx.home_team_id ? null : 'Obrigatório';
     errs.away = newFx.away_team_id ? null : 'Obrigatório';
-    if (newFx.home_team_id && newFx.away_team_id && newFx.home_team_id === newFx.away_team_id) {
+    if (
+      newFx.home_team_id &&
+      newFx.away_team_id &&
+      newFx.home_team_id === newFx.away_team_id
+    ) {
       errs.away = 'Equipas não podem ser iguais';
     }
     errs.ko = newFx.kickoff_local ? null : 'Obrigatório';
@@ -546,11 +552,13 @@ export default function AdminFixtures() {
         </datalist>
 
         {/* Sugestões */}
-        <div className="rounded-2xl border border-white/10 p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg">Sugestões — Próximos jogos do FC Porto</h2>
+        <div className="rounded-2xl border border-white/10 p-3 space-y-2 bg-black/30">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-medium">
+              Sugestões — Próximos jogos do FC Porto
+            </h2>
             <button
-              className="rounded bg-white/10 px-2 py-1 hover:bg-white/15"
+              className="rounded-full bg-white/10 px-3 py-1 text-sm hover:bg-white/15"
               onClick={() => void loadPortoSuggestions()}
               disabled={loadingSuggest}
             >
@@ -558,34 +566,44 @@ export default function AdminFixtures() {
             </button>
           </div>
           {portoSuggest.length === 0 ? (
-            <div className="opacity-70">Sem sugestões disponíveis.</div>
+            <div className="opacity-70 text-sm">
+              Sem sugestões disponíveis no momento.
+            </div>
           ) : (
             <ul className="grid md:grid-cols-2 gap-2">
-              {portoSuggest.map((s, i) => (
-                <li
-                  key={i}
-                  className="flex items-center justify-between rounded border border-white/10 bg-black/20 px-3 py-2"
-                >
-                  <div className="space-y-0.5">
-                    <div className="font-medium">
-                      {s.home} vs {s.away}
-                    </div>
-                  </div>
-                  <button
-                    className="rounded bg-white/10 px-2 py-1 hover:bg-white/15"
-                    onClick={() => prefillFromSuggestion(s)}
+              {portoSuggest.map((s, i) => {
+                const local = splitLocal(toLocalDTValue(s.utcDate));
+                return (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3 py-2 gap-3"
                   >
-                    Preencher
-                  </button>
-                </li>
-              ))}
+                    <div className="space-y-0.5 text-sm">
+                      <div className="font-medium">
+                        {s.home} vs {s.away}
+                      </div>
+                      <div className="text-xs opacity-70">
+                        {local.date} · {local.time || '--:--'}{' '}
+                        {s.comp ? `· ${s.comp}` : ''}{' '}
+                        {s.round ? `· MD ${s.round}` : ''}
+                      </div>
+                    </div>
+                    <button
+                      className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/15 whitespace-nowrap"
+                      onClick={() => prefillFromSuggestion(s)}
+                    >
+                      Preencher
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
 
-        {/* Criar novo jogo */}
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-3">
-          <div className="flex items-center justify-between">
+        {/* Criar novo jogo - card no estilo dos fixtures */}
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-medium">Criar novo jogo</h2>
             {hasCreateErrors && (
               <span className="text-xs text-amber-300">
@@ -594,14 +612,14 @@ export default function AdminFixtures() {
             )}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-4">
-            {/* Competição */}
+          {/* Linha 1: Comp / Ronda / Mão / Status */}
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,1fr)]">
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
-                Competição *
+                Comp *
               </label>
               <select
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
                 value={newFx.competition_id ?? ''}
                 onChange={(e) =>
                   setNewFx((v) => ({ ...v, competition_id: e.target.value || '' }))
@@ -616,28 +634,29 @@ export default function AdminFixtures() {
               </select>
             </div>
 
-            {/* Ronda */}
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 Ronda (ex: J11) *
               </label>
               <input
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm uppercase"
+                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm uppercase"
                 maxLength={3}
                 value={newFx.round_label ?? ''}
                 onChange={(e) =>
-                  setNewFx((v) => ({ ...v, round_label: e.target.value.toUpperCase() }))
+                  setNewFx((v) => ({
+                    ...v,
+                    round_label: e.target.value.toUpperCase(),
+                  }))
                 }
               />
             </div>
 
-            {/* Mão */}
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 Mão
               </label>
               <select
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
                 value={newFx.leg_number ?? ''}
                 onChange={(e) =>
                   setNewFx((v) => ({
@@ -652,13 +671,12 @@ export default function AdminFixtures() {
               </select>
             </div>
 
-            {/* Status */}
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 Status
               </label>
               <select
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
                 value={newFx.status}
                 onChange={(e) =>
                   setNewFx((v) => ({
@@ -673,15 +691,15 @@ export default function AdminFixtures() {
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-4">
-            {/* Home com auto-complete */}
-            <div className="space-y-1 md:col-span-2">
+          {/* Linha 2: Equipas */}
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 Equipa da casa *
               </label>
               <input
                 list="teams-list"
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
                 placeholder="Começa a escrever..."
                 value={homeSearch}
                 onChange={(e) => {
@@ -694,15 +712,13 @@ export default function AdminFixtures() {
                 }}
               />
             </div>
-
-            {/* Away com auto-complete */}
-            <div className="space-y-1 md:col-span-2">
+            <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 Equipa visitante *
               </label>
               <input
                 list="teams-list"
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
                 placeholder="Começa a escrever..."
                 value={awaySearch}
                 onChange={(e) => {
@@ -717,39 +733,33 @@ export default function AdminFixtures() {
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] items-end">
-            {/* Data */}
+          {/* Linha 3: Kickoff + botão */}
+          <div className="flex flex-wrap items-end gap-3 justify-between">
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
-                Data (local) *
+                Kickoff (local) *
               </label>
-              <input
-                type="date"
-                className="w-40 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-sm"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  className="w-40 rounded-md border border-white/20 bg-white text-slate-900 px-2 py-1.5 text-sm"
+                  value={newDate}
+                  onChange={(e) => setNewDate(e.target.value)}
+                />
+                <input
+                  type="time"
+                  step={60}
+                  className="w-24 rounded-md border border-white/20 bg-white text-slate-900 px-2 py-1.5 text-sm"
+                  value={newTime}
+                  onChange={(e) => setNewTime(e.target.value)}
+                />
+              </div>
             </div>
 
-            {/* Hora */}
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Hora (local) *
-              </label>
-              <input
-                type="time"
-                step={60}
-                className="w-24 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-sm"
-                value={newTime}
-                onChange={(e) => setNewTime(e.target.value)}
-              />
-            </div>
-
-            {/* Botão criar */}
             <button
               onClick={() => void createFixture()}
               disabled={creating || hasCreateErrors}
-              className="mt-2 inline-flex items-center justify-center rounded-full bg-emerald-500/80 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-500"
+              className="inline-flex items-center justify-center rounded-full bg-emerald-500/85 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-500"
             >
               {creating ? 'A criar…' : 'Criar jogo'}
             </button>
@@ -760,12 +770,12 @@ export default function AdminFixtures() {
         <div className="flex flex-wrap items-center gap-2 bg-card/15 border border-white/10 rounded-2xl p-3">
           <Link
             href="/admin/teams"
-            className="rounded bg-white/10 px-3 py-2 hover:bg-white/15"
+            className="rounded bg-white/10 px-3 py-2 hover:bg-white/15 text-sm"
           >
             Equipas
           </Link>
           <select
-            className="rounded border border-white/10 bg-black/20 px-2 py-1"
+            className="rounded border border-white/10 bg-black/20 px-2 py-1 text-sm"
             value={compFilter}
             onChange={(e) => setCompFilter(e.target.value)}
             title="Filtrar por competição"
@@ -778,7 +788,7 @@ export default function AdminFixtures() {
             ))}
           </select>
           <select
-            className="rounded border border-white/10 bg-black/20 px-2 py-1"
+            className="rounded border border-white/10 bg-black/20 px-2 py-1 text-sm"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value.toUpperCase())}
             title="Filtrar por status"
@@ -787,15 +797,67 @@ export default function AdminFixtures() {
             <option value="SCHEDULED">SCHEDULED</option>
             <option value="FINISHED">FINISHED</option>
           </select>
+
+          {/* Controlo simples de ordenação */}
+          <div className="flex items-center gap-1 text-xs text-white/70 ml-1">
+            <span>Ordenar por:</span>
+            <button
+              type="button"
+              className={
+                'rounded-full px-2 py-1 hover:bg-white/10 ' +
+                (sortField === 'comp' ? 'bg-white/10' : '')
+              }
+              onClick={() => {
+                setSortField(() => 'comp');
+                setSortDir((d) =>
+                  sortField === 'comp' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
+                );
+              }}
+            >
+              Comp {sortField === 'comp' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+            </button>
+            <button
+              type="button"
+              className={
+                'rounded-full px-2 py-1 hover:bg-white/10 ' +
+                (sortField === 'ronda' ? 'bg-white/10' : '')
+              }
+              onClick={() => {
+                setSortField(() => 'ronda');
+                setSortDir((d) =>
+                  sortField === 'ronda' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
+                );
+              }}
+            >
+              Ronda {sortField === 'ronda' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+            </button>
+            <button
+              type="button"
+              className={
+                'rounded-full px-2 py-1 hover:bg-white/10 ' +
+                (sortField === 'kickoff' ? 'bg-white/10' : '')
+              }
+              onClick={() => {
+                setSortField(() => 'kickoff');
+                setSortDir((d) =>
+                  sortField === 'kickoff' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
+                );
+              }}
+            >
+              Kickoff{' '}
+              {sortField === 'kickoff' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+            </button>
+          </div>
+
           <div className="flex-1" />
           <input
-            className="rounded border border-white/10 bg-black/20 px-3 py-2 w-64"
+            className="rounded border border-white/10 bg-black/20 px-3 py-2 w-full max-w-xs text-sm"
             placeholder="Pesquisar equipa / id / ronda..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <button
-            className="rounded bg-white/10 px-3 py-2 hover:bg-white/15"
+            className="rounded bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
             onClick={() => {
               setQuery('');
               setCompFilter('');
@@ -809,466 +871,218 @@ export default function AdminFixtures() {
           </button>
         </div>
 
-        {/* Tabelas / Cards */}
+        {/* Lista de jogos em cards */}
         {loading ? (
           <div className="opacity-70">A carregar…</div>
         ) : (
-          <div className="space-y-2">
-            {/* DESKTOP: tabela */}
-            <div className="overflow-x-auto rounded-2xl border border-white/10 hidden md:block">
-              <table className="min-w-full text-sm">
-                <thead className="bg-white/5">
-                  <tr>
-                    <th className="p-2 text-left">
-                      <button
-                        className="hover:underline"
-                        onClick={() => {
-                          setSortField(() => 'comp');
-                          setSortDir((d) =>
-                            sortField === 'comp' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
-                          );
-                        }}
-                        title="Ordenar por competição"
-                      >
-                        Comp / Ronda / Mão{' '}
-                        {sortField === 'comp' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                      </button>
-                    </th>
-                    <th className="p-2 text-left">Equipas</th>
-                    <th className="p-2 text-left">
-                      <button
-                        className="hover:underline"
-                        onClick={() => {
-                          setSortField(() => 'kickoff');
-                          setSortDir((d) =>
-                            sortField === 'kickoff'
-                              ? d === 'asc'
-                                ? 'desc'
-                                : 'asc'
-                              : 'asc'
-                          );
-                        }}
-                        title="Ordenar por kickoff"
-                      >
-                        Kickoff (local){' '}
-                        {sortField === 'kickoff' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-                      </button>
-                    </th>
-                    <th className="p-2 text-left">Status / Resultado</th>
-                    <th className="p-2 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((f) => {
-                    const isFinished = f.status === 'FINISHED';
-                    const lockCls = isFinished ? 'opacity-60 cursor-not-allowed' : '';
-                    const resultOK =
-                      f._hs !== '' &&
-                      f._as !== '' &&
-                      !Number.isNaN(Number(f._hs)) &&
-                      !Number.isNaN(Number(f._as));
+          <div className="space-y-3">
+            {filtered.length === 0 && (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm opacity-70">
+                Sem jogos para mostrar.
+              </div>
+            )}
 
-                    const local = splitLocal(toLocalDTValue(f.kickoff_at));
+            {filtered.map((f) => {
+              const isFinished = f.status === 'FINISHED';
+              const lockCls = isFinished ? 'opacity-60 cursor-not-allowed' : '';
+              const resultOK =
+                f._hs !== '' &&
+                f._as !== '' &&
+                !Number.isNaN(Number(f._hs)) &&
+                !Number.isNaN(Number(f._as));
 
-                    return (
-                      <tr
-                        key={f.id}
-                        className="border-t border-white/10 hover:bg-white/5 align-top"
-                      >
-                        {/* Coluna 1: Comp / Ronda / Mão */}
-                        <td className="p-2 w-[220px]">
-                          <div className="space-y-1">
-                            <select
-                              className={`w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-xs ${lockCls}`}
-                              value={f.competition_id ?? ''}
-                              disabled={isFinished}
-                              onChange={(e) =>
-                                updateField(f.id, {
-                                  competition_id: e.target.value || null,
-                                })
-                              }
-                            >
-                              <option value="">—</option>
-                              {competitions.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.code}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="flex gap-1">
-                              <input
-                                className={`w-16 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs uppercase ${lockCls}`}
-                                defaultValue={f.round_label ?? ''}
-                                maxLength={3}
-                                disabled={isFinished}
-                                placeholder="J11"
-                                onBlur={(e) =>
-                                  updateField(f.id, {
-                                    round_label: e.target.value
-                                      ? e.target.value.toUpperCase().slice(0, 3)
-                                      : null,
-                                  })
-                                }
-                              />
-                              <select
-                                className={`w-16 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-center ${lockCls}`}
-                                value={f.leg_number ?? ''}
-                                disabled={isFinished}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  updateField(f.id, {
-                                    leg_number: v === '' ? null : Number(v),
-                                  });
-                                }}
-                              >
-                                <option value="">—</option>
-                                <option value="1">1ª</option>
-                                <option value="2">2ª</option>
-                              </select>
-                            </div>
-                          </div>
-                        </td>
+              const local = splitLocal(toLocalDTValue(f.kickoff_at));
 
-                        {/* Coluna 2: Equipas */}
-                        <td className="p-2 w-[260px]">
-                          <div className="space-y-1">
-                            <select
-                              className={`w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-xs ${lockCls}`}
-                              value={f.home_team_id}
-                              disabled={isFinished}
-                              onChange={(e) =>
-                                updateField(f.id, { home_team_id: e.target.value })
-                              }
-                            >
-                              {teams.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name}
-                                </option>
-                              ))}
-                            </select>
-                            <select
-                              className={`w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-xs ${lockCls}`}
-                              value={f.away_team_id}
-                              disabled={isFinished}
-                              onChange={(e) =>
-                                updateField(f.id, { away_team_id: e.target.value })
-                              }
-                            >
-                              {teams.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </td>
-
-                        {/* Coluna 3: Kickoff local */}
-                        <td className="p-2 w-[210px]">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="date"
-                              defaultValue={local.date}
-                              disabled={isFinished}
-                              className={`w-32 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-xs ${lockCls}`}
-                              onBlur={(e) => {
-                                const date = e.currentTarget.value || local.date;
-                                const time =
-                                  (
-                                    e.currentTarget.parentElement?.querySelector(
-                                      'input[type="time"]'
-                                    ) as HTMLInputElement
-                                  )?.value || local.time;
-                                const localDT = joinLocal(date, time);
-                                const utc = fromLocalDTValue(localDT);
-                                if (utc && utc !== f.kickoff_at)
-                                  updateField(f.id, { kickoff_at: utc });
-                              }}
-                            />
-                            <input
-                              type="time"
-                              step={60}
-                              defaultValue={local.time}
-                              disabled={isFinished}
-                              className={`w-20 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-xs ${lockCls}`}
-                              onBlur={(e) => {
-                                const time = e.currentTarget.value || local.time;
-                                const date =
-                                  (
-                                    e.currentTarget.parentElement?.querySelector(
-                                      'input[type="date"]'
-                                    ) as HTMLInputElement
-                                  )?.value || local.date;
-                                const localDT = joinLocal(date, time);
-                                const utc = fromLocalDTValue(localDT);
-                                if (utc && utc !== f.kickoff_at)
-                                  updateField(f.id, { kickoff_at: utc });
-                              }}
-                            />
-                          </div>
-                        </td>
-
-                        {/* Coluna 4: Status / Resultado */}
-                        <td className="p-2 w-[210px]">
-                          <div className="space-y-1">
-                            <select
-                              className={`w-full rounded border border-white/10 bg-black/20 px-2 py-1 text-xs ${
-                                isFinished ? 'opacity-60 cursor-not-allowed' : ''
-                              }`}
-                              value={f.status}
-                              disabled={isFinished}
-                              onChange={async (e) => {
-                                const v = e.target.value as Fx['status'];
-                                if (v === 'FINISHED') {
-                                  const hs = f._hs,
-                                    as = f._as;
-                                  if (!resultOK) {
-                                    e.currentTarget.value = f.status;
-                                    alert('Para fechar um jogo tens de preencher H e A.');
-                                    return;
-                                  }
-                                  await finishFixture(f.id, Number(hs), Number(as));
-                                  return;
-                                }
-                                await updateField(f.id, { status: v });
-                              }}
-                            >
-                              <option value="SCHEDULED">SCHEDULED</option>
-                              <option value="FINISHED">FINISHED</option>
-                            </select>
-                            <div className="flex items-center gap-1">
-                              <input
-                                className={`w-14 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-center ${lockCls}`}
-                                placeholder="H"
-                                defaultValue={f._hs === '' ? '' : String(f._hs ?? '')}
-                                disabled={isFinished}
-                                onChange={(e) => {
-                                  f._hs =
-                                    e.target.value === ''
-                                      ? ''
-                                      : Number(e.target.value);
-                                }}
-                                onBlur={async (e) => {
-                                  const v = e.target.value;
-                                  const val = v === '' ? null : Number(v);
-                                  if (val === null || Number.isNaN(val)) return;
-                                  await updateField(f.id, { home_score: val });
-                                }}
-                              />
-                              <span className="opacity-60 text-xs">–</span>
-                              <input
-                                className={`w-14 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-center ${lockCls}`}
-                                placeholder="A"
-                                defaultValue={f._as === '' ? '' : String(f._as ?? '')}
-                                disabled={isFinished}
-                                onChange={(e) => {
-                                  f._as =
-                                    e.target.value === ''
-                                      ? ''
-                                      : Number(e.target.value);
-                                }}
-                                onBlur={async (e) => {
-                                  const v = e.target.value;
-                                  const val = v === '' ? null : Number(v);
-                                  if (val === null || Number.isNaN(val)) return;
-                                  await updateField(f.id, { away_score: val });
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Coluna 5: Ações */}
-                        <td className="p-2 text-right w-[120px]">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              title="Reabrir"
-                              className={`rounded px-2 py-1 text-xs hover:bg-white/10 ${
-                                !isFinished ? 'opacity-40 cursor-not-allowed' : ''
-                              }`}
-                              disabled={!isFinished}
-                              onClick={() => reopenFixture(f.id)}
-                            >
-                              ↺
-                            </button>
-                            <button
-                              title="Apagar"
-                              className="rounded px-2 py-1 text-xs hover:bg-white/10"
-                              onClick={() => deleteFixture(f.id)}
-                            >
-                              🗑
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td className="p-4 opacity-60" colSpan={5}>
-                        Sem jogos para mostrar.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* MOBILE: cards */}
-            <div className="space-y-3 md:hidden">
-              {filtered.length === 0 && (
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm opacity-70">
-                  Sem jogos para mostrar.
-                </div>
-              )}
-
-              {filtered.map((f) => {
-                const isFinished = f.status === 'FINISHED';
-                const lockCls = isFinished ? 'opacity-60 cursor-not-allowed' : '';
-                const resultOK =
-                  f._hs !== '' &&
-                  f._as !== '' &&
-                  !Number.isNaN(Number(f._hs)) &&
-                  !Number.isNaN(Number(f._as));
-                const local = splitLocal(toLocalDTValue(f.kickoff_at));
-
-                return (
-                  <div
-                    key={f.id}
-                    className="rounded-2xl border border-white/10 bg-black/20 p-3 space-y-3"
-                  >
-                    {/* Linha topo: comp/ronda/mão + status */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex-1 space-y-1">
-                        <div className="flex gap-1">
-                          <select
-                            className={`flex-1 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs ${lockCls}`}
-                            value={f.competition_id ?? ''}
-                            disabled={isFinished}
-                            onChange={(e) =>
-                              updateField(f.id, {
-                                competition_id: e.target.value || null,
-                              })
-                            }
-                          >
-                            <option value="">Comp</option>
-                            {competitions.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.code}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            className={`w-14 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs uppercase ${lockCls}`}
-                            defaultValue={f.round_label ?? ''}
-                            maxLength={3}
-                            disabled={isFinished}
-                            placeholder="J11"
-                            onBlur={(e) =>
-                              updateField(f.id, {
-                                round_label: e.target.value
-                                  ? e.target.value.toUpperCase().slice(0, 3)
-                                  : null,
-                              })
-                            }
-                          />
-                          <select
-                            className={`w-14 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-center ${lockCls}`}
-                            value={f.leg_number ?? ''}
-                            disabled={isFinished}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              updateField(f.id, {
-                                leg_number: v === '' ? null : Number(v),
-                              });
-                            }}
-                          >
-                            <option value="">–</option>
-                            <option value="1">1ª</option>
-                            <option value="2">2ª</option>
-                          </select>
-                        </div>
+              return (
+                <div
+                  key={f.id}
+                  className="rounded-2xl border border-white/12 bg-black/25 p-4 space-y-3"
+                >
+                  {/* Linha 1 topo: comp / ronda / mão / status */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap gap-2">
+                      {/* Comp */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] uppercase tracking-wide opacity-70">
+                          Comp
+                        </label>
+                        <select
+                          className={`min-w-[72px] rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs ${lockCls}`}
+                          value={f.competition_id ?? ''}
+                          disabled={isFinished}
+                          onChange={(e) =>
+                            updateField(f.id, {
+                              competition_id: e.target.value || null,
+                            })
+                          }
+                        >
+                          <option value="">—</option>
+                          {competitions.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.code}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <select
-                        className={`w-28 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs ${
-                          isFinished ? 'opacity-60 cursor-not-allowed' : ''
-                        }`}
-                        value={f.status}
-                        disabled={isFinished}
-                        onChange={async (e) => {
-                          const v = e.target.value as Fx['status'];
-                          if (v === 'FINISHED') {
-                            const hs = f._hs,
-                              as = f._as;
-                            if (!resultOK) {
-                              e.currentTarget.value = f.status;
-                              alert('Para fechar um jogo tens de preencher H e A.');
+
+                      {/* Ronda */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] uppercase tracking-wide opacity-70">
+                          Ronda
+                        </label>
+                        <input
+                          className={`w-16 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs uppercase ${lockCls}`}
+                          defaultValue={f.round_label ?? ''}
+                          maxLength={3}
+                          disabled={isFinished}
+                          onBlur={(e) =>
+                            updateField(f.id, {
+                              round_label: e.target.value
+                                ? e.target.value.toUpperCase().slice(0, 3)
+                                : null,
+                            })
+                          }
+                        />
+                      </div>
+
+                      {/* Mão */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] uppercase tracking-wide opacity-70">
+                          Mão
+                        </label>
+                        <select
+                          className={`w-16 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-center ${lockCls}`}
+                          value={f.leg_number ?? ''}
+                          disabled={isFinished}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            updateField(f.id, {
+                              leg_number: v === '' ? null : Number(v),
+                            });
+                          }}
+                        >
+                          <option value="">—</option>
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex-1" />
+
+                    {/* Status + ações rápidas topo */}
+                    <div className="flex items-end gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] uppercase tracking-wide opacity-70">
+                          Status
+                        </label>
+                        <select
+                          className={`min-w-[130px] rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs ${
+                            isFinished ? 'opacity-60 cursor-not-allowed' : ''
+                          }`}
+                          value={f.status}
+                          disabled={isFinished}
+                          onChange={async (e) => {
+                            const v = e.target.value as Fx['status'];
+                            if (v === 'FINISHED') {
+                              const hs = f._hs,
+                                as = f._as;
+                              if (!resultOK) {
+                                e.currentTarget.value = f.status;
+                                alert(
+                                  'Para fechar um jogo tens de preencher H e A.'
+                                );
+                                return;
+                              }
+                              await finishFixture(f.id, Number(hs), Number(as));
                               return;
                             }
-                            await finishFixture(f.id, Number(hs), Number(as));
-                            return;
-                          }
-                          await updateField(f.id, { status: v });
-                        }}
+                            await updateField(f.id, { status: v });
+                          }}
+                        >
+                          <option value="SCHEDULED">SCHEDULED</option>
+                          <option value="FINISHED">FINISHED</option>
+                        </select>
+                      </div>
+
+                      {/* Botão reabrir + apagar */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          title="Reabrir"
+                          className={`rounded-full px-2 py-1 text-xs hover:bg-white/10 ${
+                            !isFinished ? 'opacity-40 cursor-not-allowed' : ''
+                          }`}
+                          disabled={!isFinished}
+                          onClick={() => reopenFixture(f.id)}
+                        >
+                          ↺
+                        </button>
+                        <button
+                          title="Apagar"
+                          className="rounded-full px-2 py-1 text-xs hover:bg-white/10"
+                          onClick={() => deleteFixture(f.id)}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Linha 2: equipas */}
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-70">
+                        Equipa da casa
+                      </label>
+                      <select
+                        className={`w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm ${lockCls}`}
+                        value={f.home_team_id}
+                        disabled={isFinished}
+                        onChange={(e) =>
+                          updateField(f.id, { home_team_id: e.target.value })
+                        }
                       >
-                        <option value="SCHEDULED">SCHEDULED</option>
-                        <option value="FINISHED">FINISHED</option>
+                        {teams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
-
-                    {/* Equipas */}
-                    <div className="space-y-2">
-                      <div className="space-y-1">
-                        <div className="text-[11px] uppercase tracking-wide opacity-60">
-                          Equipa da casa
-                        </div>
-                        <select
-                          className={`w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-xs ${lockCls}`}
-                          value={f.home_team_id}
-                          disabled={isFinished}
-                          onChange={(e) =>
-                            updateField(f.id, { home_team_id: e.target.value })
-                          }
-                        >
-                          {teams.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-[11px] uppercase tracking-wide opacity-60">
-                          Equipa visitante
-                        </div>
-                        <select
-                          className={`w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-xs ${lockCls}`}
-                          value={f.away_team_id}
-                          disabled={isFinished}
-                          onChange={(e) =>
-                            updateField(f.id, { away_team_id: e.target.value })
-                          }
-                        >
-                          {teams.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Data / hora */}
                     <div className="space-y-1">
-                      <div className="text-[11px] uppercase tracking-wide opacity-60">
+                      <label className="text-[11px] uppercase tracking-wide opacity-70">
+                        Equipa visitante
+                      </label>
+                      <select
+                        className={`w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm ${lockCls}`}
+                        value={f.away_team_id}
+                        disabled={isFinished}
+                        onChange={(e) =>
+                          updateField(f.id, { away_team_id: e.target.value })
+                        }
+                      >
+                        {teams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Linha 3: kickoff + resultado */}
+                  <div className="flex flex-wrap items-end gap-3 justify-between">
+                    {/* Kickoff */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-70">
                         Kickoff (local)
-                      </div>
-                      <div className="flex gap-2">
+                      </label>
+                      <div className="flex items-center gap-2">
                         <input
                           type="date"
                           defaultValue={local.date}
                           disabled={isFinished}
-                          className={`flex-1 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-xs ${lockCls}`}
+                          className={`w-40 rounded-md border border-white/20 bg-white text-slate-900 px-2 py-1.5 text-sm ${lockCls}`}
                           onBlur={(e) => {
                             const date = e.currentTarget.value || local.date;
                             const time =
@@ -1288,7 +1102,7 @@ export default function AdminFixtures() {
                           step={60}
                           defaultValue={local.time}
                           disabled={isFinished}
-                          className={`w-20 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-xs ${lockCls}`}
+                          className={`w-24 rounded-md border border-white/20 bg-white text-slate-900 px-2 py-1.5 text-sm ${lockCls}`}
                           onBlur={(e) => {
                             const time = e.currentTarget.value || local.time;
                             const date =
@@ -1306,11 +1120,14 @@ export default function AdminFixtures() {
                       </div>
                     </div>
 
-                    {/* Resultado + ações */}
-                    <div className="flex items-center justify-between gap-3">
+                    {/* Resultado */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-70">
+                        Resultado
+                      </label>
                       <div className="flex items-center gap-1">
                         <input
-                          className={`w-12 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-center ${lockCls}`}
+                          className={`w-14 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-center text-sm ${lockCls}`}
                           placeholder="H"
                           defaultValue={f._hs === '' ? '' : String(f._hs ?? '')}
                           disabled={isFinished}
@@ -1325,9 +1142,9 @@ export default function AdminFixtures() {
                             await updateField(f.id, { home_score: val });
                           }}
                         />
-                        <span className="opacity-60 text-xs">–</span>
+                        <span className="opacity-60 text-sm px-1">–</span>
                         <input
-                          className={`w-12 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-center ${lockCls}`}
+                          className={`w-14 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-center text-sm ${lockCls}`}
                           placeholder="A"
                           defaultValue={f._as === '' ? '' : String(f._as ?? '')}
                           disabled={isFinished}
@@ -1343,68 +1160,51 @@ export default function AdminFixtures() {
                           }}
                         />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          title="Reabrir"
-                          className={`rounded px-2 py-1 text-xs hover:bg-white/10 ${
-                            !isFinished ? 'opacity-40 cursor-not-allowed' : ''
-                          }`}
-                          disabled={!isFinished}
-                          onClick={() => reopenFixture(f.id)}
-                        >
-                          ↺
-                        </button>
-                        <button
-                          title="Apagar"
-                          className="rounded px-2 py-1 text-xs hover:bg-white/10"
-                          onClick={() => deleteFixture(f.id)}
-                        >
-                          🗑
-                        </button>
-                      </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
 
             {/* Paginação */}
-            <div className="flex items-center justify-end gap-2 mt-2">
-              <span className="opacity-70 text-sm">
-                Página {page} de {Math.max(1, Math.ceil(totalCount / pageSize))}
-              </span>
-              <button
-                className="rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                Anterior
-              </button>
-              <button
-                className="rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
-                onClick={() =>
-                  setPage((p) => (p * pageSize < totalCount ? p + 1 : p))
-                }
-                disabled={page * pageSize >= totalCount}
-              >
-                Seguinte
-              </button>
-              <select
-                className="rounded border border-white/10 bg-black/20 px-2 py-1"
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value) || 20);
-                  setPage(1);
-                }}
-                title="Itens por página"
-              >
-                {[10, 20, 50, 100].map((n) => (
-                  <option key={n} value={n}>
-                    {n}/pág
-                  </option>
-                ))}
-              </select>
-            </div>
+            {filtered.length > 0 && (
+              <div className="flex items-center justify-end gap-2 mt-2">
+                <span className="opacity-70 text-sm">
+                  Página {page} de {Math.max(1, Math.ceil(totalCount / pageSize))}
+                </span>
+                <button
+                  className="rounded bg-white/10 px-3 py-1 text-sm hover:bg-white/15 disabled:opacity-50"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                >
+                  Anterior
+                </button>
+                <button
+                  className="rounded bg-white/10 px-3 py-1 text-sm hover:bg-white/15 disabled:opacity-50"
+                  onClick={() =>
+                    setPage((p) => (p * pageSize < totalCount ? p + 1 : p))
+                  }
+                  disabled={page * pageSize >= totalCount}
+                >
+                  Seguinte
+                </button>
+                <select
+                  className="rounded border border-white/10 bg-black/20 px-2 py-1 text-sm"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value) || 20);
+                    setPage(1);
+                  }}
+                  title="Itens por página"
+                >
+                  {[10, 20, 50, 100].map((n) => (
+                    <option key={n} value={n}>
+                      {n}/pág
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
 

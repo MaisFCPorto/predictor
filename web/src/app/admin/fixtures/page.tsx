@@ -146,7 +146,6 @@ export default function AdminFixtures() {
   const [homeSearch, setHomeSearch] = useState('');
   const [awaySearch, setAwaySearch] = useState('');
 
-  // sincroniza texto das equipas com os IDs
   useEffect(() => {
     const homeName = teams.find((t) => t.id === newFx.home_team_id)?.name ?? '';
     const awayName = teams.find((t) => t.id === newFx.away_team_id)?.name ?? '';
@@ -154,7 +153,7 @@ export default function AdminFixtures() {
     setAwaySearch(awayName);
   }, [teams, newFx.home_team_id, newFx.away_team_id]);
 
-  // validação: tudo obrigatório excepto Mão
+  // validação
   const createErrors = useMemo(() => {
     const errs: Record<string, string | null> = {};
     errs.comp = newFx.competition_id ? null : 'Obrigatório';
@@ -726,7 +725,7 @@ export default function AdminFixtures() {
               </label>
               <input
                 type="date"
-                className="w-40 rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                className="w-40 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-sm"
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
               />
@@ -740,7 +739,7 @@ export default function AdminFixtures() {
               <input
                 type="time"
                 step={60}
-                className="w-24 rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                className="w-24 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-sm"
                 value={newTime}
                 onChange={(e) => setNewTime(e.target.value)}
               />
@@ -815,7 +814,7 @@ export default function AdminFixtures() {
           <div className="opacity-70">A carregar…</div>
         ) : (
           <div className="space-y-2">
-            <div className="overflow-x-auto rounded-2xl border border-white/10">
+            <div className="rounded-2xl border border-white/10">
               <table className="min-w-full text-sm">
                 <thead className="bg-white/5">
                   <tr>
@@ -978,14 +977,14 @@ export default function AdminFixtures() {
                           </select>
                         </td>
 
-                        {/* Kickoff – só inputs, mais largos */}
+                        {/* Kickoff – inputs claros */}
                         <td className="p-2">
                           <div className="flex items-center gap-2">
                             <input
                               type="date"
                               defaultValue={local.date}
                               disabled={isFinished}
-                              className={`w-40 rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
+                              className={`w-40 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 ${lockCls}`}
                               onBlur={(e) => {
                                 const date = e.currentTarget.value || local.date;
                                 const time =
@@ -1005,7 +1004,7 @@ export default function AdminFixtures() {
                               step={60}
                               defaultValue={local.time}
                               disabled={isFinished}
-                              className={`w-24 rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
+                              className={`w-24 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 ${lockCls}`}
                               onBlur={(e) => {
                                 const time = e.currentTarget.value || local.time;
                                 const date =

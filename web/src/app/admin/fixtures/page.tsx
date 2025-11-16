@@ -5,16 +5,8 @@ import axios, { AxiosError } from 'axios';
 import AdminGate from '../_components/AdminGate';
 import Link from 'next/link';
 
-/**
- * IMPORTANTE
- * ----------
- * Este cliente usa apenas rotas relativas do Next:
- *   /api/admin/fixtures, /api/admin/teams, /api/admin/competitions, ...
- * O nosso proxy (no servidor do Next) acrescenta a X-Admin-Key e fala com o Worker.
- * Não uses NEXT_PUBLIC_ADMIN_KEY aqui (nunca exponhas a secret no browser).
- */
 const adm = axios.create({
-  baseURL: '', // relativo ao mesmo host
+  baseURL: '',
 });
 
 adm.interceptors.response.use(
@@ -41,8 +33,8 @@ type PortoAPIMatch = {
 
 type Fx = {
   id: string;
-  competition_id?: string | null; // <- ID (UUID) da competition
-  competition_code?: string | null; // <- pode vir da API (fallback)
+  competition_id?: string | null;
+  competition_code?: string | null;
   round_label?: string | null;
   leg_number?: number | null | '';
   home_team_id: string;
@@ -92,24 +84,6 @@ function joinLocal(date: string, time: string) {
   return `${date}T${time}`;
 }
 
-// Data/hora legível tipo: "domingo, 9 de fevereiro · 18:00"
-function formatReadableLocal(isoOrSqlUTC: string) {
-  if (!isoOrSqlUTC) return '—';
-  const asISO = isoOrSqlUTC.includes('T')
-    ? isoOrSqlUTC
-    : isoOrSqlUTC.replace(' ', 'T') + 'Z';
-  const d = new Date(asISO);
-  if (Number.isNaN(d.getTime())) return '—';
-
-  const weekday = d.toLocaleDateString('pt-PT', { weekday: 'long' }); // já vem em minúsculas
-  const day = d.getDate(); // sem zero à esquerda
-  const month = d.toLocaleDateString('pt-PT', { month: 'long' });
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-
-  return `${weekday}, ${day} de ${month} · ${hh}:${mi}`;
-}
-
 /* -------------------- Utils mensagens/erros -------------------- */
 function errorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
@@ -129,7 +103,7 @@ export default function AdminFixtures() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [compFilter, setCompFilter] = useState<string>(''); // competition code filter
+  const [compFilter, setCompFilter] = useState<string>('');
   const [sortField, setSortField] = useState<'comp' | 'ronda' | 'kickoff' | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
@@ -147,7 +121,7 @@ export default function AdminFixtures() {
 
   const [creating, setCreating] = useState(false);
   const [newFx, setNewFx] = useState<{
-    competition_id?: string | null; // <- guarda o ID (não o code)
+    competition_id?: string | null;
     round_label?: string | null;
     leg_number?: number | null;
     home_team_id: string;
@@ -164,32 +138,30 @@ export default function AdminFixtures() {
     status: 'SCHEDULED',
   });
 
+  // estados separados para data/hora do "Criar novo jogo"
+  const [newDate, setNewDate] = useState('');
+  const [newTime, setNewTime] = useState('21:00');
+
   // texto dos campos com auto-complete
   const [homeSearch, setHomeSearch] = useState('');
   const [awaySearch, setAwaySearch] = useState('');
 
-  // sincroniza texto dos campos com o ID atual (+ equipas carregadas)
+  // sincroniza texto das equipas com os IDs
   useEffect(() => {
-    const homeName =
-      teams.find((t) => t.id === newFx.home_team_id)?.name ?? '';
-    const awayName =
-      teams.find((t) => t.id === newFx.away_team_id)?.name ?? '';
+    const homeName = teams.find((t) => t.id === newFx.home_team_id)?.name ?? '';
+    const awayName = teams.find((t) => t.id === newFx.away_team_id)?.name ?? '';
     setHomeSearch(homeName);
     setAwaySearch(awayName);
   }, [teams, newFx.home_team_id, newFx.away_team_id]);
 
-  // validação: tudo obrigatório excepto Mão (leg_number)
+  // validação: tudo obrigatório excepto Mão
   const createErrors = useMemo(() => {
     const errs: Record<string, string | null> = {};
     errs.comp = newFx.competition_id ? null : 'Obrigatório';
     errs.ronda = newFx.round_label ? null : 'Obrigatório';
     errs.home = newFx.home_team_id ? null : 'Obrigatório';
     errs.away = newFx.away_team_id ? null : 'Obrigatório';
-    if (
-      newFx.home_team_id &&
-      newFx.away_team_id &&
-      newFx.home_team_id === newFx.away_team_id
-    ) {
+    if (newFx.home_team_id && newFx.away_team_id && newFx.home_team_id === newFx.away_team_id) {
       errs.away = 'Equipas não podem ser iguais';
     }
     errs.ko = newFx.kickoff_local ? null : 'Obrigatório';
@@ -200,19 +172,24 @@ export default function AdminFixtures() {
     [createErrors]
   );
 
-  // valor inicial: hoje às 21:00
+  // inicializar data/hora do novo jogo
   useEffect(() => {
-    if (!newFx.kickoff_local) {
+    if (!newDate || !newTime) {
       const now = new Date();
       const yyyy = now.getFullYear();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
-      setNewFx((v) => ({
-        ...v,
-        kickoff_local: `${yyyy}-${mm}-${dd}T21:00`,
-      }));
+      setNewDate(`${yyyy}-${mm}-${dd}`);
+      setNewTime('21:00');
     }
-  }, [newFx.kickoff_local]);
+  }, [newDate, newTime]);
+
+  // sempre que newDate/newTime mudam, atualiza kickoff_local
+  useEffect(() => {
+    if (!newDate || !newTime) return;
+    const local = joinLocal(newDate, newTime);
+    setNewFx((v) => ({ ...v, kickoff_local: local }));
+  }, [newDate, newTime]);
 
   const notify = (m: string) => {
     setMsg(m);
@@ -229,10 +206,9 @@ export default function AdminFixtures() {
 
   async function loadCompetitions() {
     try {
-      const { data } = await adm.get<Competition[]>(
-        '/api/admin/competitions',
-        { headers: { 'cache-control': 'no-store' } }
-      );
+      const { data } = await adm.get<Competition[]>('/api/admin/competitions', {
+        headers: { 'cache-control': 'no-store' },
+      });
       setCompetitions(data ?? []);
     } catch {
       setCompetitions([]);
@@ -246,21 +222,16 @@ export default function AdminFixtures() {
         headers: { 'cache-control': 'no-store' },
       });
 
-      // garante array
       const arr: any[] = Array.isArray(data) ? data : [];
       if (!Array.isArray(data)) {
         console.warn('Expected array from /api/admin/fixtures, got:', data);
-        if (data?.error) {
-          throw new Error(data.error);
-        }
+        if (data?.error) throw new Error(data.error);
       }
 
-      // mapa code -> id para fallback
       const byCode = new Map(competitions.map((c) => [c.code, c.id]));
 
       const list: Fx[] = arr.map((x: any) => ({
         ...x,
-        // se a API devolver competition_code, converte para competition_id (id)
         competition_id:
           x.competition_id ??
           (x.competition_code ? byCode.get(x.competition_code) ?? null : null),
@@ -300,7 +271,6 @@ export default function AdminFixtures() {
           comp: m.competition?.code,
           round: m.matchday != null ? String(m.matchday) : undefined,
         }))
-        // exclui jogos sem data/equipas e jogos com hora exatamente 00:00:00
         .filter((m) => {
           if (!m.utcDate || !m.home || !m.away) return false;
           const d = new Date(m.utcDate);
@@ -311,8 +281,7 @@ export default function AdminFixtures() {
           );
         })
         .sort(
-          (a, b) =>
-            new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
+          (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
         )
         .slice(0, 4);
       setPortoSuggest(items);
@@ -395,16 +364,12 @@ export default function AdminFixtures() {
       if (!kickoff_local) throw new Error('Kickoff em falta.');
 
       const kickoff_at = fromLocalDTValue(kickoff_local);
-
-      // 👇 Enquanto a API exige matchday_id, envia md1 por defeito
       const matchday_id = 'md1';
 
       await adm.post('/api/admin/fixtures', {
         matchday_id,
-        competition_id: competition_id || null, // <- ENVIA O ID
-        round_label: round_label
-          ? round_label.toUpperCase().slice(0, 3)
-          : null,
+        competition_id: competition_id || null,
+        round_label: round_label ? round_label.toUpperCase().slice(0, 3) : null,
         leg_number: leg_number ? Number(leg_number) : null,
         home_team_id,
         away_team_id,
@@ -424,6 +389,12 @@ export default function AdminFixtures() {
       });
       setHomeSearch('');
       setAwaySearch('');
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      setNewDate(`${yyyy}-${mm}-${dd}`);
+      setNewTime('21:00');
       await loadFixtures();
     } catch (e: unknown) {
       alert(errorMessage(e) || 'Falha a criar jogo');
@@ -546,44 +517,39 @@ export default function AdminFixtures() {
   }) {
     const home_team_id = findTeamIdByName(s.home);
     const away_team_id = findTeamIdByName(s.away);
-    const kickoff_local = toLocalDTValue(s.utcDate);
+    const kickoff_local_iso = toLocalDTValue(s.utcDate);
+    const { date, time } = splitLocal(kickoff_local_iso);
     setNewFx((v) => ({
       ...v,
       competition_id: competitions.find((c) => c.code === 'LP')?.id || '',
-      round_label: s.round
-        ? `J${String(s.round)}`.toUpperCase().slice(0, 3)
-        : '',
+      round_label: s.round ? `J${String(s.round)}`.toUpperCase().slice(0, 3) : '',
       leg_number: null,
       home_team_id,
       away_team_id,
-      kickoff_local,
+      kickoff_local: kickoff_local_iso,
       status: 'SCHEDULED',
     }));
     setHomeSearch(s.home);
     setAwaySearch(s.away);
+    setNewDate(date);
+    setNewTime(time || '21:00');
   }
 
-  const newLocal = splitLocal(newFx.kickoff_local || '');
-
-  /* -------------------- Render -------------------- */
   return (
     <AdminGate>
       <main className="max-w-6xl mx-auto p-6 space-y-4">
         <h1 className="text-2xl font-semibold">Backoffice — Jogos</h1>
 
-        {/* datalist global para auto-complete das equipas */}
         <datalist id="teams-list">
           {teams.map((t) => (
             <option key={t.id} value={t.name} />
           ))}
         </datalist>
 
-        {/* Sugestões próximos jogos do FC Porto */}
+        {/* Sugestões */}
         <div className="rounded-2xl border border-white/10 p-3">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg">
-              Sugestões — Próximos jogos do FC Porto
-            </h2>
+            <h2 className="text-lg">Sugestões — Próximos jogos do FC Porto</h2>
             <button
               className="rounded bg-white/10 px-2 py-1 hover:bg-white/15"
               onClick={() => void loadPortoSuggestions()}
@@ -604,11 +570,6 @@ export default function AdminFixtures() {
                   <div className="space-y-0.5">
                     <div className="font-medium">
                       {s.home} vs {s.away}
-                    </div>
-                    <div className="text-xs opacity-70">
-                      {formatReadableLocal(s.utcDate)}{' '}
-                      {s.comp ? `· ${s.comp}` : ''}{' '}
-                      {s.round ? `· MD ${s.round}` : ''}
                     </div>
                   </div>
                   <button
@@ -644,10 +605,7 @@ export default function AdminFixtures() {
                 className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
                 value={newFx.competition_id ?? ''}
                 onChange={(e) =>
-                  setNewFx((v) => ({
-                    ...v,
-                    competition_id: e.target.value || '',
-                  }))
+                  setNewFx((v) => ({ ...v, competition_id: e.target.value || '' }))
                 }
               >
                 <option value="">Selecionar…</option>
@@ -669,10 +627,7 @@ export default function AdminFixtures() {
                 maxLength={3}
                 value={newFx.round_label ?? ''}
                 onChange={(e) =>
-                  setNewFx((v) => ({
-                    ...v,
-                    round_label: e.target.value.toUpperCase(),
-                  }))
+                  setNewFx((v) => ({ ...v, round_label: e.target.value.toUpperCase() }))
                 }
               />
             </div>
@@ -688,10 +643,7 @@ export default function AdminFixtures() {
                 onChange={(e) =>
                   setNewFx((v) => ({
                     ...v,
-                    leg_number:
-                      e.target.value === ''
-                        ? null
-                        : Number(e.target.value),
+                    leg_number: e.target.value === '' ? null : Number(e.target.value),
                   }))
                 }
               >
@@ -737,13 +689,9 @@ export default function AdminFixtures() {
                   const val = e.target.value;
                   setHomeSearch(val);
                   const t = teams.find(
-                    (tm) =>
-                      tm.name.toLowerCase() === val.toLowerCase()
+                    (tm) => tm.name.toLowerCase() === val.toLowerCase()
                   );
-                  setNewFx((v) => ({
-                    ...v,
-                    home_team_id: t?.id ?? '',
-                  }));
+                  setNewFx((v) => ({ ...v, home_team_id: t?.id ?? '' }));
                 }}
               />
             </div>
@@ -762,13 +710,9 @@ export default function AdminFixtures() {
                   const val = e.target.value;
                   setAwaySearch(val);
                   const t = teams.find(
-                    (tm) =>
-                      tm.name.toLowerCase() === val.toLowerCase()
+                    (tm) => tm.name.toLowerCase() === val.toLowerCase()
                   );
-                  setNewFx((v) => ({
-                    ...v,
-                    away_team_id: t?.id ?? '',
-                  }));
+                  setNewFx((v) => ({ ...v, away_team_id: t?.id ?? '' }));
                 }}
               />
             </div>
@@ -782,14 +726,9 @@ export default function AdminFixtures() {
               </label>
               <input
                 type="date"
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
-                value={newLocal.date}
-                onChange={(e) => {
-                  const date = e.target.value;
-                  const time = newLocal.time || '21:00';
-                  const local = joinLocal(date, time);
-                  setNewFx((v) => ({ ...v, kickoff_local: local }));
-                }}
+                className="w-40 rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
               />
             </div>
 
@@ -801,16 +740,9 @@ export default function AdminFixtures() {
               <input
                 type="time"
                 step={60}
-                className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
-                value={newLocal.time}
-                onChange={(e) => {
-                  const time = e.target.value;
-                  const date =
-                    newLocal.date ||
-                    new Date().toISOString().slice(0, 10);
-                  const local = joinLocal(date, time);
-                  setNewFx((v) => ({ ...v, kickoff_local: local }));
-                }}
+                className="w-24 rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
+                value={newTime}
+                onChange={(e) => setNewTime(e.target.value)}
               />
             </div>
 
@@ -840,20 +772,16 @@ export default function AdminFixtures() {
             title="Filtrar por competição"
           >
             <option value="">Todas as competições</option>
-            {Array.from(new Set(competitions.map((c) => c.code))).map(
-              (code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              )
-            )}
+            {Array.from(new Set(competitions.map((c) => c.code))).map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
           </select>
           <select
             className="rounded border border-white/10 bg-black/20 px-2 py-1"
             value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value.toUpperCase())
-            }
+            onChange={(e) => setStatusFilter(e.target.value.toUpperCase())}
             title="Filtrar por status"
           >
             <option value="">Todos os status</option>
@@ -897,21 +825,12 @@ export default function AdminFixtures() {
                         onClick={() => {
                           setSortField(() => 'comp');
                           setSortDir((d) =>
-                            sortField === 'comp'
-                              ? d === 'asc'
-                                ? 'desc'
-                                : 'asc'
-                              : 'asc'
+                            sortField === 'comp' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
                           );
                         }}
                         title="Ordenar por competição"
                       >
-                        Comp{' '}
-                        {sortField === 'comp'
-                          ? sortDir === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : ''}
+                        Comp {sortField === 'comp' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </button>
                     </th>
                     <th className="p-2 text-left">
@@ -920,21 +839,12 @@ export default function AdminFixtures() {
                         onClick={() => {
                           setSortField(() => 'ronda');
                           setSortDir((d) =>
-                            sortField === 'ronda'
-                              ? d === 'asc'
-                                ? 'desc'
-                                : 'asc'
-                              : 'asc'
+                            sortField === 'ronda' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
                           );
                         }}
                         title="Ordenar por ronda"
                       >
-                        Ronda{' '}
-                        {sortField === 'ronda'
-                          ? sortDir === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : ''}
+                        Ronda {sortField === 'ronda' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </button>
                     </th>
                     <th className="p-2 text-left">Mão</th>
@@ -946,21 +856,13 @@ export default function AdminFixtures() {
                         onClick={() => {
                           setSortField(() => 'kickoff');
                           setSortDir((d) =>
-                            sortField === 'kickoff'
-                              ? d === 'asc'
-                                ? 'desc'
-                                : 'asc'
-                              : 'asc'
+                            sortField === 'kickoff' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
                           );
                         }}
                         title="Ordenar por kickoff"
                       >
                         Kickoff (local){' '}
-                        {sortField === 'kickoff'
-                          ? sortDir === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : ''}
+                        {sortField === 'kickoff' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                       </button>
                     </th>
                     <th className="p-2 text-left">Status</th>
@@ -971,9 +873,7 @@ export default function AdminFixtures() {
                 <tbody>
                   {filtered.map((f) => {
                     const isFinished = f.status === 'FINISHED';
-                    const lockCls = isFinished
-                      ? 'opacity-60 cursor-not-allowed'
-                      : '';
+                    const lockCls = isFinished ? 'opacity-60 cursor-not-allowed' : '';
                     const resultOK =
                       f._hs !== '' &&
                       f._as !== '' &&
@@ -994,9 +894,7 @@ export default function AdminFixtures() {
                             value={f.competition_id ?? ''}
                             disabled={isFinished}
                             onChange={(e) =>
-                              updateField(f.id, {
-                                competition_id: e.target.value || null,
-                              })
+                              updateField(f.id, { competition_id: e.target.value || null })
                             }
                           >
                             <option value="">—</option>
@@ -1018,9 +916,7 @@ export default function AdminFixtures() {
                             onBlur={(e) =>
                               updateField(f.id, {
                                 round_label: e.target.value
-                                  ? e.target.value
-                                      .toUpperCase()
-                                      .slice(0, 3)
+                                  ? e.target.value.toUpperCase().slice(0, 3)
                                   : null,
                               })
                             }
@@ -1036,8 +932,7 @@ export default function AdminFixtures() {
                             onChange={(e) => {
                               const v = e.target.value;
                               updateField(f.id, {
-                                leg_number:
-                                  v === '' ? null : Number(v),
+                                leg_number: v === '' ? null : Number(v),
                               });
                             }}
                           >
@@ -1054,9 +949,7 @@ export default function AdminFixtures() {
                             value={f.home_team_id}
                             disabled={isFinished}
                             onChange={(e) =>
-                              updateField(f.id, {
-                                home_team_id: e.target.value,
-                              })
+                              updateField(f.id, { home_team_id: e.target.value })
                             }
                           >
                             {teams.map((t) => (
@@ -1074,9 +967,7 @@ export default function AdminFixtures() {
                             value={f.away_team_id}
                             disabled={isFinished}
                             onChange={(e) =>
-                              updateField(f.id, {
-                                away_team_id: e.target.value,
-                              })
+                              updateField(f.id, { away_team_id: e.target.value })
                             }
                           >
                             {teams.map((t) => (
@@ -1087,71 +978,48 @@ export default function AdminFixtures() {
                           </select>
                         </td>
 
-                        {/* Kickoff – linha legível + inputs */}
-                        <td className="p-2 align-top">
-                          <div className="flex flex-col gap-1">
-                            <div className="text-[11px] text-white/60">
-                              {formatReadableLocal(f.kickoff_at)}
-                            </div>
-                            <div className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-2 gap-2 items-center">
-                              <input
-                                type="date"
-                                defaultValue={local.date}
-                                disabled={isFinished}
-                                className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                                onBlur={(e) => {
-                                  const date =
-                                    e.currentTarget.value ||
-                                    local.date;
-                                  const time =
-                                    (
-                                      e.currentTarget.parentElement?.querySelector(
-                                        'input[type="time"]'
-                                      ) as HTMLInputElement
-                                    )?.value || local.time;
-                                  const localDT =
-                                    joinLocal(date, time);
-                                  const utc =
-                                    fromLocalDTValue(localDT);
-                                  if (
-                                    utc &&
-                                    utc !== f.kickoff_at
-                                  )
-                                    updateField(f.id, {
-                                      kickoff_at: utc,
-                                    });
-                                }}
-                              />
-                              <input
-                                type="time"
-                                step={60}
-                                defaultValue={local.time}
-                                disabled={isFinished}
-                                className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                                onBlur={(e) => {
-                                  const time =
-                                    e.currentTarget.value ||
-                                    local.time;
-                                  const date =
-                                    (
-                                      e.currentTarget.parentElement?.querySelector(
-                                        'input[type="date"]'
-                                      ) as HTMLInputElement
-                                    )?.value || local.date;
-                                  const localDT =
-                                    joinLocal(date, time);
-                                  const utc =
-                                    fromLocalDTValue(localDT);
-                                  if (
-                                    utc &&
-                                    utc !== f.kickoff_at
-                                  )
-                                    updateField(f.id, {
-                                      kickoff_at: utc,
-                                    });
-                                }}
-                              />
-                            </div>
+                        {/* Kickoff – só inputs, mais largos */}
+                        <td className="p-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="date"
+                              defaultValue={local.date}
+                              disabled={isFinished}
+                              className={`w-40 rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
+                              onBlur={(e) => {
+                                const date = e.currentTarget.value || local.date;
+                                const time =
+                                  (
+                                    e.currentTarget.parentElement?.querySelector(
+                                      'input[type="time"]'
+                                    ) as HTMLInputElement
+                                  )?.value || local.time;
+                                const localDT = joinLocal(date, time);
+                                const utc = fromLocalDTValue(localDT);
+                                if (utc && utc !== f.kickoff_at)
+                                  updateField(f.id, { kickoff_at: utc });
+                              }}
+                            />
+                            <input
+                              type="time"
+                              step={60}
+                              defaultValue={local.time}
+                              disabled={isFinished}
+                              className={`w-24 rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
+                              onBlur={(e) => {
+                                const time = e.currentTarget.value || local.time;
+                                const date =
+                                  (
+                                    e.currentTarget.parentElement?.querySelector(
+                                      'input[type="date"]'
+                                    ) as HTMLInputElement
+                                  )?.value || local.date;
+                                const localDT = joinLocal(date, time);
+                                const utc = fromLocalDTValue(localDT);
+                                if (utc && utc !== f.kickoff_at)
+                                  updateField(f.id, { kickoff_at: utc });
+                              }}
+                            />
                           </div>
                         </td>
 
@@ -1159,44 +1027,28 @@ export default function AdminFixtures() {
                         <td className="p-2">
                           <select
                             className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${
-                              isFinished
-                                ? 'opacity-60 cursor-not-allowed'
-                                : ''
+                              isFinished ? 'opacity-60 cursor-not-allowed' : ''
                             }`}
                             value={f.status}
                             disabled={isFinished}
                             onChange={async (e) => {
-                              const v =
-                                e.target.value as Fx['status'];
+                              const v = e.target.value as Fx['status'];
                               if (v === 'FINISHED') {
                                 const hs = f._hs,
                                   as = f._as;
                                 if (!resultOK) {
-                                  e.currentTarget.value =
-                                    f.status;
-                                  alert(
-                                    'Para fechar um jogo tens de preencher H e A.'
-                                  );
+                                  e.currentTarget.value = f.status;
+                                  alert('Para fechar um jogo tens de preencher H e A.');
                                   return;
                                 }
-                                await finishFixture(
-                                  f.id,
-                                  Number(hs),
-                                  Number(as)
-                                );
+                                await finishFixture(f.id, Number(hs), Number(as));
                                 return;
                               }
-                              await updateField(f.id, {
-                                status: v,
-                              });
+                              await updateField(f.id, { status: v });
                             }}
                           >
-                            <option value="SCHEDULED">
-                              SCHEDULED
-                            </option>
-                            <option value="FINISHED">
-                              FINISHED
-                            </option>
+                            <option value="SCHEDULED">SCHEDULED</option>
+                            <option value="FINISHED">FINISHED</option>
                           </select>
                         </td>
 
@@ -1206,66 +1058,34 @@ export default function AdminFixtures() {
                             <input
                               className={`w-14 rounded border border-white/10 bg-black/20 px-2 py-1 text-center ${lockCls}`}
                               placeholder="H"
-                              defaultValue={
-                                f._hs === ''
-                                  ? ''
-                                  : String(f._hs ?? '')
-                              }
+                              defaultValue={f._hs === '' ? '' : String(f._hs ?? '')}
                               disabled={isFinished}
                               onChange={(e) => {
                                 f._hs =
-                                  e.target.value === ''
-                                    ? ''
-                                    : Number(e.target.value);
+                                  e.target.value === '' ? '' : Number(e.target.value);
                               }}
                               onBlur={async (e) => {
                                 const v = e.target.value;
-                                const val =
-                                  v === ''
-                                    ? null
-                                    : Number(v);
-                                if (
-                                  val === null ||
-                                  Number.isNaN(val)
-                                )
-                                  return;
-                                await updateField(f.id, {
-                                  home_score: val,
-                                });
+                                const val = v === '' ? null : Number(v);
+                                if (val === null || Number.isNaN(val)) return;
+                                await updateField(f.id, { home_score: val });
                               }}
                             />
-                            <span className="opacity-60">
-                              –
-                            </span>
+                            <span className="opacity-60">–</span>
                             <input
                               className={`w-14 rounded border border-white/10 bg-black/20 px-2 py-1 text-center ${lockCls}`}
                               placeholder="A"
-                              defaultValue={
-                                f._as === ''
-                                  ? ''
-                                  : String(f._as ?? '')
-                              }
+                              defaultValue={f._as === '' ? '' : String(f._as ?? '')}
                               disabled={isFinished}
                               onChange={(e) => {
                                 f._as =
-                                  e.target.value === ''
-                                    ? ''
-                                    : Number(e.target.value);
+                                  e.target.value === '' ? '' : Number(e.target.value);
                               }}
                               onBlur={async (e) => {
                                 const v = e.target.value;
-                                const val =
-                                  v === ''
-                                    ? null
-                                    : Number(v);
-                                if (
-                                  val === null ||
-                                  Number.isNaN(val)
-                                )
-                                  return;
-                                await updateField(f.id, {
-                                  away_score: val,
-                                });
+                                const val = v === '' ? null : Number(v);
+                                if (val === null || Number.isNaN(val)) return;
+                                await updateField(f.id, { away_score: val });
                               }}
                             />
                           </div>
@@ -1277,23 +1097,17 @@ export default function AdminFixtures() {
                             <button
                               title="Reabrir"
                               className={`rounded px-2 py-1 hover:bg-white/10 ${
-                                !isFinished
-                                  ? 'opacity-40 cursor-not-allowed'
-                                  : ''
+                                !isFinished ? 'opacity-40 cursor-not-allowed' : ''
                               }`}
                               disabled={!isFinished}
-                              onClick={() =>
-                                reopenFixture(f.id)
-                              }
+                              onClick={() => reopenFixture(f.id)}
                             >
                               ↺
                             </button>
                             <button
                               title="Apagar"
                               className="rounded px-2 py-1 hover:bg-white/10"
-                              onClick={() =>
-                                deleteFixture(f.id)
-                              }
+                              onClick={() => deleteFixture(f.id)}
                             >
                               🗑
                             </button>
@@ -1304,10 +1118,7 @@ export default function AdminFixtures() {
                   })}
                   {filtered.length === 0 && (
                     <tr>
-                      <td
-                        className="p-4 opacity-60"
-                        colSpan={9}
-                      >
+                      <td className="p-4 opacity-60" colSpan={9}>
                         Sem jogos para mostrar.
                       </td>
                     </tr>
@@ -1319,17 +1130,11 @@ export default function AdminFixtures() {
             {/* Paginação */}
             <div className="flex items-center justify-end gap-2 mt-2">
               <span className="opacity-70 text-sm">
-                Página {page} de{' '}
-                {Math.max(
-                  1,
-                  Math.ceil(totalCount / pageSize)
-                )}
+                Página {page} de {Math.max(1, Math.ceil(totalCount / pageSize))}
               </span>
               <button
                 className="rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
-                onClick={() =>
-                  setPage((p) => Math.max(1, p - 1))
-                }
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
               >
                 Anterior
@@ -1337,9 +1142,7 @@ export default function AdminFixtures() {
               <button
                 className="rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
                 onClick={() =>
-                  setPage((p) =>
-                    p * pageSize < totalCount ? p + 1 : p
-                  )
+                  setPage((p) => (p * pageSize < totalCount ? p + 1 : p))
                 }
                 disabled={page * pageSize >= totalCount}
               >

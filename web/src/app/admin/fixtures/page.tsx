@@ -809,12 +809,13 @@ export default function AdminFixtures() {
           </button>
         </div>
 
-        {/* Tabela */}
+        {/* Tabelas / Cards */}
         {loading ? (
           <div className="opacity-70">A carregar…</div>
         ) : (
           <div className="space-y-2">
-            <div className="overflow-x-auto rounded-2xl border border-white/10">
+            {/* DESKTOP: tabela */}
+            <div className="overflow-x-auto rounded-2xl border border-white/10 hidden md:block">
               <table className="min-w-full text-sm">
                 <thead className="bg-white/5">
                   <tr>
@@ -1111,6 +1112,260 @@ export default function AdminFixtures() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* MOBILE: cards */}
+            <div className="space-y-3 md:hidden">
+              {filtered.length === 0 && (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm opacity-70">
+                  Sem jogos para mostrar.
+                </div>
+              )}
+
+              {filtered.map((f) => {
+                const isFinished = f.status === 'FINISHED';
+                const lockCls = isFinished ? 'opacity-60 cursor-not-allowed' : '';
+                const resultOK =
+                  f._hs !== '' &&
+                  f._as !== '' &&
+                  !Number.isNaN(Number(f._hs)) &&
+                  !Number.isNaN(Number(f._as));
+                const local = splitLocal(toLocalDTValue(f.kickoff_at));
+
+                return (
+                  <div
+                    key={f.id}
+                    className="rounded-2xl border border-white/10 bg-black/20 p-3 space-y-3"
+                  >
+                    {/* Linha topo: comp/ronda/mão + status */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex gap-1">
+                          <select
+                            className={`flex-1 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs ${lockCls}`}
+                            value={f.competition_id ?? ''}
+                            disabled={isFinished}
+                            onChange={(e) =>
+                              updateField(f.id, {
+                                competition_id: e.target.value || null,
+                              })
+                            }
+                          >
+                            <option value="">Comp</option>
+                            {competitions.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.code}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            className={`w-14 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs uppercase ${lockCls}`}
+                            defaultValue={f.round_label ?? ''}
+                            maxLength={3}
+                            disabled={isFinished}
+                            placeholder="J11"
+                            onBlur={(e) =>
+                              updateField(f.id, {
+                                round_label: e.target.value
+                                  ? e.target.value.toUpperCase().slice(0, 3)
+                                  : null,
+                              })
+                            }
+                          />
+                          <select
+                            className={`w-14 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-center ${lockCls}`}
+                            value={f.leg_number ?? ''}
+                            disabled={isFinished}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              updateField(f.id, {
+                                leg_number: v === '' ? null : Number(v),
+                              });
+                            }}
+                          >
+                            <option value="">–</option>
+                            <option value="1">1ª</option>
+                            <option value="2">2ª</option>
+                          </select>
+                        </div>
+                      </div>
+                      <select
+                        className={`w-28 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs ${
+                          isFinished ? 'opacity-60 cursor-not-allowed' : ''
+                        }`}
+                        value={f.status}
+                        disabled={isFinished}
+                        onChange={async (e) => {
+                          const v = e.target.value as Fx['status'];
+                          if (v === 'FINISHED') {
+                            const hs = f._hs,
+                              as = f._as;
+                            if (!resultOK) {
+                              e.currentTarget.value = f.status;
+                              alert('Para fechar um jogo tens de preencher H e A.');
+                              return;
+                            }
+                            await finishFixture(f.id, Number(hs), Number(as));
+                            return;
+                          }
+                          await updateField(f.id, { status: v });
+                        }}
+                      >
+                        <option value="SCHEDULED">SCHEDULED</option>
+                        <option value="FINISHED">FINISHED</option>
+                      </select>
+                    </div>
+
+                    {/* Equipas */}
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <div className="text-[11px] uppercase tracking-wide opacity-60">
+                          Equipa da casa
+                        </div>
+                        <select
+                          className={`w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-xs ${lockCls}`}
+                          value={f.home_team_id}
+                          disabled={isFinished}
+                          onChange={(e) =>
+                            updateField(f.id, { home_team_id: e.target.value })
+                          }
+                        >
+                          {teams.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-[11px] uppercase tracking-wide opacity-60">
+                          Equipa visitante
+                        </div>
+                        <select
+                          className={`w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-xs ${lockCls}`}
+                          value={f.away_team_id}
+                          disabled={isFinished}
+                          onChange={(e) =>
+                            updateField(f.id, { away_team_id: e.target.value })
+                          }
+                        >
+                          {teams.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Data / hora */}
+                    <div className="space-y-1">
+                      <div className="text-[11px] uppercase tracking-wide opacity-60">
+                        Kickoff (local)
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="date"
+                          defaultValue={local.date}
+                          disabled={isFinished}
+                          className={`flex-1 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-xs ${lockCls}`}
+                          onBlur={(e) => {
+                            const date = e.currentTarget.value || local.date;
+                            const time =
+                              (
+                                e.currentTarget.parentElement?.querySelector(
+                                  'input[type="time"]'
+                                ) as HTMLInputElement
+                              )?.value || local.time;
+                            const localDT = joinLocal(date, time);
+                            const utc = fromLocalDTValue(localDT);
+                            if (utc && utc !== f.kickoff_at)
+                              updateField(f.id, { kickoff_at: utc });
+                          }}
+                        />
+                        <input
+                          type="time"
+                          step={60}
+                          defaultValue={local.time}
+                          disabled={isFinished}
+                          className={`w-20 rounded border border-white/20 bg-white text-slate-900 px-2 py-1 text-xs ${lockCls}`}
+                          onBlur={(e) => {
+                            const time = e.currentTarget.value || local.time;
+                            const date =
+                              (
+                                e.currentTarget.parentElement?.querySelector(
+                                  'input[type="date"]'
+                                ) as HTMLInputElement
+                              )?.value || local.date;
+                            const localDT = joinLocal(date, time);
+                            const utc = fromLocalDTValue(localDT);
+                            if (utc && utc !== f.kickoff_at)
+                              updateField(f.id, { kickoff_at: utc });
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Resultado + ações */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-1">
+                        <input
+                          className={`w-12 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-center ${lockCls}`}
+                          placeholder="H"
+                          defaultValue={f._hs === '' ? '' : String(f._hs ?? '')}
+                          disabled={isFinished}
+                          onChange={(e) => {
+                            f._hs =
+                              e.target.value === '' ? '' : Number(e.target.value);
+                          }}
+                          onBlur={async (e) => {
+                            const v = e.target.value;
+                            const val = v === '' ? null : Number(v);
+                            if (val === null || Number.isNaN(val)) return;
+                            await updateField(f.id, { home_score: val });
+                          }}
+                        />
+                        <span className="opacity-60 text-xs">–</span>
+                        <input
+                          className={`w-12 rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-center ${lockCls}`}
+                          placeholder="A"
+                          defaultValue={f._as === '' ? '' : String(f._as ?? '')}
+                          disabled={isFinished}
+                          onChange={(e) => {
+                            f._as =
+                              e.target.value === '' ? '' : Number(e.target.value);
+                          }}
+                          onBlur={async (e) => {
+                            const v = e.target.value;
+                            const val = v === '' ? null : Number(v);
+                            if (val === null || Number.isNaN(val)) return;
+                            await updateField(f.id, { away_score: val });
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          title="Reabrir"
+                          className={`rounded px-2 py-1 text-xs hover:bg-white/10 ${
+                            !isFinished ? 'opacity-40 cursor-not-allowed' : ''
+                          }`}
+                          disabled={!isFinished}
+                          onClick={() => reopenFixture(f.id)}
+                        >
+                          ↺
+                        </button>
+                        <button
+                          title="Apagar"
+                          className="rounded px-2 py-1 text-xs hover:bg-white/10"
+                          onClick={() => deleteFixture(f.id)}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Paginação */}

@@ -164,6 +164,20 @@ export default function AdminFixtures() {
     status: 'SCHEDULED',
   });
 
+  // texto dos campos com auto-complete
+  const [homeSearch, setHomeSearch] = useState('');
+  const [awaySearch, setAwaySearch] = useState('');
+
+  // sincroniza texto dos campos com o ID atual (+ equipas carregadas)
+  useEffect(() => {
+    const homeName =
+      teams.find((t) => t.id === newFx.home_team_id)?.name ?? '';
+    const awayName =
+      teams.find((t) => t.id === newFx.away_team_id)?.name ?? '';
+    setHomeSearch(homeName);
+    setAwaySearch(awayName);
+  }, [teams, newFx.home_team_id, newFx.away_team_id]);
+
   // validação: tudo obrigatório excepto Mão (leg_number)
   const createErrors = useMemo(() => {
     const errs: Record<string, string | null> = {};
@@ -408,6 +422,8 @@ export default function AdminFixtures() {
         kickoff_local: '',
         status: 'SCHEDULED',
       });
+      setHomeSearch('');
+      setAwaySearch('');
       await loadFixtures();
     } catch (e: unknown) {
       alert(errorMessage(e) || 'Falha a criar jogo');
@@ -543,6 +559,8 @@ export default function AdminFixtures() {
       kickoff_local,
       status: 'SCHEDULED',
     }));
+    setHomeSearch(s.home);
+    setAwaySearch(s.away);
   }
 
   const newLocal = splitLocal(newFx.kickoff_local || '');
@@ -552,6 +570,13 @@ export default function AdminFixtures() {
     <AdminGate>
       <main className="max-w-6xl mx-auto p-6 space-y-4">
         <h1 className="text-2xl font-semibold">Backoffice — Jogos</h1>
+
+        {/* datalist global para auto-complete das equipas */}
+        <datalist id="teams-list">
+          {teams.map((t) => (
+            <option key={t.id} value={t.name} />
+          ))}
+        </datalist>
 
         {/* Sugestões próximos jogos do FC Porto */}
         <div className="rounded-2xl border border-white/10 p-3">
@@ -698,52 +723,54 @@ export default function AdminFixtures() {
           </div>
 
           <div className="grid gap-3 md:grid-cols-4">
-            {/* Home */}
+            {/* Home com auto-complete */}
             <div className="space-y-1 md:col-span-2">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 Equipa da casa *
               </label>
-              <select
+              <input
+                list="teams-list"
                 className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
-                value={newFx.home_team_id}
-                onChange={(e) =>
+                placeholder="Começa a escrever..."
+                value={homeSearch}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setHomeSearch(val);
+                  const t = teams.find(
+                    (tm) =>
+                      tm.name.toLowerCase() === val.toLowerCase()
+                  );
                   setNewFx((v) => ({
                     ...v,
-                    home_team_id: e.target.value,
-                  }))
-                }
-              >
-                <option value="">Selecionar equipa…</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+                    home_team_id: t?.id ?? '',
+                  }));
+                }}
+              />
             </div>
 
-            {/* Away */}
+            {/* Away com auto-complete */}
             <div className="space-y-1 md:col-span-2">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 Equipa visitante *
               </label>
-              <select
+              <input
+                list="teams-list"
                 className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm"
-                value={newFx.away_team_id}
-                onChange={(e) =>
+                placeholder="Começa a escrever..."
+                value={awaySearch}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAwaySearch(val);
+                  const t = teams.find(
+                    (tm) =>
+                      tm.name.toLowerCase() === val.toLowerCase()
+                  );
                   setNewFx((v) => ({
                     ...v,
-                    away_team_id: e.target.value,
-                  }))
-                }
-              >
-                <option value="">Selecionar equipa…</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+                    away_team_id: t?.id ?? '',
+                  }));
+                }}
+              />
             </div>
           </div>
 
@@ -778,7 +805,9 @@ export default function AdminFixtures() {
                 value={newLocal.time}
                 onChange={(e) => {
                   const time = e.target.value;
-                  const date = newLocal.date || new Date().toISOString().slice(0, 10);
+                  const date =
+                    newLocal.date ||
+                    new Date().toISOString().slice(0, 10);
                   const local = joinLocal(date, time);
                   setNewFx((v) => ({ ...v, kickoff_local: local }));
                 }}
@@ -1058,66 +1087,71 @@ export default function AdminFixtures() {
                           </select>
                         </td>
 
-                        {/* Kickoff – só inputs data/hora */}
-                        <td className="p-2">
-                          <div className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-2 gap-2 items-center">
-                            <input
-                              type="date"
-                              defaultValue={local.date}
-                              disabled={isFinished}
-                              className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                              onBlur={(e) => {
-                                const date =
-                                  e.currentTarget.value ||
-                                  local.date;
-                                const time =
-                                  (
-                                    e.currentTarget.parentElement?.querySelector(
-                                      'input[type="time"]'
-                                    ) as HTMLInputElement
-                                  )?.value || local.time;
-                                const localDT =
-                                  joinLocal(date, time);
-                                const utc =
-                                  fromLocalDTValue(localDT);
-                                if (
-                                  utc &&
-                                  utc !== f.kickoff_at
-                                )
-                                  updateField(f.id, {
-                                    kickoff_at: utc,
-                                  });
-                              }}
-                            />
-                            <input
-                              type="time"
-                              step={60}
-                              defaultValue={local.time}
-                              disabled={isFinished}
-                              className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
-                              onBlur={(e) => {
-                                const time =
-                                  e.currentTarget.value ||
-                                  local.time;
-                                const date =
-                                  (
-                                    e.currentTarget.parentElement?.querySelector(
-                                      'input[type="date"]'
-                                    ) as HTMLInputElement
-                                  )?.value || local.date;
-                                const localDT =
-                                  joinLocal(date, time);
-                                const utc =
-                                  fromLocalDTValue(localDT);
-                                if (
-                                  utc &&
-                                  utc !== f.kickoff_at
-                                )
-                                  updateField(f.id, {
-                                    kickoff_at: utc,
-                                  });
-                              }}
-                            />
+                        {/* Kickoff – linha legível + inputs */}
+                        <td className="p-2 align-top">
+                          <div className="flex flex-col gap-1">
+                            <div className="text-[11px] text-white/60">
+                              {formatReadableLocal(f.kickoff_at)}
+                            </div>
+                            <div className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-2 gap-2 items-center">
+                              <input
+                                type="date"
+                                defaultValue={local.date}
+                                disabled={isFinished}
+                                className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
+                                onBlur={(e) => {
+                                  const date =
+                                    e.currentTarget.value ||
+                                    local.date;
+                                  const time =
+                                    (
+                                      e.currentTarget.parentElement?.querySelector(
+                                        'input[type="time"]'
+                                      ) as HTMLInputElement
+                                    )?.value || local.time;
+                                  const localDT =
+                                    joinLocal(date, time);
+                                  const utc =
+                                    fromLocalDTValue(localDT);
+                                  if (
+                                    utc &&
+                                    utc !== f.kickoff_at
+                                  )
+                                    updateField(f.id, {
+                                      kickoff_at: utc,
+                                    });
+                                }}
+                              />
+                              <input
+                                type="time"
+                                step={60}
+                                defaultValue={local.time}
+                                disabled={isFinished}
+                                className={`rounded border border-white/10 bg-black/20 px-2 py-1 ${lockCls}`}
+                                onBlur={(e) => {
+                                  const time =
+                                    e.currentTarget.value ||
+                                    local.time;
+                                  const date =
+                                    (
+                                      e.currentTarget.parentElement?.querySelector(
+                                        'input[type="date"]'
+                                      ) as HTMLInputElement
+                                    )?.value || local.date;
+                                  const localDT =
+                                    joinLocal(date, time);
+                                  const utc =
+                                    fromLocalDTValue(localDT);
+                                  if (
+                                    utc &&
+                                    utc !== f.kickoff_at
+                                  )
+                                    updateField(f.id, {
+                                      kickoff_at: utc,
+                                    });
+                                }}
+                              />
+                            </div>
                           </div>
                         </td>
 

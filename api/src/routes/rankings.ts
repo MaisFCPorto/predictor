@@ -5,34 +5,21 @@ type Env = { DB: D1Database };
 export const rankings = new Hono<{ Bindings: Env }>();
 
 /* ============================
-   Pontuação estilo UEFA
+   Pontuação e utilitários
 ============================ */
-// - vencedor/empate correto:            +3 pts
-// - golos da equipa da casa corretos:   +2 pts
-// - golos da equipa de fora corretos:   +2 pts
-// - diferença de golos correta:         +3 pts
-
-const P_WINNER = 3;
-const P_HOME_GOALS = 2;
-const P_AWAY_GOALS = 2;
-const P_DIFF = 3;
+const POINTS_EXACT  = 5;
+const POINTS_DIFF   = 3; // <- diferença de golos igual (mesmo sinal)
+const POINTS_WINNER = 1; // <- tendência (vencedor/empate)
 
 const sign = (d: number) => (d === 0 ? 0 : d > 0 ? 1 : -1);
 
-type ScoreUEFAResult = {
-  points: number;
-  exact: number;   // resultado exato (ambos os golos certos)
-  diff: number;    // diferença correta mas não exata
-  winner: number;  // apenas tendência correta (sem diff nem exato)
-};
-
-// Calcula pontuação de UM palpite para um resultado real (modelo UEFA)
-export function scoreUEFA(
+// Calcula pontuação de UM palpite para um resultado real
+function scoreOf(
   predHome: number | null | undefined,
   predAway: number | null | undefined,
   realHome: number | null | undefined,
   realAway: number | null | undefined,
-): ScoreUEFAResult {
+) {
   if (realHome == null || realAway == null) {
     return { points: 0, exact: 0, diff: 0, winner: 0 };
   }
@@ -45,30 +32,24 @@ export function scoreUEFA(
   const rh = Number(realHome);
   const ra = Number(realAway);
 
+  // Resultado exato
+  if (ph === rh && pa === ra) {
+    return { points: POINTS_EXACT, exact: 1, diff: 0, winner: 0 };
+  }
+
+  // Diferença de golos (mesma magnitude e mesmo sinal)
   const pd = ph - pa;
   const rd = rh - ra;
+  if (Math.abs(pd) === Math.abs(rd) && sign(pd) === sign(rd)) {
+    return { points: POINTS_DIFF, exact: 0, diff: 1, winner: 0 };
+  }
 
-  const sameWinner  = sign(pd) === sign(rd); // vencedor/empate correto
-  const correctHome = ph === rh;             // golos equipa casa corretos
-  const correctAway = pa === ra;             // golos equipa fora corretos
-  const correctDiff = pd === rd;             // diferença de golos correta
-  const isExact     = ph === rh && pa === ra;
+  // Tendência (mesmo sinal da diferença)
+  if (sign(pd) === sign(rd)) {
+    return { points: POINTS_WINNER, exact: 0, diff: 0, winner: 1 };
+  }
 
-  let points = 0;
-  if (sameWinner)  points += P_WINNER;
-  if (correctHome) points += P_HOME_GOALS;
-  if (correctAway) points += P_AWAY_GOALS;
-  if (correctDiff) points += P_DIFF;
-
-  // Para critérios de desempate:
-  // - exact: apenas quando é resultado exato
-  // - diff:  diferença certa mas não exata
-  // - winner: tendência correta, sem diff nem exato
-  const exact  = isExact ? 1 : 0;
-  const diff   = !isExact && correctDiff ? 1 : 0;
-  const winner = !isExact && !diff && sameWinner ? 1 : 0;
-
-  return { points, exact, diff, winner };
+  return { points: 0, exact: 0, diff: 0, winner: 0 };
 }
 
 // Comparador comum aos 3 rankings: pontos → exatos → diferenças → tendência → palpite mais cedo
@@ -87,59 +68,39 @@ function cmpRanking<T extends {
 
 /* ======================================================
    /api/rankings  (geral ou mensal se ?ym=YYYY-MM)
-
-   Agora:
-   - só conta jogos FINISHED
-   - se ym existir, filtra por strftime('%Y-%m', fixtures.kickoff_at)
-   - predictions.created_at só entra para desempate final
 ====================================================== */
 rankings.get('/', async (c) => {
   const ym = c.req.query('ym'); // ex: '2025-10'  -> modo mensal
 
-  // 1) Buscar todas as predictions JOIN fixtures FINISHED,
-  //    filtrando por kickoff_at quando ym estiver presente
-  const params: unknown[] = [];
-  let where = `f.status = 'FINISHED'`;
-  if (ym) {
-    where += ` AND strftime('%Y-%m', f.kickoff_at) = ?`;
-    params.push(ym);
-  }
-
-  const { results: rows } = await c.env.DB
-    .prepare(
+  // 1) Fixtures FINISHED (opcionalmente filtrados por mês)
+  const sqlFx = ym
+    ? `
+       SELECT id, home_score, away_score, kickoff_at
+       FROM fixtures
+       WHERE status='FINISHED'
+         AND strftime('%Y-%m', kickoff_at)=?
       `
-      SELECT
-        p.user_id,
-        p.fixture_id,
-        p.home_goals,
-        p.away_goals,
-        p.created_at,
-        f.home_score,
-        f.away_score,
-        f.kickoff_at
-      FROM predictions p
-      JOIN fixtures f ON f.id = p.fixture_id
-      WHERE ${where}
-    `,
-    )
-    .bind(...params)
-    .all<{
-      user_id: string;
-      fixture_id: string;
-      home_goals: number;
-      away_goals: number;
-      created_at: string | null;
-      home_score: number | null;
-      away_score: number | null;
-      kickoff_at: string;
-    }>();
+    : `
+       SELECT id, home_score, away_score, kickoff_at
+       FROM fixtures
+       WHERE status='FINISHED'
+      `;
+  const finished = ym
+    ? await c.env.DB.prepare(sqlFx).bind(ym).all<{ id: string; home_score: number; away_score: number; kickoff_at: string }>()
+    : await c.env.DB.prepare(sqlFx).all<{ id: string; home_score: number; away_score: number; kickoff_at: string }>();
 
-  const preds = rows ?? [];
-  if (!preds.length) {
-    return c.json([], 200);
-  }
+  const fin = finished.results ?? [];
+  if (!fin.length) return c.json([], 200);
 
-  // 2) Users (nome amigável)
+  // 2) Todas as previsões (precisamos do created_at para desempate final)
+  const preds = await c.env.DB
+    .prepare(`
+      SELECT user_id, fixture_id, home_goals, away_goals, created_at
+      FROM predictions
+    `)
+    .all<{ user_id: string; fixture_id: string; home_goals: number; away_goals: number; created_at: string | null }>();
+
+  // 3) Users (nome amigável)
   const users = await c.env.DB
     .prepare(`
       SELECT
@@ -156,55 +117,43 @@ rankings.get('/', async (c) => {
         u.avatar_url
       FROM users u
     `)
-    .all<{
-      id: string;
-      name: string;
-      email: string | null;
-      avatar_url: string | null;
-    }>();
+    .all<{ id: string; name: string; email: string | null; avatar_url: string | null }>();
 
-  const nameById   = new Map(users.results?.map(u => [u.id, u.name]) ?? []);
+  const nameById = new Map(users.results?.map(u => [u.id, u.name]) ?? []);
   const avatarById = new Map(users.results?.map(u => [u.id, u.avatar_url ?? null]) ?? []);
+  const fxMap = new Map(fin.map(f => [f.id, f]));
 
   type Acc = {
-    user_id: string;
-    name: string;
-    avatar_url: string | null;
-    points: number;
-    exact: number;
-    diff: number;
-    winner: number;
+    user_id: string; name: string; avatar_url: string | null;
+    points: number; exact: number; diff: number; winner: number;
     first_pred_at: number | null; // epoch ms do palpite mais antigo (entre os jogos que contam)
   };
-
   const score: Record<string, Acc> = {};
 
-  for (const p of preds) {
-    const uName = nameById.get(p.user_id) ?? 'Jogador';
+  for (const p of preds.results ?? []) {
+    const f = fxMap.get(p.fixture_id);
+    if (!f) continue; // só contas para jogos finalizados (e do mês se houver ym)
 
+    const uName = nameById.get(p.user_id) ?? 'Jogador';
     if (!score[p.user_id]) {
       score[p.user_id] = {
         user_id: p.user_id,
         name: uName,
         avatar_url: avatarById.get(p.user_id) ?? null,
-        points: 0,
-        exact: 0,
-        diff: 0,
-        winner: 0,
+        points: 0, exact: 0, diff: 0, winner: 0,
         first_pred_at: null,
       };
     }
 
-    // Pontos (UEFA) — sempre com base no resultado oficial do jogo
-    const s   = scoreUEFA(p.home_goals, p.away_goals, p.home_score, p.away_score);
+    // Pontos
+    const s = scoreOf(p.home_goals, p.away_goals, f.home_score, f.away_score);
     const acc = score[p.user_id];
-
     acc.points += s.points;
     acc.exact  += s.exact;
     acc.diff   += s.diff;
     acc.winner += s.winner;
 
-    // Desempate final: palpite mais cedo (independente do mês)
+    // Desempate final: mais cedo
     if (p.created_at) {
       const t = new Date(p.created_at).getTime();
       acc.first_pred_at = acc.first_pred_at == null ? t : Math.min(acc.first_pred_at, t);
@@ -217,7 +166,6 @@ rankings.get('/', async (c) => {
 
 /* ======================================================
    /api/rankings/months  -> meses com jogos FINISHED
-   (baseado em kickoff_at, como queres)
 ====================================================== */
 rankings.get('/months', async (c) => {
   const { results } = await c.env.DB
@@ -228,7 +176,6 @@ rankings.get('/months', async (c) => {
       ORDER BY ym DESC
     `)
     .all<{ ym: string }>();
-
   return c.json((results ?? []).map(r => r.ym), 200);
 });
 
@@ -281,12 +228,7 @@ rankings.get('/game', async (c) => {
       LIMIT 1
     `)
     .bind(fixtureId)
-    .first<{
-      id: string;
-      status: string;
-      home_score: number | null;
-      away_score: number | null;
-    }>();
+    .first<{ id: string; status: string; home_score: number | null; away_score: number | null }>();
 
   if (!fx) return c.json({ error: 'fixture_not_found' }, 404);
 
@@ -323,11 +265,8 @@ rankings.get('/game', async (c) => {
     }>();
 
   const rows = (results ?? []).map(r => {
-    const s = scoreUEFA(r.pred_home, r.pred_away, fx.home_score, fx.away_score);
-    const first_pred_at = r.pred_created_at
-      ? new Date(r.pred_created_at).getTime()
-      : null;
-
+    const s = scoreOf(r.pred_home, r.pred_away, fx.home_score, fx.away_score);
+    const first_pred_at = r.pred_created_at ? new Date(r.pred_created_at).getTime() : null;
     return {
       user_id: r.user_id,
       name: r.name ?? 'Jogador',

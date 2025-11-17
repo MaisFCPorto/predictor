@@ -7,3 +7,4 @@ api/node_modules/
 .next/
 web/.next/
 .DS_Store
+api/.wrangler/

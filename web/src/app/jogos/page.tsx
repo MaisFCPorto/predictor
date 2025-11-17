@@ -275,6 +275,32 @@ export default function JogosPage() {
     };
   }, [userId]);
 
+  // --- carregar lista de jogadores (rota pública /api/players) ---
+  async function loadPlayers() {
+    try {
+      const res = await fetch('/api/players', {
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        console.error('Falha a carregar players:', res.status, res.statusText);
+        setPlayers([]);
+        return;
+      }
+
+      const json = await res.json();
+      const list: PlayerDTO[] = Array.isArray(json) ? json : [];
+      setPlayers(list);
+    } catch (e) {
+      console.error('Erro a carregar players', e);
+      setPlayers([]);
+    }
+  }
+
+  useEffect(() => {
+    void loadPlayers();
+  }, []);
+
   // --- carregar dashboard (geral / mensal / último) ---
   useEffect(() => {
     let abort = false;
@@ -710,6 +736,11 @@ export default function JogosPage() {
                     final_away_score={f.away_score ?? null}
                     pred_home={predictions[f.id]?.home}
                     pred_away={predictions[f.id]?.away}
+                    pred_scorer_id={
+                      predictions[f.id]?.scorer_player_id ?? null
+                    }
+                    points={predictions[f.id]?.points ?? null}
+                    players={players}
                     onSave={onSave}
                     saving={savingId === f.id}
                     variant="default"
@@ -751,6 +782,11 @@ export default function JogosPage() {
                     final_away_score={f.away_score ?? null}
                     pred_home={predictions[f.id]?.home}
                     pred_away={predictions[f.id]?.away}
+                    pred_scorer_id={
+                      predictions[f.id]?.scorer_player_id ?? null
+                    }
+                    points={predictions[f.id]?.points ?? null}
+                    players={players}
                     onSave={onSave}
                     saving={false}
                     variant="past"

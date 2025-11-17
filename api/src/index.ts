@@ -4,6 +4,7 @@ import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { rankings, scoreUEFA } from './routes/rankings';
 import { adminCompetitions } from './routes/admin/competitions';
+import { adminPlayers } from './routes/admin/players';
 import { corsMiddleware } from './cors';
 import { auth } from './routes/auth';
 import { admin } from './routes/admin';
@@ -134,6 +135,8 @@ app.get('/routes', (c) =>
       '/api/admin/teams',
       '/api/admin/fixtures',
       '/api/admin/fixtures/porto',
+      '/api/admin/competitions',
+      '/api/admin/players',
     ],
   }),
 );
@@ -143,6 +146,7 @@ app.get('/routes', (c) =>
 // ----------------------------------------------------
 app.route('/api/rankings', rankings);
 app.route('/api/admin/competitions', adminCompetitions);
+app.route('/api/admin/players', adminPlayers);
 app.route('/api/auth', auth);
 app.route('/api/admin', admin);
 
@@ -466,9 +470,6 @@ app.get('/api/predictions', async (c) => {
     return c.json({ error: 'internal_error' }, 500);
   }
 });
-
-
-
 
 // ----------------------------------------------------
 // PUBLIC: Sync Users

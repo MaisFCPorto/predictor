@@ -28,10 +28,17 @@ type Props = {
   pred_home?: number | null;
   pred_away?: number | null;
   points?: number | null;
-  // NOVO:
+
+  // NOVO
   pred_scorer_id?: string | null;
   players?: PlayerOption[];
-  onSave: (id: string, h: number, a: number, scorerId?: string | null) => Promise<void> | void;
+
+  onSave: (
+    id: string,
+    h: number,
+    a: number,
+    scorerId?: string | null
+  ) => Promise<void> | void;
   saving?: boolean;
   variant?: 'default' | 'past';
 };
@@ -166,19 +173,16 @@ export default function FixtureCard({
 
   const nowLocked = lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0);
 
+  // jogo é do Porto?
+  const involvesPorto =
+    home_team_name.toLowerCase().includes('porto') ||
+    away_team_name.toLowerCase().includes('porto');
+
   // estado dos inputs de resultado
   const [home, setHome] = useState<number | ''>('');
   const [away, setAway] = useState<number | ''>('');
 
-  const hasPred = typeof pred_home === 'number' && typeof pred_away === 'number';
-
-  const unchanged =
-    hasPred && typeof home === 'number' && typeof away === 'number'
-      ? home === pred_home && away === pred_away
-      : false;
-
-  const canSave = !nowLocked && home !== '' && away !== '' && !unchanged;
-
+  // Prefill com prediction existente
   useEffect(() => {
     const ph = typeof pred_home === 'number' ? pred_home : null;
     const pa = typeof pred_away === 'number' ? pred_away : null;
@@ -193,7 +197,7 @@ export default function FixtureCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pred_home, pred_away, variant]);
 
-  // NOVO: marcador escolhido
+  // marcador escolhido
   const [scorerId, setScorerId] = useState<string | null>(pred_scorer_id ?? null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
@@ -207,7 +211,38 @@ export default function FixtureCard({
     [players, scorerId],
   );
 
-  const pickerEnabled = variant !== 'past' && !nowLocked;
+  // último estado gravado (para não spammar saves iguais)
+  const [lastSaved, setLastSaved] = useState<{
+    home: number;
+    away: number;
+    scorerId: string | null;
+  } | null>(() => {
+    const ph = typeof pred_home === 'number' ? pred_home : null;
+    const pa = typeof pred_away === 'number' ? pred_away : null;
+    if (ph == null || pa == null) return null;
+    return { home: ph, away: pa, scorerId: pred_scorer_id ?? null };
+  });
+
+  const unchanged = useMemo(() => {
+    if (!lastSaved) return false;
+    if (typeof home !== 'number' || typeof away !== 'number') return false;
+    return (
+      home === lastSaved.home &&
+      away === lastSaved.away &&
+      (scorerId ?? null) === lastSaved.scorerId
+    );
+  }, [lastSaved, home, away, scorerId]);
+
+  const canSave =
+    !nowLocked && typeof home === 'number' && typeof away === 'number' && !unchanged;
+
+  // picker só ativo em jogos do Porto + com jogadores e jogo aberto
+  const pickerEnabled =
+    variant !== 'past' &&
+    !nowLocked &&
+    involvesPorto &&
+    !!players &&
+    players.length > 0;
 
   const filteredPlayers = useMemo(() => {
     if (!players) return [];
@@ -215,13 +250,39 @@ export default function FixtureCard({
     const base = !q
       ? players
       : players.filter((p) =>
-          p.name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').includes(
-            q.normalize('NFD').replace(/\p{Diacritic}/gu, ''),
-          ),
+          p.name
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/\p{Diacritic}/gu, '')
+            .includes(q.normalize('NFD').replace(/\p{Diacritic}/gu, '')),
         );
-    // mantém ordem por posição
     return base;
   }, [players, pickerSearch]);
+
+  // AUTO-SAVE: guarda automaticamente após pequena pausa
+  useEffect(() => {
+    if (variant === 'past') return;
+    if (nowLocked) return;
+    if (typeof home !== 'number' || typeof away !== 'number') return;
+
+    const current = { home, away, scorerId: scorerId ?? null };
+
+    if (
+      lastSaved &&
+      lastSaved.home === current.home &&
+      lastSaved.away === current.away &&
+      lastSaved.scorerId === current.scorerId
+    ) {
+      return;
+    }
+
+    const handle = setTimeout(() => {
+      onSave(id, home, away, scorerId ?? null);
+      setLastSaved(current);
+    }, 800); // 0.8s depois de parar de escrever
+
+    return () => clearTimeout(handle);
+  }, [home, away, scorerId, nowLocked, variant, id, onSave, lastSaved]);
 
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
@@ -493,6 +554,11 @@ export default function FixtureCard({
                   onClick={() => {
                     if (typeof home === 'number' && typeof away === 'number') {
                       onSave(id, home, away, scorerId ?? null);
+                      setLastSaved({
+                        home,
+                        away,
+                        scorerId: scorerId ?? null,
+                      });
                     }
                   }}
                   title="Guardar palpite"
@@ -547,15 +613,15 @@ export default function FixtureCard({
       <div className="mt-2 flex flex-col items-center gap-1">
         <button
           type="button"
-          disabled={!pickerEnabled || !players || players.length === 0}
+          disabled={!pickerEnabled}
           className={clsx(
             'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs sm:text-sm border',
-            pickerEnabled && players && players.length > 0
+            pickerEnabled
               ? 'border-white/20 bg-white/5 hover:bg-white/10'
               : 'border-white/10 bg-white/5 text-white/50 cursor-not-allowed',
           )}
           onClick={() => {
-            if (!pickerEnabled || !players || players.length === 0) return;
+            if (!pickerEnabled) return;
             setPickerSearch('');
             setPickerOpen(true);
           }}
@@ -604,7 +670,8 @@ export default function FixtureCard({
           </span>
           {scorerPlayer && (
             <span className="mt-1 text-[12px] text-white/70">
-              Marcador escolhido: {scorerPlayer.name} ({positionLabel(scorerPlayer.position)})
+              Marcador escolhido: {scorerPlayer.name} (
+              {positionLabel(scorerPlayer.position)})
             </span>
           )}
         </div>
@@ -619,7 +686,7 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Botão mobile Guardar */}
+      {/* Botão mobile Guardar (continua, mas agora é opcional por causa do auto-save) */}
       {variant !== 'past' && (
         <div className="md:hidden flex justify-center mt-2">
           <button
@@ -633,6 +700,11 @@ export default function FixtureCard({
             onClick={() => {
               if (typeof home === 'number' && typeof away === 'number') {
                 onSave(id, home, away, scorerId ?? null);
+                setLastSaved({
+                  home,
+                  away,
+                  scorerId: scorerId ?? null,
+                });
               }
             }}
           >

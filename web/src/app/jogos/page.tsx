@@ -27,6 +27,13 @@ type FixtureDTO = {
   away_score?: number | null;
 };
 
+type PlayerDTO = {
+  id: string;
+  name: string;
+  position: string; // 'GR' | 'D' | 'M' | 'A'
+};
+
+
 type PredictionDTO = {
   fixture_id: string | number;
   home_goals: number;
@@ -147,7 +154,9 @@ export default function JogosPage() {
     >
   >({});
 
-  const [players, setPlayers] = useState<Player[]>([]);
+
+  const [players, setPlayers] = useState<PlayerDTO[]>([]);
+
 
 
   // --- supabase user + SYNC NO WORKER ---
@@ -276,6 +285,11 @@ export default function JogosPage() {
       abort = true;
     };
   }, [userId]);
+
+  useEffect(() => {
+    void loadPlayers();
+  }, []);
+
 
   // --- carregar lista de jogadores (FCP) ---
 useEffect(() => {
@@ -494,6 +508,28 @@ useEffect(() => {
       setPastLoading(false);
     }
   }
+
+  async function loadPlayers() {
+    try {
+      const res = await fetch('/api/admin/players?team_id=fcp', {
+        cache: 'no-store',
+      });
+  
+      if (!res.ok) {
+        console.error('Falha a carregar players:', res.status, res.statusText);
+        setPlayers([]);
+        return;
+      }
+  
+      const json = await res.json();
+      const list: PlayerDTO[] = Array.isArray(json) ? json : [];
+      setPlayers(list);
+    } catch (e) {
+      console.error('Erro a carregar players', e);
+      setPlayers([]);
+    }
+  }
+  
 
   const sortedAsc = useMemo(
     () =>

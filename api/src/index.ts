@@ -413,7 +413,7 @@ const scorerId =
     await c.env.DB
       .prepare(
         `
-        INSERT INTO predictions (id, user_id, fixture_id, home_goals, away_goals)
+        INSERT INTO predictions (id, user_id, fixture_id, home_goals, away_goals, scorer_player_id)
         VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)
         ON CONFLICT(user_id, fixture_id)
         DO UPDATE SET
@@ -447,7 +447,7 @@ app.get('/api/predictions', async (c) => {
           fixture_id,
           home_goals,
           away_goals,
-          points.
+          points,
           scorer_player_id
         FROM predictions
         WHERE user_id = ?

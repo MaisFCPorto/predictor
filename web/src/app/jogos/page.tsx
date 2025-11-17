@@ -28,6 +28,12 @@ type FixtureDTO = {
   away_score?: number | null;
 };
 
+type PlayerDTO = {
+  id: string;
+  name: string;
+  position: string; // 'GR' | 'D' | 'M' | 'A'
+};
+
 type PredictionDTO = {
   fixture_id: string;
   home_goals: number;
@@ -181,6 +187,32 @@ export default function JogosPage() {
     })();
     return () => { abort = true; };
   }, [userId]);
+
+  // --- carregar lista de jogadores (rota pública /api/players) ---
+  async function loadPlayers() {
+    try {
+      const res = await fetch('/api/players', {
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        console.error('Falha a carregar players:', res.status, res.statusText);
+        setPlayers([]);
+        return;
+      }
+
+      const json = await res.json();
+      const list: PlayerDTO[] = Array.isArray(json) ? json : [];
+      setPlayers(list);
+    } catch (e) {
+      console.error('Erro a carregar players', e);
+      setPlayers([]);
+    }
+  }
+
+  useEffect(() => {
+    void loadPlayers();
+  }, []);
 
   // --- carregar dashboard (geral / mensal / último) ---
   useEffect(() => {
@@ -345,6 +377,11 @@ export default function JogosPage() {
     if (pastLoading || !pastHasMore) return;
     try {
       setPastLoading(true);
+      const res = await fetch(
+        `/api/fixtures/closed?limit=3&offset=${pastOffset}`,
+        { cache: 'no-store',
+        },
+      );
       const res = await fetch(`/api/fixtures/closed?limit=3&offset=${pastOffset}`, { cache: 'no-store' });
       const json = await res.json();
       const more: FixtureDTO[] = Array.isArray(json) ? json : [];
@@ -366,6 +403,42 @@ export default function JogosPage() {
     () => sortedAsc.filter(f => f.status === 'SCHEDULED' && !f.is_locked),
     [sortedAsc]
   );
+
+
+
+  // guardar palpite (agora com scorerId)
+  async function onSave(
+    fixtureId: string,
+    home: number,
+    away: number,
+    scorerId?: string | null,
+  ) {
+    try {
+      setSavingId(fixtureId);
+      setError(null);
+      const {
+        data: { user },
+      } = await supabasePKCE.auth.getUser();
+      if (!user) throw new Error('Sessão inválida. Faz login novamente.');
+
+      await savePrediction({
+        userId: user.id,
+        fixtureId,
+        home,
+        away,
+        scorer_player_id: scorerId ?? null,
+      });
+
+      // atualiza estado local para refletir de imediato
+      setPredictions((prev) => ({
+        ...prev,
+        [fixtureId]: {
+          home,
+          away,
+          points: prev[fixtureId]?.points ?? null,
+          scorer_player_id: scorerId ?? null,
+        },
+      }));
 
   // lockedRecent no longer used; we paginate finished fixtures via API
 
@@ -528,6 +601,11 @@ export default function JogosPage() {
                     lock_at_utc={f.lock_at_utc}
                     pred_home={predictions[f.id]?.home}
                     pred_away={predictions[f.id]?.away}
+                    pred_scorer_id={
+                      predictions[f.id]?.scorer_player_id ?? null
+                    }
+                    points={predictions[f.id]?.points ?? null}
+                    players={players}
                     onSave={onSave}
                     saving={savingId === f.id}
                   />
@@ -566,6 +644,11 @@ export default function JogosPage() {
                     final_away_score={f.away_score ?? null}
                     pred_home={predictions[f.id]?.home}
                     pred_away={predictions[f.id]?.away}
+                    pred_scorer_id={
+                      predictions[f.id]?.scorer_player_id ?? null
+                    }
+                    points={predictions[f.id]?.points ?? null}
+                    players={players}
                     onSave={onSave}
                     saving={false}
                     variant="past"
@@ -594,6 +677,10 @@ export default function JogosPage() {
                       {pastLoading ? 'A carregar…' : 'Mostrar mais'}
                     </button>
                   </div>
+                )}
+
+                {pastLoading && (
+                  <div className="opacity-70">A carregar…</div>
                 )}
                 {pastLoading && <div className="opacity-70">A carregar…</div>}
               </div>

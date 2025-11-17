@@ -283,10 +283,14 @@ export default function JogosPage() {
   // --- carregar lista de jogadores (rota pública /api/players) ---
   async function loadPlayers() {
     try {
-      const res = await fetch('/api/players', { cache: 'no-store' });
+      const base = API_BASE && API_BASE.length > 0 ? API_BASE.replace(/\/+$/, '') : '';
+      const url = base ? `${base}/api/players` : '/api/players';
+
+      const res = await fetch(url, { cache: 'no-store' });
 
       if (!res.ok) {
-        console.error('Falha a carregar jogadores:', res.status, res.statusText);
+        const txt = await res.text().catch(() => '');
+        console.error('Falha a carregar jogadores:', res.status, txt);
         setPlayers([]);
         return;
       }

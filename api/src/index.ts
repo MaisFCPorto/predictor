@@ -373,10 +373,16 @@ app.post('/api/predictions', async (c) => {
     const body = await c.req.json().catch(() => null);
     if (!body) return c.json({ error: 'invalid_json' }, 400);
 
-    const { fixtureId, home, away, userId } = body;
-    if (!fixtureId || !userId || home == null || away == null) {
-      return c.json({ error: 'missing_data' }, 400);
-    }
+    const { fixtureId, home, away, userId, scorer_player_id } = body;
+if (!fixtureId || !userId || home == null || away == null) {
+  return c.json({ error: 'missing_data' }, 400);
+}
+
+// valida opcionalmente se é string
+const scorerId =
+  typeof scorer_player_id === 'string' && scorer_player_id.trim()
+    ? scorer_player_id.trim()
+    : null;
 
     const userExists = await c.env.DB
       .prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`)
@@ -412,10 +418,11 @@ app.post('/api/predictions', async (c) => {
         ON CONFLICT(user_id, fixture_id)
         DO UPDATE SET
           home_goals = excluded.home_goals,
-          away_goals = excluded.away_goals
+          away_goals = excluded.away_goals,
+          scorer_player_id  = excluded.scorer_player_id
       `,
       )
-      .bind(userId, fixtureId, home, away)
+      .bind(userId, fixtureId, home, away, scorerId)
       .run();
 
     return c.json({ success: true });
@@ -440,7 +447,8 @@ app.get('/api/predictions', async (c) => {
           fixture_id,
           home_goals,
           away_goals,
-          points
+          points.
+          scorer_player_id
         FROM predictions
         WHERE user_id = ?
       `,
@@ -451,6 +459,7 @@ app.get('/api/predictions', async (c) => {
         home_goals: number | null;
         away_goals: number | null;
         points: number | null;
+        scorer_player_id: string | null;
       }>();
 
     const safe = (results ?? []).map((r) => ({
@@ -458,6 +467,7 @@ app.get('/api/predictions', async (c) => {
       home_goals: r.home_goals ?? 0,
       away_goals: r.away_goals ?? 0,
       points: r.points, // pode ser null se ainda não foi calculado
+      scorer_player_id: r.scorer_player_id ?? null,
     }));
 
     // Log server-side (apenas para debug; podes remover depois)
@@ -503,6 +513,38 @@ app.post('/api/users/sync', async (c) => {
     return c.json({ error: 'sync_failed' }, 500);
   }
 });
+
+// ----------------------------------------------------
+// PUBLIC: Players (ex: plantel FC Porto)
+// ----------------------------------------------------
+app.get('/api/players', async (c) => {
+  const { results } = await c.env.DB
+    .prepare(
+      `
+      SELECT id, team_id, name, position
+      FROM players
+      WHERE is_active = 1
+      ORDER BY
+        CASE position
+          WHEN 'GR' THEN 1
+          WHEN 'D'  THEN 2
+          WHEN 'M'  THEN 3
+          WHEN 'A'  THEN 4
+          ELSE 5
+        END,
+        name
+    `,
+    )
+    .all<{
+      id: string;
+      team_id: string;
+      name: string;
+      position: string;
+    }>();
+
+  return c.json(results ?? []);
+});
+
 
 // ----------------------------------------------------
 // ADMIN: Teams

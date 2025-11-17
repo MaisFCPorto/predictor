@@ -27,12 +27,21 @@ type FixtureDTO = {
   away_score?: number | null;
 };
 
+type PlayerDTO = {
+  id: string;
+  name: string;
+  position: string; // 'GR' | 'D' | 'M' | 'A'
+};
+
+
 type PredictionDTO = {
   fixture_id: string | number;
   home_goals: number;
   away_goals: number;
   points?: number | null;
   uefa_points?: number | null;
+  // NOVO: marcador gravado na BD
+  scorer_player_id?: string | null;
 };
 
 type RankRow = {
@@ -44,6 +53,14 @@ type RankRow = {
   diff: number;
   winner: number;
 };
+
+type Player = {
+  id: string;
+  name: string;
+  position: string; // 'GR' | 'D' | 'M' | 'A'
+  team_id?: string;
+};
+
 
 type LastPoints =
   | {
@@ -126,8 +143,21 @@ export default function JogosPage() {
 
   // --- predictions for current user (by fixture id) ---
   const [predictions, setPredictions] = useState<
-    Record<string, { home: number; away: number; points: number | null }>
+    Record<
+      string,
+      {
+        home: number;
+        away: number;
+        points: number | null;
+        scorer_player_id: string | null;
+      }
+    >
   >({});
+
+
+  const [players, setPlayers] = useState<PlayerDTO[]>([]);
+
+
 
   // --- supabase user + SYNC NO WORKER ---
   useEffect(() => {
@@ -212,7 +242,12 @@ export default function JogosPage() {
 
         const map: Record<
           string,
-          { home: number; away: number; points: number | null }
+          {
+            home: number;
+            away: number;
+            points: number | null;
+            scorer_player_id: string | null;
+          }
         > = {};
 
         for (const p of arr) {
@@ -223,12 +258,15 @@ export default function JogosPage() {
           const a = (p as any).away_goals;
           const pts =
             (p as any).points ?? (p as any).uefa_points ?? null;
+          const scorer = (p as any).scorer_player_id ?? null;
 
           if (typeof h === 'number' && typeof a === 'number') {
             map[fixtureKey] = {
               home: h,
               away: a,
               points: typeof pts === 'number' ? pts : null,
+              scorer_player_id:
+                typeof scorer === 'string' ? scorer : null,
             };
           }
         }
@@ -247,6 +285,31 @@ export default function JogosPage() {
       abort = true;
     };
   }, [userId]);
+
+  useEffect(() => {
+    void loadPlayers();
+  }, []);
+
+
+  // --- carregar lista de jogadores (FCP) ---
+useEffect(() => {
+  let abort = false;
+  (async () => {
+    try {
+      const res = await fetch('/api/players', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Falha a carregar jogadores');
+      const json = await res.json();
+      const list: Player[] = Array.isArray(json) ? json : [];
+      if (!abort) setPlayers(list);
+    } catch {
+      if (!abort) setPlayers([]);
+    }
+  })();
+  return () => {
+    abort = true;
+  };
+}, []);
+
 
   // --- carregar dashboard (geral / mensal / último) ---
   useEffect(() => {
@@ -446,6 +509,28 @@ export default function JogosPage() {
     }
   }
 
+  async function loadPlayers() {
+    try {
+      const res = await fetch('/api/admin/players?team_id=fcp', {
+        cache: 'no-store',
+      });
+  
+      if (!res.ok) {
+        console.error('Falha a carregar players:', res.status, res.statusText);
+        setPlayers([]);
+        return;
+      }
+  
+      const json = await res.json();
+      const list: PlayerDTO[] = Array.isArray(json) ? json : [];
+      setPlayers(list);
+    } catch (e) {
+      console.error('Erro a carregar players', e);
+      setPlayers([]);
+    }
+  }
+  
+
   const sortedAsc = useMemo(
     () =>
       [...fixtures].sort(
@@ -464,27 +549,49 @@ export default function JogosPage() {
     [sortedAsc],
   );
 
+  // guardar palpite (agora com scorerId)
   // guardar palpite
-  async function onSave(
-    fixtureId: string,
-    home: number,
-    away: number,
-  ) {
-    try {
-      setSavingId(fixtureId);
-      setError(null);
-      const {
-        data: { user },
-      } = await supabasePKCE.auth.getUser();
-      if (!user) throw new Error('Sessão inválida. Faz login novamente.');
-      await savePrediction({ userId: user.id, fixtureId, home, away });
-      toast.success('Palpite guardado!', { duration: 1500 });
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Erro a guardar');
-    } finally {
-      setSavingId(null);
-    }
+async function onSave(
+  fixtureId: string,
+  home: number,
+  away: number,
+  scorerId?: string | null,
+) {
+  try {
+    setSavingId(fixtureId);
+    setError(null);
+    const {
+      data: { user },
+    } = await supabasePKCE.auth.getUser();
+    if (!user) throw new Error('Sessão inválida. Faz login novamente.');
+
+    await savePrediction({
+      userId: user.id,
+      fixtureId,
+      home,
+      away,
+      scorer_player_id: scorerId ?? null,
+    });
+
+    // atualiza estado local para refletir de imediato
+    setPredictions((prev) => ({
+      ...prev,
+      [fixtureId]: {
+        home,
+        away,
+        points: prev[fixtureId]?.points ?? null,
+        scorer_player_id: scorerId ?? null,
+      },
+    }));
+
+    toast.success('Palpite guardado!', { duration: 1500 });
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Erro a guardar');
+  } finally {
+    setSavingId(null);
   }
+}
+
 
   const ym = currentYM();
   const linkGeneral = '/rankings?mode=general';
@@ -497,29 +604,25 @@ export default function JogosPage() {
       )}`
     : null;
 
-    const CardLink: React.FC<{
-      href?: string | null;
-      children: React.ReactNode;
-      aria?: string;
-    }> = ({ href, children, aria }) => {
-      const base =
-        'group rounded-2xl border border-white/10 bg-white/[0.04] p-4 ' +
-        'transition-all duration-200 hover:bg-white/[0.07] ' +
-        'hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.45)]';
-  
-      if (userId && href) {
-        return (
-          <Link
-            href={href}
-            aria-label={aria}
-            className={base}
-          >
-            {children}
-          </Link>
-        );
-      }
-      return <div className={base}>{children}</div>;
-    };
+  const CardLink: React.FC<{
+    href?: string | null;
+    children: React.ReactNode;
+    aria?: string;
+  }> = ({ href, children, aria }) => {
+    const base =
+      'group rounded-2xl border border-white/10 bg-white/[0.04] p-4 ' +
+      'transition-all duration-200 hover:bg-white/[0.07] ' +
+      'hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.45)]';
+
+    if (userId && href) {
+      return (
+        <Link href={href} aria-label={aria} className={base}>
+          {children}
+        </Link>
+      );
+    }
+    return <div className={base}>{children}</div>;
+  };
 
   return (
     <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-6 sm:py-8">
@@ -551,8 +654,7 @@ export default function JogosPage() {
                     {genPos == null ? '—' : `#${genPos}`}
                   </div>
                   <div className="mt-1 text-xs opacity-75">
-                    Pontos:{' '}
-                    {genPoints == null ? '—' : genPoints}
+                    Pontos: {genPoints == null ? '—' : genPoints}
                   </div>
                 </CardLink>
 
@@ -567,8 +669,7 @@ export default function JogosPage() {
                     {monPos == null ? '—' : `#${monPos}`}
                   </div>
                   <div className="mt-1 text-xs opacity-75">
-                    Pontos:{' '}
-                    {monPoints == null ? '—' : monPoints}
+                    Pontos: {monPoints == null ? '—' : monPoints}
                   </div>
                 </CardLink>
 
@@ -669,6 +770,9 @@ export default function JogosPage() {
                     final_away_score={f.away_score ?? null}
                     pred_home={predictions[f.id]?.home}
                     pred_away={predictions[f.id]?.away}
+                    pred_scorer_id={
+                      predictions[f.id]?.scorer_player_id ?? null
+                    }
                     points={predictions[f.id]?.points ?? null}
                     onSave={onSave}
                     saving={savingId === f.id}
@@ -715,6 +819,9 @@ export default function JogosPage() {
                     final_away_score={f.away_score ?? null}
                     pred_home={predictions[f.id]?.home}
                     pred_away={predictions[f.id]?.away}
+                    pred_scorer_id={
+                      predictions[f.id]?.scorer_player_id ?? null
+                    }
                     points={predictions[f.id]?.points ?? null}
                     onSave={onSave}
                     saving={false}
@@ -734,24 +841,23 @@ export default function JogosPage() {
                   </div>
                 )}
 
-                {!manualLoad &&
-                  enableAutoLoad && <div ref={loadMoreRef} />}
+                {!manualLoad && enableAutoLoad && (
+                  <div ref={loadMoreRef} />
+                )}
 
-                {manualLoad &&
-                  pastHasMore &&
-                  past.length <= 3 && (
-                    <div className="flex justify-center">
-                      <button
-                        className="mt-2 rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
-                        onClick={loadMoreManual}
-                        disabled={pastLoading}
-                      >
-                        {pastLoading
-                          ? 'A carregar…'
-                          : 'Mostrar mais'}
-                      </button>
-                    </div>
-                  )}
+                {manualLoad && pastHasMore && past.length <= 3 && (
+                  <div className="flex justify-center">
+                    <button
+                      className="mt-2 rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
+                      onClick={loadMoreManual}
+                      disabled={pastLoading}
+                    >
+                      {pastLoading
+                        ? 'A carregar…'
+                        : 'Mostrar mais'}
+                    </button>
+                  </div>
+                )}
 
                 {pastLoading && (
                   <div className="opacity-70">

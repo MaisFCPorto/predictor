@@ -49,6 +49,14 @@ type Fx = {
   _as?: number | '';
 };
 
+// jogadores FC Porto
+type Player = {
+  id: string;
+  team_id: string;
+  name: string;
+  position: 'GR' | 'D' | 'M' | 'A' | string;
+};
+
 /* -------------------- Utils datas -------------------- */
 function toLocalDTValue(isoOrSqlUTC: string) {
   if (!isoOrSqlUTC) return '';
@@ -104,9 +112,7 @@ export default function AdminFixtures() {
   const [msg, setMsg] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [compFilter, setCompFilter] = useState<string>('');
-  const [sortField, setSortField] = useState<'comp' | 'ronda' | 'kickoff' | ''>(
-    ''
-  );
+  const [sortField, setSortField] = useState<'comp' | 'ronda' | 'kickoff' | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -147,6 +153,10 @@ export default function AdminFixtures() {
   // texto dos campos com auto-complete
   const [homeSearch, setHomeSearch] = useState('');
   const [awaySearch, setAwaySearch] = useState('');
+
+  // jogadores + marcadores
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [scorersByFixture, setScorersByFixture] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     const homeName = teams.find((t) => t.id === newFx.home_team_id)?.name ?? '';
@@ -297,11 +307,63 @@ export default function AdminFixtures() {
     }
   }
 
+  // jogadores FCP
+  async function loadPlayers() {
+    try {
+      const { data } = await adm.get<Player[]>('/api/admin/players', {
+        headers: { 'cache-control': 'no-store' },
+      });
+      setPlayers(data ?? []);
+    } catch {
+      setPlayers([]);
+    }
+  }
+
+  // marcadores de um fixture
+  async function loadFixtureScorers(fixtureId: string) {
+    try {
+      const { data } = await adm.get<{ player_id: string }[]>(
+        `/api/admin/fixtures/${fixtureId}/scorers`,
+        { headers: { 'cache-control': 'no-store' } }
+      );
+      const ids = (Array.isArray(data) ? data : []).map((r) => r.player_id);
+      setScorersByFixture((prev) => ({ ...prev, [fixtureId]: ids }));
+    } catch {
+      setScorersByFixture((prev) => ({ ...prev, [fixtureId]: prev[fixtureId] ?? [] }));
+    }
+  }
+
+  function toggleScorer(fixtureId: string, playerId: string) {
+    setScorersByFixture((prev) => {
+      const current = prev[fixtureId] ?? [];
+      const exists = current.includes(playerId);
+      const next = exists
+        ? current.filter((id) => id !== playerId)
+        : [...current, playerId];
+      return { ...prev, [fixtureId]: next };
+    });
+  }
+
+  async function saveFixtureScorers(fixtureId: string) {
+    try {
+      const player_ids = scorersByFixture[fixtureId] ?? [];
+      await adm.put(
+        `/api/admin/fixtures/${fixtureId}/scorers`,
+        { player_ids },
+        { headers: { 'cache-control': 'no-store' } }
+      );
+      notify('Marcadores atualizados ✅');
+    } catch (e) {
+      alert(errorMessage(e));
+    }
+  }
+
   useEffect(() => {
     void loadTeams();
     void loadCompetitions();
     void loadFixtures();
     void loadPortoSuggestions();
+    void loadPlayers();
   }, []);
 
   /* -------------------- Mutations -------------------- */
@@ -892,6 +954,7 @@ export default function AdminFixtures() {
                 !Number.isNaN(Number(f._as));
 
               const local = splitLocal(toLocalDTValue(f.kickoff_at));
+              const selectedScorers = scorersByFixture[f.id] ?? [];
 
               return (
                 <div
@@ -1161,6 +1224,61 @@ export default function AdminFixtures() {
                         />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Linha 4: Marcadores FC Porto */}
+                  <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] uppercase tracking-wide opacity-70">
+                        Marcadores FC Porto
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="rounded-full bg-white/5 px-3 py-1 text-[11px] hover:bg-white/10"
+                          onClick={() => void loadFixtureScorers(f.id)}
+                        >
+                          Carregar
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-full bg-emerald-500/80 px-3 py-1 text-[11px] hover:bg-emerald-500"
+                          onClick={() => void saveFixtureScorers(f.id)}
+                        >
+                          Guardar marcadores
+                        </button>
+                      </div>
+                    </div>
+
+                    {players.length === 0 ? (
+                      <div className="text-xs opacity-60">
+                        Sem jogadores configurados para o FC Porto.
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {players.map((p) => {
+                          const active = selectedScorers.includes(p.id);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className={
+                                'rounded-full border px-2 py-1 text-[11px] flex items-center gap-1 ' +
+                                (active
+                                  ? 'bg-sky-500/80 border-sky-500 text-white'
+                                  : 'bg-black/40 border-white/20 text-white/80 hover:bg-white/5')
+                              }
+                              onClick={() => toggleScorer(f.id, p.id)}
+                            >
+                              <span className="text-[9px] uppercase opacity-80">
+                                {p.position}
+                              </span>
+                              <span>{p.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

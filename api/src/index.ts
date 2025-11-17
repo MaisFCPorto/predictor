@@ -5,6 +5,7 @@ import { cors } from 'hono/cors';
 import { rankings, scoreUEFA } from './routes/rankings';
 import { adminCompetitions } from './routes/admin/competitions';
 import { adminPlayers } from './routes/admin/players';
+import { adminFixtureScorers } from './routes/admin/fixture-scorers';
 import { corsMiddleware } from './cors';
 import { auth } from './routes/auth';
 import { admin } from './routes/admin';
@@ -147,6 +148,7 @@ app.get('/routes', (c) =>
 app.route('/api/rankings', rankings);
 app.route('/api/admin/competitions', adminCompetitions);
 app.route('/api/admin/players', adminPlayers);
+app.route('/api/admin/fixtures', adminFixtureScorers);
 app.route('/api/auth', auth);
 app.route('/api/admin', admin);
 

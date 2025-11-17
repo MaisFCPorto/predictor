@@ -27,6 +27,12 @@ type FixtureDTO = {
   away_score?: number | null;
 };
 
+type PlayerDTO = {
+  id: string;
+  name: string;
+  position: string; // 'GR' | 'D' | 'M' | 'A'
+};
+
 type PredictionDTO = {
   fixture_id: string | number;
   home_goals: number;

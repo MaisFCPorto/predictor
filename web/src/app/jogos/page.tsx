@@ -734,7 +734,7 @@ async function onSave(
                     final_away_score={f.away_score ?? null}
                     pred_home={predictions[f.id]?.home}
                     pred_away={predictions[f.id]?.away}
-                    pred_scorer_player_id={
+                    pred_scorer_id={
                       predictions[f.id]?.scorer_player_id ?? null
                     }
                     points={predictions[f.id]?.points ?? null}
@@ -783,7 +783,7 @@ async function onSave(
                     final_away_score={f.away_score ?? null}
                     pred_home={predictions[f.id]?.home}
                     pred_away={predictions[f.id]?.away}
-                    pred_scorer_player_id={
+                    pred_scorer_id={
                       predictions[f.id]?.scorer_player_id ?? null
                     }
                     points={predictions[f.id]?.points ?? null}

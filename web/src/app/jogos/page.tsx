@@ -33,7 +33,6 @@ type PlayerDTO = {
   position: string; // 'GR' | 'D' | 'M' | 'A'
 };
 
-
 type PredictionDTO = {
   fixture_id: string | number;
   home_goals: number;
@@ -53,14 +52,6 @@ type RankRow = {
   diff: number;
   winner: number;
 };
-
-type Player = {
-  id: string;
-  name: string;
-  position: string; // 'GR' | 'D' | 'M' | 'A'
-  team_id?: string;
-};
-
 
 type LastPoints =
   | {
@@ -154,10 +145,8 @@ export default function JogosPage() {
     >
   >({});
 
-
+  // --- lista de jogadores (FCP ou plantel relevante) ---
   const [players, setPlayers] = useState<PlayerDTO[]>([]);
-
-
 
   // --- supabase user + SYNC NO WORKER ---
   useEffect(() => {
@@ -286,30 +275,31 @@ export default function JogosPage() {
     };
   }, [userId]);
 
+  // --- carregar lista de jogadores (rota pública /api/players) ---
+  async function loadPlayers() {
+    try {
+      const res = await fetch('/api/players', {
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        console.error('Falha a carregar players:', res.status, res.statusText);
+        setPlayers([]);
+        return;
+      }
+
+      const json = await res.json();
+      const list: PlayerDTO[] = Array.isArray(json) ? json : [];
+      setPlayers(list);
+    } catch (e) {
+      console.error('Erro a carregar players', e);
+      setPlayers([]);
+    }
+  }
+
   useEffect(() => {
     void loadPlayers();
   }, []);
-
-
-  // --- carregar lista de jogadores (FCP) ---
-useEffect(() => {
-  let abort = false;
-  (async () => {
-    try {
-      const res = await fetch('/api/players', { cache: 'no-store' });
-      if (!res.ok) throw new Error('Falha a carregar jogadores');
-      const json = await res.json();
-      const list: Player[] = Array.isArray(json) ? json : [];
-      if (!abort) setPlayers(list);
-    } catch {
-      if (!abort) setPlayers([]);
-    }
-  })();
-  return () => {
-    abort = true;
-  };
-}, []);
-
 
   // --- carregar dashboard (geral / mensal / último) ---
   useEffect(() => {
@@ -497,7 +487,8 @@ useEffect(() => {
       setPastLoading(true);
       const res = await fetch(
         `/api/fixtures/closed?limit=3&offset=${pastOffset}`,
-        { cache: 'no-store' },
+        { cache: 'no-store',
+        },
       );
       const json = await res.json();
       const more: FixtureDTO[] = Array.isArray(json) ? json : [];
@@ -508,29 +499,6 @@ useEffect(() => {
       setPastLoading(false);
     }
   }
-
-  async function loadPlayers() {
-    try {
-      const res = await fetch('/api/admin/players?team_id=fcp', {
-        cache: 'no-store',
-      });
-  
-      if (!res.ok) {
-        console.error('Falha a carregar players:', res.status, res.statusText);
-        setPlayers([]);
-        return;
-      }
-  
-      const json = await res.json();
-      const list: PlayerDTO[] = Array.isArray(json) ? json : [];
-      setPlayers(list);
-    } catch (e) {
-      console.error('Erro a carregar players', e);
-      setPlayers([]);
-    }
-  }
-  
-
   const sortedAsc = useMemo(
     () =>
       [...fixtures].sort(
@@ -549,49 +517,49 @@ useEffect(() => {
     [sortedAsc],
   );
 
+
+
   // guardar palpite (agora com scorerId)
-  // guardar palpite
-async function onSave(
-  fixtureId: string,
-  home: number,
-  away: number,
-  scorerId?: string | null,
-) {
-  try {
-    setSavingId(fixtureId);
-    setError(null);
-    const {
-      data: { user },
-    } = await supabasePKCE.auth.getUser();
-    if (!user) throw new Error('Sessão inválida. Faz login novamente.');
+  async function onSave(
+    fixtureId: string,
+    home: number,
+    away: number,
+    scorerId?: string | null,
+  ) {
+    try {
+      setSavingId(fixtureId);
+      setError(null);
+      const {
+        data: { user },
+      } = await supabasePKCE.auth.getUser();
+      if (!user) throw new Error('Sessão inválida. Faz login novamente.');
 
-    await savePrediction({
-      userId: user.id,
-      fixtureId,
-      home,
-      away,
-      scorer_player_id: scorerId ?? null,
-    });
-
-    // atualiza estado local para refletir de imediato
-    setPredictions((prev) => ({
-      ...prev,
-      [fixtureId]: {
+      await savePrediction({
+        userId: user.id,
+        fixtureId,
         home,
         away,
-        points: prev[fixtureId]?.points ?? null,
         scorer_player_id: scorerId ?? null,
-      },
-    }));
+      });
 
-    toast.success('Palpite guardado!', { duration: 1500 });
-  } catch (e: any) {
-    toast.error(e?.message ?? 'Erro a guardar');
-  } finally {
-    setSavingId(null);
+      // atualiza estado local para refletir de imediato
+      setPredictions((prev) => ({
+        ...prev,
+        [fixtureId]: {
+          home,
+          away,
+          points: prev[fixtureId]?.points ?? null,
+          scorer_player_id: scorerId ?? null,
+        },
+      }));
+
+      toast.success('Palpite guardado!', { duration: 1500 });
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Erro a guardar');
+    } finally {
+      setSavingId(null);
+    }
   }
-}
-
 
   const ym = currentYM();
   const linkGeneral = '/rankings?mode=general';
@@ -746,9 +714,7 @@ async function onSave(
               Jogos em aberto
             </h2>
             {openFixtures.length === 0 ? (
-              <div className="opacity-70">
-                Sem jogos abertos.
-              </div>
+              <div className="opacity-70">Sem jogos abertos.</div>
             ) : (
               <div className="space-y-4">
                 {openFixtures.map((f) => (
@@ -774,6 +740,7 @@ async function onSave(
                       predictions[f.id]?.scorer_player_id ?? null
                     }
                     points={predictions[f.id]?.points ?? null}
+                    players={players}
                     onSave={onSave}
                     saving={savingId === f.id}
                     variant="default"
@@ -791,13 +758,9 @@ async function onSave(
               Jogos passados
             </h2>
             {past.length === 0 && pastLoading ? (
-              <div className="opacity-70">
-                A carregar…
-              </div>
+              <div className="opacity-70">A carregar…</div>
             ) : past.length === 0 ? (
-              <div className="opacity-70">
-                Sem jogos passados.
-              </div>
+              <div className="opacity-70">Sem jogos passados.</div>
             ) : (
               <div className="space-y-4">
                 {past.map((f) => (
@@ -823,6 +786,7 @@ async function onSave(
                       predictions[f.id]?.scorer_player_id ?? null
                     }
                     points={predictions[f.id]?.points ?? null}
+                    players={players}
                     onSave={onSave}
                     saving={false}
                     variant="past"
@@ -852,17 +816,13 @@ async function onSave(
                       onClick={loadMoreManual}
                       disabled={pastLoading}
                     >
-                      {pastLoading
-                        ? 'A carregar…'
-                        : 'Mostrar mais'}
+                      {pastLoading ? 'A carregar…' : 'Mostrar mais'}
                     </button>
                   </div>
                 )}
 
                 {pastLoading && (
-                  <div className="opacity-70">
-                    A carregar…
-                  </div>
+                  <div className="opacity-70">A carregar…</div>
                 )}
               </div>
             )}

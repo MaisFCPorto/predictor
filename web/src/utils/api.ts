@@ -7,8 +7,7 @@ type SavePredictionPayload = {
   fixtureId: string;
   home: number;
   away: number;
-  // NOVO: opcional, porque o user pode não escolher marcador
-  scorer_player_id?: string | null;
+  scorer_player_id: string | null; // obrigatório enviar, mesmo null
 };
 
 export async function savePrediction({
@@ -22,17 +21,14 @@ export async function savePrediction({
     ? `${API_BASE}/api/predictions`
     : '/api/predictions';
 
-  const body: any = {
+  // ⚠️ Enviamos SEMPRE o scorer_player_id — null incluído.
+  const body = {
     userId,
     fixtureId,
     home,
     away,
+    scorer_player_id,
   };
-
-  // só envia se existir (para não partir nada antigo)
-  if (scorer_player_id) {
-    body.scorer_player_id = scorer_player_id;
-  }
 
   const res = await fetch(url, {
     method: 'POST',
@@ -44,10 +40,11 @@ export async function savePrediction({
     const txt = await res.text().catch(() => '');
     throw new Error(
       `Falha ao guardar palpite (${res.status}) ${res.statusText}${
-        txt ? ` — ${txt.slice(0, 140)}…` : ''
+        txt ? ` — ${txt.slice(0, 200)}…` : ''
       }`,
     );
   }
 
+  // a route já responde com JSON consistente
   return res.json().catch(() => ({}));
 }

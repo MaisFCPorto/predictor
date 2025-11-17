@@ -278,24 +278,23 @@ export default function JogosPage() {
   // --- carregar lista de jogadores (rota pública /api/players) ---
   async function loadPlayers() {
     try {
-      const res = await fetch('/api/players', {
-        cache: 'no-store',
-      });
-
+      const res = await fetch('/api/players', { cache: 'no-store' });
+  
       if (!res.ok) {
-        console.error('Falha a carregar players:', res.status, res.statusText);
+        console.error('Falha a carregar jogadores:', res.status, res.statusText);
         setPlayers([]);
         return;
       }
-
+  
       const json = await res.json();
       const list: PlayerDTO[] = Array.isArray(json) ? json : [];
       setPlayers(list);
-    } catch (e) {
-      console.error('Erro a carregar players', e);
+    } catch (err) {
+      console.error('Erro a carregar jogadores', err);
       setPlayers([]);
     }
   }
+  
 
   useEffect(() => {
     void loadPlayers();

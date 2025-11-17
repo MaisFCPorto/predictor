@@ -368,21 +368,24 @@ app.get('/api/fixtures/closed', async (c) => {
 // ----------------------------------------------------
 // PUBLIC: Predictions
 // ----------------------------------------------------
+// ----------------------------------------------------
+// PUBLIC: Predictions
+// ----------------------------------------------------
 app.post('/api/predictions', async (c) => {
   try {
     const body = await c.req.json().catch(() => null);
     if (!body) return c.json({ error: 'invalid_json' }, 400);
 
     const { fixtureId, home, away, userId, scorer_player_id } = body;
-if (!fixtureId || !userId || home == null || away == null) {
-  return c.json({ error: 'missing_data' }, 400);
-}
+    if (!fixtureId || !userId || home == null || away == null) {
+      return c.json({ error: 'missing_data' }, 400);
+    }
 
-// valida opcionalmente se é string
-const scorerId =
-  typeof scorer_player_id === 'string' && scorer_player_id.trim()
-    ? scorer_player_id.trim()
-    : null;
+    // valida opcionalmente se é string
+    const scorerId =
+      typeof scorer_player_id === 'string' && scorer_player_id.trim()
+        ? scorer_player_id.trim()
+        : null;
 
     const userExists = await c.env.DB
       .prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`)
@@ -413,12 +416,19 @@ const scorerId =
     await c.env.DB
       .prepare(
         `
-        INSERT INTO predictions (id, user_id, fixture_id, home_goals, away_goals, scorer_player_id)
-        VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)
+        INSERT INTO predictions (
+          id,
+          user_id,
+          fixture_id,
+          home_goals,
+          away_goals,
+          scorer_player_id
+        )
+        VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)
         ON CONFLICT(user_id, fixture_id)
         DO UPDATE SET
-          home_goals = excluded.home_goals,
-          away_goals = excluded.away_goals,
+          home_goals        = excluded.home_goals,
+          away_goals        = excluded.away_goals,
           scorer_player_id  = excluded.scorer_player_id
       `,
       )
@@ -466,11 +476,10 @@ app.get('/api/predictions', async (c) => {
       fixture_id: String(r.fixture_id),
       home_goals: r.home_goals ?? 0,
       away_goals: r.away_goals ?? 0,
-      points: r.points, // pode ser null se ainda não foi calculado
+      points: r.points, // pode ser null
       scorer_player_id: r.scorer_player_id ?? null,
     }));
 
-    // Log server-side (apenas para debug; podes remover depois)
     console.log(
       'GET /api/predictions →',
       JSON.stringify(safe).slice(0, 200),
@@ -482,6 +491,7 @@ app.get('/api/predictions', async (c) => {
     return c.json({ error: 'internal_error' }, 500);
   }
 });
+
 
 // ----------------------------------------------------
 // PUBLIC: Sync Users

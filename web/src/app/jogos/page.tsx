@@ -39,7 +39,6 @@ type PredictionDTO = {
   away_goals: number;
   points?: number | null;
   uefa_points?: number | null;
-  // NOVO: marcador gravado na BD
   scorer_player_id?: string | null;
 };
 
@@ -97,6 +96,12 @@ function formatYmLabel(ym: string) {
   const cap = month.charAt(0).toUpperCase() + month.slice(1);
   return cap;
 }
+
+type CardLinkProps = {
+  href?: string | null;
+  children: React.ReactNode;
+  aria?: string;
+};
 
 export default function JogosPage() {
   const router = useRouter();
@@ -279,13 +284,13 @@ export default function JogosPage() {
   async function loadPlayers() {
     try {
       const res = await fetch('/api/players', { cache: 'no-store' });
-  
+
       if (!res.ok) {
         console.error('Falha a carregar jogadores:', res.status, res.statusText);
         setPlayers([]);
         return;
       }
-  
+
       const json = await res.json();
       const list: PlayerDTO[] = Array.isArray(json) ? json : [];
       setPlayers(list);
@@ -294,7 +299,6 @@ export default function JogosPage() {
       setPlayers([]);
     }
   }
-  
 
   useEffect(() => {
     void loadPlayers();
@@ -486,8 +490,7 @@ export default function JogosPage() {
       setPastLoading(true);
       const res = await fetch(
         `/api/fixtures/closed?limit=3&offset=${pastOffset}`,
-        { cache: 'no-store',
-        },
+        { cache: 'no-store' },
       );
       const json = await res.json();
       const more: FixtureDTO[] = Array.isArray(json) ? json : [];
@@ -498,6 +501,7 @@ export default function JogosPage() {
       setPastLoading(false);
     }
   }
+
   const sortedAsc = useMemo(
     () =>
       [...fixtures].sort(
@@ -515,8 +519,6 @@ export default function JogosPage() {
       ),
     [sortedAsc],
   );
-
-
 
   // guardar palpite (agora com scorerId)
   async function onSave(
@@ -562,20 +564,14 @@ export default function JogosPage() {
 
   const ym = currentYM();
   const linkGeneral = '/rankings?mode=general';
-  const linkMonthly = `/rankings?mode=monthly&ym=${encodeURIComponent(
-    ym,
-  )}`;
+  const linkMonthly = `/rankings?mode=monthly&ym=${encodeURIComponent(ym)}`;
   const linkByGame = lastPoints?.fixture?.id
     ? `/rankings?mode=bygame&fixtureId=${encodeURIComponent(
         lastPoints.fixture.id,
       )}`
     : null;
 
-  const CardLink: React.FC<{
-    href?: string | null;
-    children: React.ReactNode;
-    aria?: string;
-  }> = ({ href, children, aria }) => {
+  const CardLink = ({ href, children, aria }: CardLinkProps) => {
     const base =
       'group rounded-2xl border border-white/10 bg-white/[0.04] p-4 ' +
       'transition-all duration-200 hover:bg-white/[0.07] ' +
@@ -583,7 +579,7 @@ export default function JogosPage() {
 
     if (userId && href) {
       return (
-        <Link href={href} aria-label={aria} className={base}>
+        <Link href={href} aria-label={aria ?? undefined} className={base}>
           {children}
         </Link>
       );

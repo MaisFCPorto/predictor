@@ -1,25 +1,53 @@
-// utils/api.ts
+// web/src/utils/api.ts
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
+
+type SavePredictionPayload = {
+  userId: string;
+  fixtureId: string;
+  home: number;
+  away: number;
+  // NOVO: opcional, porque o user pode não escolher marcador
+  scorer_player_id?: string | null;
+};
+
 export async function savePrediction({
-  userId, fixtureId, home, away,
-}: { userId: string; fixtureId: string; home: number; away: number }) {
+  userId,
+  fixtureId,
+  home,
+  away,
+  scorer_player_id,
+}: SavePredictionPayload) {
+  const url = API_BASE
+    ? `${API_BASE}/api/predictions`
+    : '/api/predictions';
 
-  const res = await fetch('/api/predictions', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ userId, fixtureId, home, away }),
-  });
+  const body: any = {
+    userId,
+    fixtureId,
+    home,
+    away,
+  };
 
-  const text = await res.text();
-  const tryJson = () => { try { return JSON.parse(text); } catch { return null; } };
-
-  if (!res.ok) {
-    const j = tryJson();
-    const msg =
-      j?.error === 'user_missing' ? 'Utilizador não sincronizado.' :
-      j?.error === 'locked'       ? 'Palpite bloqueado (jogo fechado).' :
-      j?.error || text || `HTTP ${res.status}`;
-    throw new Error(msg);
+  // só envia se existir (para não partir nada antigo)
+  if (scorer_player_id) {
+    body.scorer_player_id = scorer_player_id;
   }
 
-  return tryJson() ?? { ok: true };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(
+      `Falha ao guardar palpite (${res.status}) ${res.statusText}${
+        txt ? ` — ${txt.slice(0, 140)}…` : ''
+      }`,
+    );
+  }
+
+  return res.json().catch(() => ({}));
 }

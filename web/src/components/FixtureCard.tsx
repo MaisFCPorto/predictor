@@ -4,6 +4,12 @@ import { useMemo, useState, useEffect } from 'react';
 import clsx from 'clsx';
 import { compName, compAccent, compSubtle, roundText } from './competitions';
 
+type Player = {
+  id: string;
+  name: string;
+  position?: 'GR' | 'D' | 'M' | 'A' | string;
+};
+
 type Props = {
   id: string;
   kickoff_at: string;
@@ -22,7 +28,17 @@ type Props = {
   pred_home?: number | null;
   pred_away?: number | null;
   points?: number | null;
-  onSave: (id: string, h: number, a: number) => Promise<void> | void;
+  /** id do jogador que o user já tinha escolhido como marcador (se existir) */
+  pred_scorer_player_id?: string | null;
+  /** lista de jogadores do FCP, para o picker */
+  players?: Player[];
+  /** agora recebe também scorerId */
+  onSave: (
+    id: string,
+    h: number,
+    a: number,
+    scorerId: string | null
+  ) => Promise<void> | void;
   saving?: boolean;
   variant?: 'default' | 'past';
 };
@@ -52,6 +68,8 @@ export default function FixtureCard({
   final_away_score,
   pred_home,
   pred_away,
+  pred_scorer_player_id,
+  players,
   points,
   onSave,
   saving,
@@ -77,7 +95,7 @@ export default function FixtureCard({
       weekday: 'long',
       day: 'numeric',
       month: 'long',
-    }).format(d); // ex: "domingo, 9 de fevereiro"
+    }).format(d);
   }, [kickoff_at]);
 
   const timeLabel = useMemo(() => {
@@ -144,27 +162,39 @@ export default function FixtureCard({
   const nowLocked =
     lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0);
 
-  // estado dos inputs
+  // estado dos inputs de resultado
   const [home, setHome] = useState<number | ''>('');
   const [away, setAway] = useState<number | ''>('');
+
+  // --- NOVO: estado do jogador escolhido ----------------
+  const [scorerId, setScorerId] = useState<string | null>(
+    pred_scorer_player_id ?? null
+  );
+
+  // sempre que a prediction carregada mudar, atualiza o estado local
+  useEffect(() => {
+    setScorerId(pred_scorer_player_id ?? null);
+  }, [pred_scorer_player_id]);
+  // ------------------------------------------------------
 
   const hasPred =
     typeof pred_home === 'number' && typeof pred_away === 'number';
 
   const unchanged =
-    hasPred && typeof home === 'number' && typeof away === 'number'
-      ? home === pred_home && away === pred_away
-      : false;
+    hasPred &&
+    typeof home === 'number' &&
+    typeof away === 'number' &&
+    home === pred_home &&
+    away === pred_away &&
+    (pred_scorer_player_id ?? null) === (scorerId ?? null);
 
   const canSave =
     !nowLocked && home !== '' && away !== '' && !unchanged;
 
   // Prefill com a prediction do user
   useEffect(() => {
-    const ph =
-      typeof pred_home === 'number' ? pred_home : null;
-    const pa =
-      typeof pred_away === 'number' ? pred_away : null;
+    const ph = typeof pred_home === 'number' ? pred_home : null;
+    const pa = typeof pred_away === 'number' ? pred_away : null;
 
     if (variant === 'past') {
       if (ph !== null) setHome(ph);
@@ -176,22 +206,15 @@ export default function FixtureCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pred_home, pred_away, variant]);
 
-  // Points badge para jogos passados (usa pontos da BD se existirem)
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
 
-    const ph =
-      typeof pred_home === 'number' ? pred_home : null;
-    const pa =
-      typeof pred_away === 'number' ? pred_away : null;
+    const ph = typeof pred_home === 'number' ? pred_home : null;
+    const pa = typeof pred_away === 'number' ? pred_away : null;
     const rh =
-      typeof final_home_score === 'number'
-        ? final_home_score
-        : null;
+      typeof final_home_score === 'number' ? final_home_score : null;
     const ra =
-      typeof final_away_score === 'number'
-        ? final_away_score
-        : null;
+      typeof final_away_score === 'number' ? final_away_score : null;
 
     if (ph == null || pa == null) {
       return {
@@ -210,8 +233,7 @@ export default function FixtureCard({
     if (typeof points === 'number') {
       pts = points;
     } else {
-      const sign = (d: number) =>
-        d === 0 ? 0 : d > 0 ? 1 : -1;
+      const sign = (d: number) => (d === 0 ? 0 : d > 0 ? 1 : -1);
       pts = 0;
       if (sign(ph - pa) === sign(rh - ra)) pts += 3;
       if (ph === rh) pts += 2;
@@ -219,9 +241,7 @@ export default function FixtureCard({
       if (ph - pa === rh - ra) pts += 3;
     }
 
-    const label = `+${pts} ${
-      pts === 1 ? 'ponto' : 'pontos'
-    }`;
+    const label = `+${pts} ${pts === 1 ? 'ponto' : 'pontos'}`;
 
     if (pts === 0) {
       return {
@@ -255,23 +275,17 @@ export default function FixtureCard({
 
   const finalScoreText = useMemo(() => {
     const h =
-      typeof final_home_score === 'number'
-        ? final_home_score
-        : null;
+      typeof final_home_score === 'number' ? final_home_score : null;
     const a =
-      typeof final_away_score === 'number'
-        ? final_away_score
-        : null;
+      typeof final_away_score === 'number' ? final_away_score : null;
     if (variant !== 'past') return null;
     if (h == null || a == null) return null;
     return `${h}-${a}`;
   }, [variant, final_home_score, final_away_score]);
 
   const lastPredText = useMemo(() => {
-    const ph =
-      typeof pred_home === 'number' ? pred_home : null;
-    const pa =
-      typeof pred_away === 'number' ? pred_away : null;
+    const ph = typeof pred_home === 'number' ? pred_home : null;
+    const pa = typeof pred_away === 'number' ? pred_away : null;
     if (variant === 'past') return null;
     if (ph == null || pa == null) return null;
     return `${ph}-${pa}`;
@@ -279,9 +293,7 @@ export default function FixtureCard({
 
   const headerStatusLabel = useMemo(() => {
     if (variant === 'past')
-      return status === 'FINISHED'
-        ? 'Terminado'
-        : 'Bloqueado';
+      return status === 'FINISHED' ? 'Terminado' : 'Bloqueado';
     if (nowLocked) return 'Bloqueado';
     return null;
   }, [variant, status, nowLocked]);
@@ -301,10 +313,21 @@ export default function FixtureCard({
     }
   }, [competition_code]);
 
+  const selectedScorerName = useMemo(() => {
+    if (!scorerId || !players) return null;
+    return players.find((p) => p.id === scorerId)?.name ?? null;
+  }, [scorerId, players]);
+
+  const previousScorerName = useMemo(() => {
+    if (!pred_scorer_player_id || !players) return null;
+    return (
+      players.find((p) => p.id === pred_scorer_player_id)?.name ?? null
+    );
+  }, [pred_scorer_player_id, players]);
+
   return (
     <div
       className={clsx(
-        // ROOT como "group" para animar emblemas no hover
         'group relative w-full',
         'rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8 pb-8',
         'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden',
@@ -357,9 +380,7 @@ export default function FixtureCard({
               'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] leading-none',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
-                : urgencyClass(
-                    remainMs ?? Number.MAX_SAFE_INTEGER,
-                  ),
+                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
             )}
           >
             {headerStatusLabel ? (
@@ -426,9 +447,7 @@ export default function FixtureCard({
               'rounded-full px-3 py-1 text-[12px] leading-none',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
-                : urgencyClass(
-                    remainMs ?? Number.MAX_SAFE_INTEGER,
-                  ),
+                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
             )}
           >
             {headerStatusLabel ? (
@@ -450,10 +469,7 @@ export default function FixtureCard({
                     d="M12 7v5l3 3"
                   />
                 </svg>
-                <span
-                  className="tabular-nums"
-                  aria-live="polite"
-                >
+                <span className="tabular-nums" aria-live="polite">
                   {remaining}
                 </span>
               </>
@@ -463,7 +479,7 @@ export default function FixtureCard({
       </div>
 
       {/* Layout principal */}
-      <div className="mt-6 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap mb-8">
+      <div className="mt-6 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap mb-6">
         {/* HOME */}
         <div className="flex flex-col items-center w-[25%] min-w-[60px]">
           <Crest src={home_crest} alt={home_team_name} />
@@ -501,11 +517,8 @@ export default function FixtureCard({
                       : 'bg-white/10 hover:bg-white/15 text-white',
                   )}
                   onClick={() => {
-                    if (
-                      typeof home === 'number' &&
-                      typeof away === 'number'
-                    ) {
-                      onSave(id, home, away);
+                    if (typeof home === 'number' && typeof away === 'number') {
+                      onSave(id, home, away, scorerId ?? null);
                     }
                   }}
                   title="Guardar palpite"
@@ -560,12 +573,27 @@ export default function FixtureCard({
         </div>
       </div>
 
+      {/* NOVO: picker de marcador do FC Porto */}
+      <div className="mt-2 mb-3 relative z-10">
+        <PlayerPicker
+          players={players}
+          value={scorerId}
+          onChange={(pid) => setScorerId(pid)}
+          disabled={nowLocked || variant === 'past'}
+        />
+      </div>
+
       {/* Badge de Resultado + Pontos (jogos passados) */}
       {pointsBadge && (
-        <div className="flex justify-center mt-2 gap-2">
+        <div className="flex justify-center mt-2 gap-2 flex-wrap">
           {finalScoreText && (
             <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
               Resultado Correto: {finalScoreText}
+            </span>
+          )}
+          {selectedScorerName && (
+            <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
+              Marcador escolhido: {selectedScorerName}
             </span>
           )}
           <span
@@ -580,17 +608,22 @@ export default function FixtureCard({
       )}
 
       {/* Pill "Última previsão" para jogos em aberto */}
-      {!pointsBadge && lastPredText && (
+      {!pointsBadge && (lastPredText || previousScorerName) && (
         <div className="flex justify-center mt-2">
-          <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
-            Última previsão: {lastPredText}
+          <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200 gap-1">
+            {lastPredText && <>Última previsão: {lastPredText}</>}
+            {previousScorerName && (
+              <span className="opacity-80">
+                · Marcador: {previousScorerName}
+              </span>
+            )}
           </span>
         </div>
       )}
 
       {/* Botão mobile Guardar */}
       {variant !== 'past' && (
-        <div className="md:hidden flex justify-center mt-1">
+        <div className="md:hidden flex justify-center mt-2">
           <button
             disabled={!canSave || !!saving || nowLocked}
             className={clsx(
@@ -600,19 +633,12 @@ export default function FixtureCard({
                 : 'bg-white/10 hover:bg-white/15 text-white',
             )}
             onClick={() => {
-              if (
-                typeof home === 'number' &&
-                typeof away === 'number'
-              ) {
-                onSave(id, home, away);
+              if (typeof home === 'number' && typeof away === 'number') {
+                onSave(id, home, away, scorerId ?? null);
               }
             }}
           >
-            {nowLocked
-              ? 'Bloqueado'
-              : saving
-              ? 'A guardar…'
-              : 'Guardar'}
+            {nowLocked ? 'Bloqueado' : saving ? 'A guardar…' : 'Guardar'}
           </button>
         </div>
       )}
@@ -622,17 +648,10 @@ export default function FixtureCard({
 
 /* ---------- Sub-componentes ---------- */
 
-function Crest({
-  src,
-  alt,
-}: {
-  src?: string | null;
-  alt: string;
-}) {
+function Crest({ src, alt }: { src?: string | null; alt: string }) {
   return (
     <div className="flex-shrink-0">
       <div className="relative h-12 sm:h-14 md:h-16 px-1.5 sm:px-2 flex items-center justify-center">
-        {/* glow suave por baixo no hover */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-full opacity-0 scale-95
@@ -645,7 +664,6 @@ function Crest({
             alt={alt}
             className={clsx(
               'relative block max-h-full w-auto max-w-[80px] sm:max-w-[96px] md:max-w-[112px] object-contain',
-              // animação só em desktop para não chatear no touch
               'transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]',
               'md:group-hover:scale-[1.06] md:group-hover:-translate-y-0.5 md:group-hover:-rotate-2',
             )}
@@ -679,8 +697,7 @@ function ScoreBox({
         const v = e.target.value;
         if (v === '') return onChange('');
         const n = Number(v);
-        if (Number.isFinite(n) && n >= 0 && n <= 99)
-          onChange(n);
+        if (Number.isFinite(n) && n >= 0 && n <= 99) onChange(n);
       }}
       className={clsx(
         'no-spinner text-center tabular-nums rounded-2xl border placeholder:text-white/70',
@@ -693,5 +710,151 @@ function ScoreBox({
       placeholder=""
       inputMode="numeric"
     />
+  );
+}
+
+/* ---------- Picker de jogador ---------- */
+
+function PlayerPicker({
+  players,
+  value,
+  onChange,
+  disabled,
+}: {
+  players?: Player[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const list = useMemo(() => {
+    if (!players || players.length === 0) return [];
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? players.filter((p) =>
+          p.name.toLowerCase().includes(q),
+        )
+      : players;
+
+    // ordenar por posição e nome já vem do backend, mas garantimos algo simples aqui
+    return filtered;
+  }, [players, query]);
+
+  const selected = useMemo(
+    () => players?.find((p) => p.id === value) ?? null,
+    [players, value],
+  );
+
+  if (!players || players.length === 0) return null;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((v) => !v)}
+        className={clsx(
+          'w-full flex items-center justify-between gap-2 rounded-2xl border px-3 py-2.5 text-sm',
+          disabled
+            ? 'border-white/10 bg-white/5 text-white/40'
+            : 'border-white/15 bg-black/40 text-white hover:bg-black/50',
+        )}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs">
+            🎯
+          </span>
+          <div className="flex flex-col text-left min-w-0">
+            <span className="text-[11px] uppercase tracking-wide text-white/60">
+              Marcador do FC Porto
+            </span>
+            <span className="truncate">
+              {selected
+                ? selected.name
+                : 'Escolhe um jogador (opcional)'}
+            </span>
+          </div>
+        </div>
+        <svg
+          className={clsx(
+            'h-4 w-4 flex-shrink-0 transition-transform',
+            open && !disabled ? 'rotate-180' : '',
+          )}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6 9l6 6 6-6"
+          />
+        </svg>
+      </button>
+
+      {open && !disabled && (
+        <div className="absolute left-0 right-0 mt-2 rounded-2xl border border-white/15 bg-[#02051f] shadow-xl z-20 max-h-72 overflow-hidden">
+          <div className="p-2 border-b border-white/10">
+            <input
+              autoFocus
+              className="w-full rounded-xl bg-black/40 px-3 py-2 text-sm outline-none border border-white/15"
+              placeholder="Procurar jogador..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto py-1">
+            <button
+              type="button"
+              className="w-full text-left px-3 py-2 text-sm text-white/70 hover:bg-white/5"
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+            >
+              Nenhum marcador específico
+            </button>
+            {list.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={clsx(
+                  'w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-white/5',
+                  p.id === value ? 'bg-white/10' : '',
+                )}
+                onClick={() => {
+                  onChange(p.id);
+                  setOpen(false);
+                }}
+              >
+                <span>{p.name}</span>
+                {p.position && (
+                  <span className="text-[11px] rounded-full px-2 py-0.5 bg-white/10 text-white/70">
+                    {p.position}
+                  </span>
+                )}
+              </button>
+            ))}
+            {list.length === 0 && (
+              <div className="px-3 py-2 text-xs text-white/60">
+                Nenhum jogador encontrado.
+              </div>
+            )}
+          </div>
+          <div className="p-2 border-t border-white/10 text-right">
+            <button
+              type="button"
+              className="text-xs text-white/70 hover:text-white"
+              onClick={() => setOpen(false)}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

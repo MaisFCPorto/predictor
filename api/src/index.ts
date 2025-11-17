@@ -683,6 +683,84 @@ app.patch('/api/admin/fixtures/:id/reopen', async (c) => {
   return c.json({ ok: true });
 });
 
+// ----------------------------------------------------
+// ADMIN: Fixture scorers (golos FC Porto)
+// ----------------------------------------------------
+
+// GET atual: devolve lista de jogadores que marcarm neste fixture
+app.get('/api/admin/fixtures/:id/scorers', async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+
+  const fixtureId = c.req.param('id');
+
+  const { results } = await c.env.DB
+    .prepare(
+      `
+      SELECT 
+        fs.player_id,
+        p.name,
+        p.position
+      FROM fixture_scorers fs
+      LEFT JOIN players p ON p.id = fs.player_id
+      WHERE fs.fixture_id = ?
+      ORDER BY 
+        CASE p.position
+          WHEN 'GR' THEN 1
+          WHEN 'D'  THEN 2
+          WHEN 'M'  THEN 3
+          WHEN 'A'  THEN 4
+          ELSE 5
+        END,
+        p.name
+    `,
+    )
+    .bind(fixtureId)
+    .all<{
+      player_id: string;
+      name: string | null;
+      position: string | null;
+    }>();
+
+  return c.json(results ?? []);
+});
+
+// PUT: grava a lista de marcadores (apaga os antigos e insere os novos)
+app.put('/api/admin/fixtures/:id/scorers', async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+
+  const fixtureId = c.req.param('id');
+  const body = await c.req.json().catch(() => null) as
+    | { player_ids?: string[] }
+    | null;
+
+  const ids = Array.isArray(body?.player_ids)
+    ? body!.player_ids.map((x) => String(x)).filter(Boolean)
+    : [];
+
+  // limpa marcadores antigos
+  await run(c.env.DB, `DELETE FROM fixture_scorers WHERE fixture_id = ?`, fixtureId);
+
+  // insere os novos
+  for (const pid of ids) {
+    await run(
+      c.env.DB,
+      `
+      INSERT INTO fixture_scorers (id, fixture_id, player_id)
+      VALUES (lower(hex(randomblob(16))), ?, ?)
+      ON CONFLICT(fixture_id, player_id) DO NOTHING
+    `,
+      fixtureId,
+      pid,
+    );
+  }
+
+  return c.json({ ok: true, count: ids.length });
+});
+
+
+
 // GET /api/users/:id/role
 app.get('/api/users/:id/role', async (c) => {
   const userId = c.req.param('id');

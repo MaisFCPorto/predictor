@@ -47,6 +47,14 @@ type RankRow = {
   winner: number;
 };
 
+type Player = {
+  id: string;
+  name: string;
+  position: string; // 'GR' | 'D' | 'M' | 'A'
+  team_id?: string;
+};
+
+
 type LastPoints =
   | {
       points: number;
@@ -138,6 +146,9 @@ export default function JogosPage() {
       }
     >
   >({});
+
+  const [players, setPlayers] = useState<Player[]>([]);
+
 
   // --- supabase user + SYNC NO WORKER ---
   useEffect(() => {
@@ -265,6 +276,26 @@ export default function JogosPage() {
       abort = true;
     };
   }, [userId]);
+
+  // --- carregar lista de jogadores (FCP) ---
+useEffect(() => {
+  let abort = false;
+  (async () => {
+    try {
+      const res = await fetch('/api/players', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Falha a carregar jogadores');
+      const json = await res.json();
+      const list: Player[] = Array.isArray(json) ? json : [];
+      if (!abort) setPlayers(list);
+    } catch {
+      if (!abort) setPlayers([]);
+    }
+  })();
+  return () => {
+    abort = true;
+  };
+}, []);
+
 
   // --- carregar dashboard (geral / mensal / último) ---
   useEffect(() => {
@@ -483,33 +514,48 @@ export default function JogosPage() {
   );
 
   // guardar palpite (agora com scorerId)
-  async function onSave(
-    fixtureId: string,
-    home: number,
-    away: number,
-    scorerId: string | null,
-  ) {
-    try {
-      setSavingId(fixtureId);
-      setError(null);
-      const {
-        data: { user },
-      } = await supabasePKCE.auth.getUser();
-      if (!user) throw new Error('Sessão inválida. Faz login novamente.');
-      await savePrediction({
-        userId: user.id,
-        fixtureId,
+  // guardar palpite
+async function onSave(
+  fixtureId: string,
+  home: number,
+  away: number,
+  scorerId?: string | null,
+) {
+  try {
+    setSavingId(fixtureId);
+    setError(null);
+    const {
+      data: { user },
+    } = await supabasePKCE.auth.getUser();
+    if (!user) throw new Error('Sessão inválida. Faz login novamente.');
+
+    await savePrediction({
+      userId: user.id,
+      fixtureId,
+      home,
+      away,
+      scorer_player_id: scorerId ?? null,
+    });
+
+    // atualiza estado local para refletir de imediato
+    setPredictions((prev) => ({
+      ...prev,
+      [fixtureId]: {
         home,
         away,
-        scorer_player_id: scorerId,
-      });
-      toast.success('Palpite guardado!', { duration: 1500 });
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Erro a guardar');
-    } finally {
-      setSavingId(null);
-    }
+        points: prev[fixtureId]?.points ?? null,
+        scorer_player_id: scorerId ?? null,
+      },
+    }));
+
+    toast.success('Palpite guardado!', { duration: 1500 });
+  } catch (e: any) {
+    toast.error(e?.message ?? 'Erro a guardar');
+  } finally {
+    setSavingId(null);
   }
+}
+
 
   const ym = currentYM();
   const linkGeneral = '/rankings?mode=general';

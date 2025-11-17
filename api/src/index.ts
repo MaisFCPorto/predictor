@@ -515,6 +515,38 @@ app.post('/api/users/sync', async (c) => {
 });
 
 // ----------------------------------------------------
+// PUBLIC: Players (ex: plantel FC Porto)
+// ----------------------------------------------------
+app.get('/api/players', async (c) => {
+  const { results } = await c.env.DB
+    .prepare(
+      `
+      SELECT id, team_id, name, position
+      FROM players
+      WHERE is_active = 1
+      ORDER BY
+        CASE position
+          WHEN 'GR' THEN 1
+          WHEN 'D'  THEN 2
+          WHEN 'M'  THEN 3
+          WHEN 'A'  THEN 4
+          ELSE 5
+        END,
+        name
+    `,
+    )
+    .all<{
+      id: string;
+      team_id: string;
+      name: string;
+      position: string;
+    }>();
+
+  return c.json(results ?? []);
+});
+
+
+// ----------------------------------------------------
 // ADMIN: Teams
 // ----------------------------------------------------
 app.get('/api/admin/teams', async (c) => {

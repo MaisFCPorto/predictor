@@ -381,18 +381,20 @@ app.post('/api/predictions', async (c) => {
       return c.json({ error: 'missing_data' }, 400);
     }
 
-    // valida opcionalmente se é string
+    // normaliza marcador (string ou null)
     const scorerId =
       typeof scorer_player_id === 'string' && scorer_player_id.trim()
         ? scorer_player_id.trim()
         : null;
 
+    // valida se user existe
     const userExists = await c.env.DB
       .prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`)
       .bind(userId)
       .first();
     if (!userExists) return c.json({ error: 'user_missing' }, 400);
 
+    // valida fixture + lock
     const fx = await c.env.DB
       .prepare(
         `SELECT kickoff_at, status
@@ -413,6 +415,7 @@ app.post('/api/predictions', async (c) => {
       return c.json({ error: 'locked' }, 400);
     }
 
+    // 👉 AGORA inclui scorer_player_id no INSERT
     await c.env.DB
       .prepare(
         `
@@ -441,6 +444,7 @@ app.post('/api/predictions', async (c) => {
     return c.json({ error: 'internal_error' }, 500);
   }
 });
+
 
 app.get('/api/predictions', async (c) => {
   try {

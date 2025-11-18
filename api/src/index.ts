@@ -416,7 +416,7 @@ app.post('/api/predictions', async (c) => {
       return c.json({ error: 'locked' }, 400);
     }
 
-    // ⚠️ IMPORTANTE: incluir scorer_player_id na lista de colunas
+    // ⚠️ IMPORTANTE: incluir scorer_player_id nas colunas + values
     await c.env.DB
       .prepare(
         `
@@ -448,6 +448,7 @@ app.post('/api/predictions', async (c) => {
     return c.json({ error: 'internal_error' }, 500);
   }
 });
+
 
 
 

@@ -721,7 +721,7 @@ export default function FixtureCard({
                 setPickerOpen(false);
               }}
             >
-              Não escolher marcadores
+              Não escolher marcador
             </button>
           </div>
         </div>

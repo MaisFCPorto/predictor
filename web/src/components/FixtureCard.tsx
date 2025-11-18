@@ -167,8 +167,8 @@ export default function FixtureCard({
       setRemaining(formatRemaining(ms));
     };
     update();
-    const id = setInterval(update, 1000);
-    return () => clearInterval(id);
+    const timerId = setInterval(update, 1000);
+    return () => clearInterval(timerId);
   }, [lock_at_utc, variant, lockedBase]);
 
   const nowLocked = lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0);
@@ -211,31 +211,6 @@ export default function FixtureCard({
     [players, scorerId],
   );
 
-  // último estado gravado (para não spammar saves iguais)
-  const [lastSaved, setLastSaved] = useState<{
-    home: number;
-    away: number;
-    scorerId: string | null;
-  } | null>(() => {
-    const ph = typeof pred_home === 'number' ? pred_home : null;
-    const pa = typeof pred_away === 'number' ? pred_away : null;
-    if (ph == null || pa == null) return null;
-    return { home: ph, away: pa, scorerId: pred_scorer_id ?? null };
-  });
-
-  const unchanged = useMemo(() => {
-    if (!lastSaved) return false;
-    if (typeof home !== 'number' || typeof away !== 'number') return false;
-    return (
-      home === lastSaved.home &&
-      away === lastSaved.away &&
-      (scorerId ?? null) === lastSaved.scorerId
-    );
-  }, [lastSaved, home, away, scorerId]);
-
-  const canSave =
-    !nowLocked && typeof home === 'number' && typeof away === 'number' && !unchanged;
-
   // picker só ativo em jogos do Porto + com jogadores e jogo aberto
   const pickerEnabled =
     variant !== 'past' &&
@@ -259,30 +234,16 @@ export default function FixtureCard({
     return base;
   }, [players, pickerSearch]);
 
-  // AUTO-SAVE: guarda automaticamente após pequena pausa
-  useEffect(() => {
-    if (variant === 'past') return;
-    if (nowLocked) return;
-    if (typeof home !== 'number' || typeof away !== 'number') return;
-
-    const current = { home, away, scorerId: scorerId ?? null };
-
-    if (
-      lastSaved &&
-      lastSaved.home === current.home &&
-      lastSaved.away === current.away &&
-      lastSaved.scorerId === current.scorerId
-    ) {
-      return;
-    }
-
-    const handle = setTimeout(() => {
-      onSave(id, home, away, scorerId ?? null);
-      setLastSaved(current);
-    }, 800); // 0.8s depois de parar de escrever
-
-    return () => clearTimeout(handle);
-  }, [home, away, scorerId, nowLocked, variant, id, onSave, lastSaved]);
+  // pode guardar se mudou em relação aos props + não está bloqueado
+  const canSave =
+    !nowLocked &&
+    typeof home === 'number' &&
+    typeof away === 'number' &&
+    (
+      home !== (pred_home ?? null) ||
+      away !== (pred_away ?? null) ||
+      (scorerId ?? null) !== (pred_scorer_id ?? null)
+    );
 
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
@@ -379,6 +340,12 @@ export default function FixtureCard({
         return null;
     }
   }, [competition_code]);
+
+  // handler comum para guardar
+  const handleSave = () => {
+    if (typeof home !== 'number' || typeof away !== 'number') return;
+    onSave(id, home, away, scorerId ?? null);
+  };
 
   return (
     <div
@@ -551,16 +518,7 @@ export default function FixtureCard({
                       ? 'bg-white/5 text-white/40 cursor-not-allowed'
                       : 'bg-white/10 hover:bg-white/15 text-white',
                   )}
-                  onClick={() => {
-                    if (typeof home === 'number' && typeof away === 'number') {
-                      onSave(id, home, away, scorerId ?? null);
-                      setLastSaved({
-                        home,
-                        away,
-                        scorerId: scorerId ?? null,
-                      });
-                    }
-                  }}
+                  onClick={handleSave}
                   title="Guardar palpite"
                 >
                   {saving ? (
@@ -686,7 +644,7 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Botão mobile Guardar (continua, mas agora é opcional por causa do auto-save) */}
+      {/* Botão mobile Guardar */}
       {variant !== 'past' && (
         <div className="md:hidden flex justify-center mt-2">
           <button
@@ -697,16 +655,7 @@ export default function FixtureCard({
                 ? 'bg-white/5 text-white/50 cursor-not-allowed'
                 : 'bg-white/10 hover:bg-white/15 text-white',
             )}
-            onClick={() => {
-              if (typeof home === 'number' && typeof away === 'number') {
-                onSave(id, home, away, scorerId ?? null);
-                setLastSaved({
-                  home,
-                  away,
-                  scorerId: scorerId ?? null,
-                });
-              }
-            }}
+            onClick={handleSave}
           >
             {nowLocked ? 'Bloqueado' : saving ? 'A guardar…' : 'Guardar'}
           </button>

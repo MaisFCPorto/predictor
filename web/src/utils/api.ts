@@ -21,13 +21,13 @@ export async function savePrediction({
     ? `${API_BASE}/api/predictions`
     : '/api/predictions';
 
-  // ⚠️ Enviamos SEMPRE o scorer_player_id — null incluído.
+  // 👉 enviamos SEMPRE scorer_player_id (até se for null)
   const body = {
     userId,
     fixtureId,
     home,
     away,
-    scorer_player_id,
+    scorer_player_id: scorer_player_id ?? null,
   };
 
   const res = await fetch(url, {
@@ -40,11 +40,10 @@ export async function savePrediction({
     const txt = await res.text().catch(() => '');
     throw new Error(
       `Falha ao guardar palpite (${res.status}) ${res.statusText}${
-        txt ? ` — ${txt.slice(0, 200)}…` : ''
+        txt ? ` — ${txt.slice(0, 140)}…` : ''
       }`,
     );
   }
 
-  // a route já responde com JSON consistente
   return res.json().catch(() => ({}));
 }

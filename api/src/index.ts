@@ -415,7 +415,7 @@ app.post('/api/predictions', async (c) => {
       return c.json({ error: 'locked' }, 400);
     }
 
-    // 👉 AGORA inclui scorer_player_id no INSERT
+    // 👉 INSERT + UPDATE de resultado e marcador
     await c.env.DB
       .prepare(
         `
@@ -444,6 +444,7 @@ app.post('/api/predictions', async (c) => {
     return c.json({ error: 'internal_error' }, 500);
   }
 });
+
 
 
 app.get('/api/predictions', async (c) => {

@@ -377,17 +377,18 @@ app.post('/api/predictions', async (c) => {
     if (!body) return c.json({ error: 'invalid_json' }, 400);
 
     const { fixtureId, home, away, userId, scorer_player_id } = body;
+
     if (!fixtureId || !userId || home == null || away == null) {
       return c.json({ error: 'missing_data' }, 400);
     }
 
-    // normaliza marcador (string ou null)
+    // normalizar scorer opcional
     const scorerId =
       typeof scorer_player_id === 'string' && scorer_player_id.trim()
         ? scorer_player_id.trim()
         : null;
 
-    // valida se user existe
+    // valida user
     const userExists = await c.env.DB
       .prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`)
       .bind(userId)
@@ -415,7 +416,7 @@ app.post('/api/predictions', async (c) => {
       return c.json({ error: 'locked' }, 400);
     }
 
-    // 👉 INSERT + UPDATE de resultado e marcador
+    // ⚠️ IMPORTANTE: incluir scorer_player_id na lista de colunas
     await c.env.DB
       .prepare(
         `
@@ -427,12 +428,15 @@ app.post('/api/predictions', async (c) => {
           away_goals,
           scorer_player_id
         )
-        VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)
+        VALUES (
+          lower(hex(randomblob(16))),
+          ?, ?, ?, ?, ?
+        )
         ON CONFLICT(user_id, fixture_id)
         DO UPDATE SET
-          home_goals        = excluded.home_goals,
-          away_goals        = excluded.away_goals,
-          scorer_player_id  = excluded.scorer_player_id
+          home_goals       = excluded.home_goals,
+          away_goals       = excluded.away_goals,
+          scorer_player_id = excluded.scorer_player_id
       `,
       )
       .bind(userId, fixtureId, home, away, scorerId)
@@ -444,6 +448,8 @@ app.post('/api/predictions', async (c) => {
     return c.json({ error: 'internal_error' }, 500);
   }
 });
+
+
 
 
 

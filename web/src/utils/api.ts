@@ -1,5 +1,3 @@
-// web/src/utils/api.ts
-
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
 type SavePredictionPayload = {
@@ -7,7 +5,7 @@ type SavePredictionPayload = {
   fixtureId: string;
   home: number;
   away: number;
-  scorer_player_id: string | null; // obrigatório enviar, mesmo null
+  scorer_player_id?: string | null;
 };
 
 export async function savePrediction({
@@ -21,14 +19,17 @@ export async function savePrediction({
     ? `${API_BASE}/api/predictions`
     : '/api/predictions';
 
-  // 👉 enviamos SEMPRE scorer_player_id (até se for null)
-  const body = {
+  const body: any = {
     userId,
     fixtureId,
     home,
     away,
-    scorer_player_id: scorer_player_id ?? null,
   };
+
+  // ⚠️ Enviar mesmo quando for null (para limpar)
+  if (typeof scorer_player_id !== 'undefined') {
+    body.scorer_player_id = scorer_player_id;
+  }
 
   const res = await fetch(url, {
     method: 'POST',

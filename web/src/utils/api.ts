@@ -26,7 +26,7 @@ export async function savePrediction({
     away,
   };
 
-  // enviar mesmo quando for null, para limpar
+  // Enviar mesmo quando for null, para limpar
   if (typeof scorer_player_id !== 'undefined') {
     body.scorer_player_id = scorer_player_id;
   }

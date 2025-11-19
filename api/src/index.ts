@@ -357,118 +357,58 @@ app.get('/api/fixtures/closed', async (c) => {
 // POST /api/predictions  → cria OU atualiza palpite (update → insert)
 app.post('/api/predictions', async (c) => {
   try {
-    const body = (await c.req.json().catch(() => null)) as
-      | {
-          fixtureId?: string;
-          home?: number;
-          away?: number;
-          userId?: string;
-          scorer_player_id?: string | null;
-        }
-      | null;
+    const body = await c.req.json().catch(() => null) as any;
+    console.log('BODY /api/predictions', body);
 
-    if (!body) return c.json({ error: 'invalid_json' }, 400);
-
-    const { fixtureId, home, away, userId, scorer_player_id } = body;
-
-    if (!fixtureId || !userId || home == null || away == null) {
-      return c.json({ error: 'missing_data' }, 400);
-    }
-
+    const { fixtureId, home, away, userId, scorer_player_id } = body || {};
     const scorerId =
       typeof scorer_player_id === 'string' && scorer_player_id.trim()
         ? scorer_player_id.trim()
         : null;
 
-    // logging para debug
-    console.log('POST /api/predictions payload', {
-      fixtureId,
-      home,
-      away,
-      userId,
-      scorerId,
-    });
-
-    // valida user
-    const userExists = await c.env.DB
-      .prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`)
-      .bind(userId)
-      .first();
-    if (!userExists) return c.json({ error: 'user_missing' }, 400);
-
-    // valida fixture + lock
-    const fx = await c.env.DB
-      .prepare(
-        `SELECT kickoff_at, status
-         FROM fixtures
-         WHERE id = ?
-         LIMIT 1`,
-      )
-      .bind(fixtureId)
-      .first<{ kickoff_at: string; status: string }>();
-
-    if (!fx) return c.json({ error: 'fixture_not_found' }, 404);
-
-    const lockMs = getLockMs(c);
-    if (
-      fx.status === 'FINISHED' ||
-      isLocked(fx.kickoff_at, Date.now(), lockMs)
-    ) {
-      return c.json({ error: 'locked' }, 400);
-    }
-
     const db = c.env.DB;
 
-    // 1) tentar UPDATE
+    const fx = await db
+      .prepare(`SELECT kickoff_at, status FROM fixtures WHERE id = ? LIMIT 1`)
+      .bind(fixtureId)
+      .first();
+    console.log('FIXTURE', fx);
+
     const updateRes = await db
       .prepare(
-        `
-        UPDATE predictions
-        SET home_goals = ?, away_goals = ?, scorer_player_id = ?
-        WHERE user_id = ? AND fixture_id = ?
-      `,
+        `UPDATE predictions
+         SET home_goals = ?, away_goals = ?, scorer_player_id = ?
+         WHERE user_id = ? AND fixture_id = ?`,
       )
       .bind(home, away, scorerId, userId, fixtureId)
       .run();
 
-    const updated = updateRes.meta?.changes ?? 0;
-    console.log('POST /api/predictions update.meta', updateRes.meta);
+    console.log('UPDATE meta', updateRes.meta);
 
     let mode: 'update' | 'insert' = 'update';
 
-    // 2) se não atualizou nenhuma linha, fazer INSERT
-    if (!updated) {
+    if (!updateRes.meta?.changes) {
       const insertRes = await db
         .prepare(
-          `
-          INSERT INTO predictions (
-            id,
-            user_id,
-            fixture_id,
-            home_goals,
-            away_goals,
-            scorer_player_id,
-            created_at
-          )
-          VALUES (
-            lower(hex(randomblob(16))),
-            ?, ?, ?, ?, ?, DATETIME('now')
-          )
-        `,
+          `INSERT INTO predictions (
+             id, user_id, fixture_id, home_goals, away_goals, scorer_player_id, created_at
+           )
+           VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, DATETIME('now'))`,
         )
         .bind(userId, fixtureId, home, away, scorerId)
         .run();
 
-      console.log('POST /api/predictions insert.meta', insertRes.meta);
+      console.log('INSERT meta', insertRes.meta);
       mode = 'insert';
     }
 
     return c.json({ success: true, mode });
-  } catch (e) {
-    console.error('POST /api/predictions error:', e);
-    return c.json({ error: 'internal_error' }, 500);
+  } catch (e: any) {
+    console.error('POST /api/predictions ERROR', e?.message, e?.stack);
+    return c.json({ error: 'internal_error', detail: String(e) }, 500);
   }
 });
+
 
 // GET /api/predictions  → lista palpites do user
 app.get('/api/predictions', async (c) => {

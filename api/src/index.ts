@@ -20,7 +20,7 @@ type Env = {
 };
 
 // ----------------------------------------------------
-// App + CORS
+// App + CORS “à prova de bala”
 // ----------------------------------------------------
 const app = new Hono<{ Bindings: Env }>();
 
@@ -73,30 +73,29 @@ const isLocked = (kickoffISO: string, nowMs: number, lockMs: number) => {
 // Helper: recalcular pontos UEFA para um fixture
 // ----------------------------------------------------
 async function recomputePointsForFixture(db: D1Database, fixtureId: string) {
+  // 1) Buscar o resultado oficial do jogo
   const fx = await db
-    .prepare(
-      `
+    .prepare(`
       SELECT home_score, away_score
       FROM fixtures
       WHERE id = ?
       LIMIT 1
-    `,
-    )
+    `)
     .bind(fixtureId)
     .first<{ home_score: number | null; away_score: number | null }>();
 
+  // Se ainda não há resultado, não há pontos a recalcular
   if (!fx || fx.home_score == null || fx.away_score == null) {
     return;
   }
 
+  // 2) Ir buscar todas as predictions desse jogo
   const { results } = await db
-    .prepare(
-      `
+    .prepare(`
       SELECT user_id, fixture_id, home_goals, away_goals
       FROM predictions
       WHERE fixture_id = ?
-    `,
-    )
+    `)
     .bind(fixtureId)
     .all<{
       user_id: string;
@@ -105,18 +104,17 @@ async function recomputePointsForFixture(db: D1Database, fixtureId: string) {
       away_goals: number | null;
     }>();
 
+  // 3) Calcular pontos UEFA e gravar no campo "points"
   for (const p of results ?? []) {
     const s = scoreUEFA(p.home_goals, p.away_goals, fx.home_score, fx.away_score);
 
     await db
-      .prepare(
-        `
+      .prepare(`
         UPDATE predictions
         SET points = ?
         WHERE user_id = ?
           AND fixture_id = ?
-      `,
-      )
+      `)
       .bind(s.points, p.user_id, p.fixture_id)
       .run();
   }
@@ -126,7 +124,6 @@ async function recomputePointsForFixture(db: D1Database, fixtureId: string) {
 // Utilitários e Ctes
 // ----------------------------------------------------
 app.get('/health', (c) => c.text('ok'));
-
 app.get('/routes', (c) =>
   c.json({
     ok: true,
@@ -141,7 +138,6 @@ app.get('/routes', (c) =>
       '/api/admin/fixtures/porto',
       '/api/admin/competitions',
       '/api/admin/players',
-      '/api/players',
     ],
   }),
 );
@@ -373,10 +369,19 @@ app.get('/api/fixtures/closed', async (c) => {
 // PUBLIC: Predictions
 // ----------------------------------------------------
 
-// POST /api/predictions → cria OU atualiza palpite
+// POST /api/predictions  → cria OU atualiza palpite (update → insert)
 app.post('/api/predictions', async (c) => {
   try {
-    const body = await c.req.json().catch(() => null);
+    const body = (await c.req.json().catch(() => null)) as
+      | {
+          fixtureId?: string;
+          home?: number;
+          away?: number;
+          userId?: string;
+          scorer_player_id?: string | null;
+        }
+      | null;
+
     if (!body) return c.json({ error: 'invalid_json' }, 400);
 
     const { fixtureId, home, away, userId, scorer_player_id } = body;
@@ -390,20 +395,29 @@ app.post('/api/predictions', async (c) => {
         ? scorer_player_id.trim()
         : null;
 
+    // logging para debug
+    console.log('POST /api/predictions payload', {
+      fixtureId,
+      home,
+      away,
+      userId,
+      scorerId,
+    });
+
+    // valida user
     const userExists = await c.env.DB
       .prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`)
       .bind(userId)
       .first();
     if (!userExists) return c.json({ error: 'user_missing' }, 400);
 
+    // valida fixture + lock
     const fx = await c.env.DB
       .prepare(
-        `
-        SELECT kickoff_at, status
-        FROM fixtures
-        WHERE id = ?
-        LIMIT 1
-      `,
+        `SELECT kickoff_at, status
+         FROM fixtures
+         WHERE id = ?
+         LIMIT 1`,
       )
       .bind(fixtureId)
       .first<{ kickoff_at: string; status: string }>();
@@ -418,41 +432,60 @@ app.post('/api/predictions', async (c) => {
       return c.json({ error: 'locked' }, 400);
     }
 
-    const result = await c.env.DB
+    const db = c.env.DB;
+
+    // 1) tentar UPDATE
+    const updateRes = await db
       .prepare(
         `
-        INSERT INTO predictions (
-          id,
-          user_id,
-          fixture_id,
-          home_goals,
-          away_goals,
-          scorer_player_id
-        )
-        VALUES (
-          lower(hex(randomblob(16))),
-          ?, ?, ?, ?, ?
-        )
-        ON CONFLICT(user_id, fixture_id)
-        DO UPDATE SET
-          home_goals       = excluded.home_goals,
-          away_goals       = excluded.away_goals,
-          scorer_player_id = excluded.scorer_player_id
+        UPDATE predictions
+        SET home_goals = ?, away_goals = ?, scorer_player_id = ?
+        WHERE user_id = ? AND fixture_id = ?
       `,
       )
-      .bind(userId, fixtureId, home, away, scorerId)
+      .bind(home, away, scorerId, userId, fixtureId)
       .run();
 
-    console.log('POST /api/predictions → meta:', result.meta);
+    const updated = updateRes.meta?.changes ?? 0;
+    console.log('POST /api/predictions update.meta', updateRes.meta);
 
-    return c.json({ success: true });
+    let mode: 'update' | 'insert' = 'update';
+
+    // 2) se não atualizou nenhuma linha, fazer INSERT
+    if (!updated) {
+      const insertRes = await db
+        .prepare(
+          `
+          INSERT INTO predictions (
+            id,
+            user_id,
+            fixture_id,
+            home_goals,
+            away_goals,
+            scorer_player_id,
+            created_at
+          )
+          VALUES (
+            lower(hex(randomblob(16))),
+            ?, ?, ?, ?, ?, DATETIME('now')
+          )
+        `,
+        )
+        .bind(userId, fixtureId, home, away, scorerId)
+        .run();
+
+      console.log('POST /api/predictions insert.meta', insertRes.meta);
+      mode = 'insert';
+    }
+
+    return c.json({ success: true, mode });
   } catch (e) {
     console.error('POST /api/predictions error:', e);
     return c.json({ error: 'internal_error' }, 500);
   }
 });
 
-// GET /api/predictions → lista palpites do user
+// GET /api/predictions  → lista palpites do user
 app.get('/api/predictions', async (c) => {
   try {
     const userId = c.req.query('userId');
@@ -577,7 +610,7 @@ app.get('/api/admin/teams', async (c) => {
 // --- ADMIN: check -------------------------------------------------
 app.get('/api/admin/check', (c) => {
   const guard = requireAdmin(c);
-  if (guard) return guard;
+  if (guard) return guard; // devolve 403 se a x-admin-key não bater certo
   return c.json({ ok: true });
 });
 
@@ -618,15 +651,21 @@ app.post('/api/admin/fixtures', async (c) => {
 
     const id = (b.id && String(b.id)) || genId();
 
+    // valida mínimos
     if (!b.home_team_id || !b.away_team_id)
       return c.json({ error: 'missing_team' }, 400);
     if (b.home_team_id === b.away_team_id)
       return c.json({ error: 'same_team' }, 400);
     if (!b.kickoff_at) return c.json({ error: 'missing_kickoff' }, 400);
 
+    // campos opcionais
     const competition_id = b.competition_id ?? null;
     const round_label = b.round_label ?? null;
+
+    // usar 'leg_number' como coluna canónica
     const leg = (b.leg_number ?? b.leg) ?? null;
+
+    // se ainda tens a coluna matchday_id e queres um default:
     const matchday_id = b.matchday_id ?? 'md1';
 
     await run(
@@ -740,6 +779,7 @@ app.patch('/api/admin/fixtures/:id/reopen', async (c) => {
 // ----------------------------------------------------
 // ADMIN: Fixture scorers (golos FC Porto)
 // ----------------------------------------------------
+
 app.get('/api/admin/fixtures/:id/scorers', async (c) => {
   const guard = requireAdmin(c);
   if (guard) return guard;
@@ -808,9 +848,6 @@ app.put('/api/admin/fixtures/:id/scorers', async (c) => {
   return c.json({ ok: true, count: ids.length });
 });
 
-// ----------------------------------------------------
-// USERS: role
-// ----------------------------------------------------
 app.get('/api/users/:id/role', async (c) => {
   const userId = c.req.param('id');
   if (!userId) return c.json({ role: null }, 400);

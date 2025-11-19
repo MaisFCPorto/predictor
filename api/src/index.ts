@@ -860,6 +860,129 @@ app.get('/api/users/role/:id', async (c) => {
 });
 
 // ----------------------------------------------------
+// USERS: Last points (resumo do último jogo pontuado)
+// GET /api/users/:id/last-points
+// ----------------------------------------------------
+app.get('/api/users/:id/last-points', async (c) => {
+  const userId = c.req.param('id');
+  if (!userId) return c.json(null, 400);
+
+  const db = c.env.DB;
+
+  // 1) último jogo TERMINADO em que este user tem prediction
+  const last = await db
+    .prepare(
+      `
+      SELECT 
+        p.fixture_id,
+        f.kickoff_at,
+        f.home_score,
+        f.away_score
+      FROM predictions p
+      JOIN fixtures f ON f.id = p.fixture_id
+      WHERE 
+        p.user_id = ?
+        AND f.status = 'FINISHED'
+        AND f.home_score IS NOT NULL
+        AND f.away_score IS NOT NULL
+      ORDER BY f.kickoff_at DESC
+      LIMIT 1
+    `,
+    )
+    .bind(userId)
+    .first<{
+      fixture_id: string;
+      kickoff_at: string;
+      home_score: number;
+      away_score: number;
+    }>();
+
+  if (!last) {
+    // ainda não tem jogos pontuados
+    return c.json(null);
+  }
+
+  const { fixture_id, kickoff_at, home_score, away_score } = last;
+
+  // 2) ir buscar TODAS as predictions desse jogo
+  const { results } = await db
+    .prepare(
+      `
+      SELECT user_id, home_goals, away_goals
+      FROM predictions
+      WHERE fixture_id = ?
+    `,
+    )
+    .bind(fixture_id)
+    .all<{
+      user_id: string;
+      home_goals: number | null;
+      away_goals: number | null;
+    }>();
+
+  if (!results || results.length === 0) {
+    return c.json(null);
+  }
+
+  // 3) calcular pontuação UEFA para cada user e ordenar
+  type Row = {
+    user_id: string;
+    points: number;
+    exact: number;
+    diff: number;
+    winner: number;
+  };
+
+  const table: Row[] = results.map((r) => {
+    const s = scoreUEFA(
+      r.home_goals ?? 0,
+      r.away_goals ?? 0,
+      home_score,
+      away_score,
+    );
+    // assumo que scoreUEFA devolve { points, exact, diff, winner }
+    return {
+      user_id: r.user_id,
+      points: s.points,
+      exact: s.exact ?? 0,
+      diff: s.diff ?? 0,
+      winner: s.winner ?? 0,
+    };
+  });
+
+  table.sort((a, b) => {
+    // ordenação básica: mais pontos primeiro
+    if (b.points !== a.points) return b.points - a.points;
+    // se quiseres, dá para pôr mais critérios aqui
+    return 0;
+  });
+
+  const idx = table.findIndex((r) => r.user_id === userId);
+  const me = idx >= 0 ? table[idx] : null;
+
+  if (!me) {
+    // user não participou nesse fixture (não devia acontecer pela query de cima,
+    // mas guardo o fallback)
+    return c.json(null);
+  }
+
+  const payload = {
+    points: me.points,
+    exact: me.exact,
+    diff: me.diff,
+    winner: me.winner,
+    position: idx + 1,
+    fixture: {
+      id: fixture_id,
+      kickoff_at,
+    },
+  };
+
+  return c.json(payload);
+});
+
+
+// ----------------------------------------------------
 // Exporta App
 // ----------------------------------------------------
 export default app;

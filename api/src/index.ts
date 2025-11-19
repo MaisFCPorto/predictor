@@ -357,48 +357,114 @@ app.get('/api/fixtures/closed', async (c) => {
 // POST /api/predictions  → cria OU atualiza palpite (update → insert)
 app.post('/api/predictions', async (c) => {
   try {
-    const body = await c.req.json().catch(() => null) as any;
-    console.log('BODY /api/predictions', body);
+    const body = (await c.req.json().catch(() => null)) as
+      | {
+          fixtureId?: string;
+          home?: number;
+          away?: number;
+          userId?: string;
+          scorer_player_id?: string | number | null;
+        }
+      | null;
 
-    const { fixtureId, home, away, userId, scorer_player_id } = body || {};
-    const scorerId =
-      typeof scorer_player_id === 'string' && scorer_player_id.trim()
-        ? scorer_player_id.trim()
-        : null;
+    if (!body) return c.json({ error: 'invalid_json' }, 400);
+
+    const { fixtureId, home, away, userId, scorer_player_id } = body;
+
+    if (!fixtureId || !userId || home == null || away == null) {
+      return c.json({ error: 'missing_data' }, 400);
+    }
+
+    // aceitar string OU number e normalizar para string ou null
+    let scorerId: string | null = null;
+    if (typeof scorer_player_id === 'string') {
+      const t = scorer_player_id.trim();
+      scorerId = t || null;
+    } else if (
+      typeof scorer_player_id === 'number' &&
+      Number.isFinite(scorer_player_id)
+    ) {
+      scorerId = String(scorer_player_id);
+    }
+
+    console.log('POST /api/predictions payload', {
+      fixtureId,
+      home,
+      away,
+      userId,
+      scorerId,
+    });
 
     const db = c.env.DB;
 
-    const fx = await db
-      .prepare(`SELECT kickoff_at, status FROM fixtures WHERE id = ? LIMIT 1`)
-      .bind(fixtureId)
+    // valida user
+    const userExists = await db
+      .prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`)
+      .bind(userId)
       .first();
-    console.log('FIXTURE', fx);
+    if (!userExists) return c.json({ error: 'user_missing' }, 400);
 
+    // valida fixture + lock
+    const fx = await db
+      .prepare(
+        `SELECT kickoff_at, status
+         FROM fixtures
+         WHERE id = ?
+         LIMIT 1`,
+      )
+      .bind(fixtureId)
+      .first<{ kickoff_at: string; status: string }>();
+
+    if (!fx) return c.json({ error: 'fixture_not_found' }, 404);
+
+    const lockMs = getLockMs(c);
+    if (
+      fx.status === 'FINISHED' ||
+      isLocked(fx.kickoff_at, Date.now(), lockMs)
+    ) {
+      return c.json({ error: 'locked' }, 400);
+    }
+
+    // 1) tentar UPDATE
     const updateRes = await db
       .prepare(
-        `UPDATE predictions
-         SET home_goals = ?, away_goals = ?, scorer_player_id = ?
-         WHERE user_id = ? AND fixture_id = ?`,
+        `
+        UPDATE predictions
+        SET home_goals = ?, away_goals = ?, scorer_player_id = ?
+        WHERE user_id = ? AND fixture_id = ?
+      `,
       )
       .bind(home, away, scorerId, userId, fixtureId)
       .run();
 
-    console.log('UPDATE meta', updateRes.meta);
+    console.log('POST /api/predictions UPDATE meta', updateRes.meta);
 
     let mode: 'update' | 'insert' = 'update';
 
+    // 2) se não atualizou nenhuma linha, fazer INSERT
     if (!updateRes.meta?.changes) {
       const insertRes = await db
         .prepare(
-          `INSERT INTO predictions (
-             id, user_id, fixture_id, home_goals, away_goals, scorer_player_id, created_at
-           )
-           VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, DATETIME('now'))`,
+          `
+          INSERT INTO predictions (
+            id,
+            user_id,
+            fixture_id,
+            home_goals,
+            away_goals,
+            scorer_player_id,
+            created_at
+          )
+          VALUES (
+            lower(hex(randomblob(16))),
+            ?, ?, ?, ?, ?, DATETIME('now')
+          )
+        `,
         )
         .bind(userId, fixtureId, home, away, scorerId)
         .run();
 
-      console.log('INSERT meta', insertRes.meta);
+      console.log('POST /api/predictions INSERT meta', insertRes.meta);
       mode = 'insert';
     }
 
@@ -408,7 +474,6 @@ app.post('/api/predictions', async (c) => {
     return c.json({ error: 'internal_error', detail: String(e) }, 500);
   }
 });
-
 
 // GET /api/predictions  → lista palpites do user
 app.get('/api/predictions', async (c) => {
@@ -920,7 +985,6 @@ app.get('/api/users/:id/last-points', async (c) => {
 
   return c.json(payload);
 });
-
 
 // ----------------------------------------------------
 // Exporta App

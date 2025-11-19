@@ -1,4 +1,4 @@
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL_BASE || '').trim();
 
 type SavePredictionPayload = {
   userId: string;

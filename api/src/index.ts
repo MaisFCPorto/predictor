@@ -1,7 +1,6 @@
 // predictor-porto/api/src/index.ts
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { cors } from 'hono/cors';
 import { rankings, scoreUEFA } from './routes/rankings';
 import { adminCompetitions } from './routes/admin/competitions';
 import { adminPlayers } from './routes/admin/players';
@@ -20,26 +19,12 @@ type Env = {
 };
 
 // ----------------------------------------------------
-// App + CORS “à prova de bala”
+// App + CORS
 // ----------------------------------------------------
 const app = new Hono<{ Bindings: Env }>();
 
-// CORS em TODAS as rotas
+// CORS em TODAS as rotas (o middleware trata também dos OPTIONS)
 app.use('*', corsMiddleware);
-
-app.use(
-  '*',
-  cors({
-    origin: (origin) => origin ?? '*',
-    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['*'],
-    exposeHeaders: ['Content-Length'],
-    credentials: false,
-    maxAge: 86400,
-  }),
-);
-
-app.options('*', (c) => c.body(null, 204));
 
 // ----------------------------------------------------
 // Helpers
@@ -779,7 +764,6 @@ app.patch('/api/admin/fixtures/:id/reopen', async (c) => {
 // ----------------------------------------------------
 // ADMIN: Fixture scorers (golos FC Porto)
 // ----------------------------------------------------
-
 app.get('/api/admin/fixtures/:id/scorers', async (c) => {
   const guard = requireAdmin(c);
   if (guard) return guard;
@@ -848,6 +832,9 @@ app.put('/api/admin/fixtures/:id/scorers', async (c) => {
   return c.json({ ok: true, count: ids.length });
 });
 
+// ----------------------------------------------------
+// USERS: Roles
+// ----------------------------------------------------
 app.get('/api/users/:id/role', async (c) => {
   const userId = c.req.param('id');
   if (!userId) return c.json({ role: null }, 400);

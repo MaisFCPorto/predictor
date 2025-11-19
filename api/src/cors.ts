@@ -1,40 +1,28 @@
-// apps/api/src/cors.ts
-import type { Context, Next } from 'hono';
+// predictor-porto/api/src/cors.ts
+import type { MiddlewareHandler } from 'hono';
 
-const ALLOWED_ORIGINS = [
-  'http://localhost:3000',
-  'https://maispredictor.vercel.app',
-];
+export const corsMiddleware: MiddlewareHandler = async (c, next) => {
+  // Usa SEMPRE o Origin do pedido, ou '*' se não houver
+  const origin = c.req.header('Origin') ?? '*';
+  const reqHeaders =
+    c.req.header('Access-Control-Request-Headers') ?? '*';
 
-export function corsHeaders(origin?: string) {
-  const allowOrigin =
-    origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  c.header('Access-Control-Allow-Origin', origin);
+  // Para caches não baralharem diferentes origins
+  c.header('Vary', 'Origin');
 
-  return {
-    'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers':
-      'Authorization, Content-Type, X-Admin-Key',
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Max-Age': '86400',
-    // opcional mas útil quando a resposta é 204
-    'Vary': 'Origin',
-  };
-}
+  c.header(
+    'Access-Control-Allow-Methods',
+    'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+  );
+  c.header('Access-Control-Allow-Headers', reqHeaders);
+  c.header('Access-Control-Allow-Credentials', 'true');
+  c.header('Access-Control-Max-Age', '86400');
 
-export async function corsMiddleware(c: Context, next: Next) {
-  const origin = c.req.header('Origin') || undefined;
-
-  // Preflight
+  // Responder logo aos preflights
   if (c.req.method === 'OPTIONS') {
-    return c.body(null, 204, corsHeaders(origin));
+    return c.body(null, 204);
   }
 
   await next();
-
-  // Anexa CORS na resposta normal
-  const headers = corsHeaders(origin);
-  for (const [k, v] of Object.entries(headers)) {
-    c.header(k, v);
-  }
-}
+};

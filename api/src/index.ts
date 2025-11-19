@@ -913,7 +913,7 @@ app.get('/api/users/:id/last-points', async (c) => {
   const { results } = await db
     .prepare(
       `
-      SELECT user_id, home_goals, away_goals
+      SELECT user_id, home_goals, away_goals, points
       FROM predictions
       WHERE fixture_id = ?
     `,
@@ -923,11 +923,8 @@ app.get('/api/users/:id/last-points', async (c) => {
       user_id: string;
       home_goals: number | null;
       away_goals: number | null;
+      points: number | null;
     }>();
-
-  if (!results || results.length === 0) {
-    return c.json(null);
-  }
 
   // 3) calcular pontuação UEFA para cada user e ordenar
   type Row = {
@@ -946,9 +943,11 @@ app.get('/api/users/:id/last-points', async (c) => {
       away_score,
     );
     // assumo que scoreUEFA devolve { points, exact, diff, winner }
+    const pts = typeof r.points === 'number' ? r.points : s.points;
+
     return {
       user_id: r.user_id,
-      points: s.points,
+      points: pts,
       exact: s.exact ?? 0,
       diff: s.diff ?? 0,
       winner: s.winner ?? 0,

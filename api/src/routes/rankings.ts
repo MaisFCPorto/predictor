@@ -71,6 +71,26 @@ export function scoreUEFA(
   return { points, exact, diff, winner };
 }
 
+/* ============================
+   Bónus por marcador acertado
+   (por posição)
+============================ */
+
+// AJUSTA ESTES VALORES consoante a regra que tinhas:
+// aqui é só um exemplo:
+const SCORER_BONUS_BY_POS: Record<string, number> = {
+  GR: 10,
+  D: 5,
+  M: 3,
+  A: 1,
+};
+
+function scorerBonusForPosition(pos: string | null | undefined): number {
+  if (!pos) return 0;
+  const key = pos.toUpperCase();
+  return SCORER_BONUS_BY_POS[key] ?? 0;
+}
+
 // Comparador comum aos 3 rankings: pontos → exatos → diferenças → tendência → palpite mais cedo
 function cmpRanking<T extends {
   points: number; exact: number; diff: number; winner: number;
@@ -92,6 +112,7 @@ function cmpRanking<T extends {
    - só conta jogos FINISHED
    - se ym existir, filtra por strftime('%Y-%m', fixtures.kickoff_at)
    - predictions.created_at só entra para desempate final
+   - soma também bónus por marcador acertado (conforme posição)
 ====================================================== */
 rankings.get('/', async (c) => {
   const ym = c.req.query('ym'); // ex: '2025-10'  -> modo mensal
@@ -113,6 +134,7 @@ rankings.get('/', async (c) => {
         p.fixture_id,
         p.home_goals,
         p.away_goals,
+        p.scorer_player_id,
         p.created_at,
         f.home_score,
         f.away_score,
@@ -128,6 +150,7 @@ rankings.get('/', async (c) => {
       fixture_id: string;
       home_goals: number;
       away_goals: number;
+      scorer_player_id: string | number | null;
       created_at: string | null;
       home_score: number | null;
       away_score: number | null;
@@ -139,7 +162,37 @@ rankings.get('/', async (c) => {
     return c.json([], 200);
   }
 
-  // 2) Users (nome amigável)
+  // 2) Buscar marcadores reais (fixture_scorers + posição do jogador)
+  const { results: scorerRows } = await c.env.DB
+    .prepare(
+      `
+      SELECT
+        fs.fixture_id,
+        fs.player_id,
+        p.position
+      FROM fixture_scorers fs
+      LEFT JOIN players p ON p.id = fs.player_id
+      JOIN fixtures f ON f.id = fs.fixture_id
+      WHERE ${where}
+    `,
+    )
+    .bind(...params)
+    .all<{
+      fixture_id: string;
+      player_id: string;
+      position: string | null;
+    }>();
+
+  // Mapa (fixture_id + player_id) -> bónus por posição
+  const bonusByFixtureAndPlayer = new Map<string, number>();
+  for (const r of scorerRows ?? []) {
+    const bonus = scorerBonusForPosition(r.position);
+    if (!bonus) continue;
+    const key = `${r.fixture_id}:${String(r.player_id)}`;
+    bonusByFixtureAndPlayer.set(key, bonus);
+  }
+
+  // 3) Users (nome amigável)
   const users = await c.env.DB
     .prepare(`
       SELECT
@@ -195,11 +248,22 @@ rankings.get('/', async (c) => {
       };
     }
 
-    // Pontos (UEFA) — sempre com base no resultado oficial do jogo
-    const s   = scoreUEFA(p.home_goals, p.away_goals, p.home_score, p.away_score);
     const acc = score[p.user_id];
 
-    acc.points += s.points;
+    // Pontos (UEFA) — sempre com base no resultado oficial do jogo
+    const s = scoreUEFA(p.home_goals, p.away_goals, p.home_score, p.away_score);
+
+    let pts = s.points;
+
+    // Bónus por marcador acertado (se o jogador previsto tiver marcado)
+    if (p.scorer_player_id != null) {
+      const predId = String(p.scorer_player_id);
+      const key = `${p.fixture_id}:${predId}`;
+      const bonus = bonusByFixtureAndPlayer.get(key) ?? 0;
+      pts += bonus;
+    }
+
+    acc.points += pts;
     acc.exact  += s.exact;
     acc.diff   += s.diff;
     acc.winner += s.winner;
@@ -267,6 +331,7 @@ rankings.get('/games', async (c) => {
 /* ======================================================
    /api/rankings/game?fixtureId=...
    Ranking por jogo (mostra todos os users; 0 pts sem palpite)
+   Agora também com bónus por marcador acertado
 ====================================================== */
 rankings.get('/game', async (c) => {
   const fixtureId = c.req.query('fixtureId');
@@ -290,6 +355,28 @@ rankings.get('/game', async (c) => {
 
   if (!fx) return c.json({ error: 'fixture_not_found' }, 404);
 
+  // Marcadores reais desse fixture + posição
+  const { results: scorerRows } = await c.env.DB
+    .prepare(
+      `
+      SELECT 
+        fs.player_id,
+        p.position
+      FROM fixture_scorers fs
+      LEFT JOIN players p ON p.id = fs.player_id
+      WHERE fs.fixture_id = ?
+    `,
+    )
+    .bind(fixtureId)
+    .all<{ player_id: string; position: string | null }>();
+
+  const scorerBonusByPlayer = new Map<string, number>();
+  for (const r of scorerRows ?? []) {
+    const bonus = scorerBonusForPosition(r.position);
+    if (!bonus) continue;
+    scorerBonusByPlayer.set(String(r.player_id), bonus);
+  }
+
   // Users + palpite (se existir) + timestamp do palpite
   const { results } = await c.env.DB
     .prepare(`
@@ -306,6 +393,7 @@ rankings.get('/game', async (c) => {
         u.avatar_url                       AS avatar_url,
         p.home_goals                       AS pred_home,
         p.away_goals                       AS pred_away,
+        p.scorer_player_id                 AS pred_scorer_id,
         p.created_at                       AS pred_created_at
       FROM users u
       LEFT JOIN predictions p
@@ -319,11 +407,22 @@ rankings.get('/game', async (c) => {
       avatar_url: string | null;
       pred_home: number | null;
       pred_away: number | null;
+      pred_scorer_id: string | number | null;
       pred_created_at: string | null;
     }>();
 
   const rows = (results ?? []).map(r => {
     const s = scoreUEFA(r.pred_home, r.pred_away, fx.home_score, fx.away_score);
+
+    let pts = s.points;
+
+    // Bónus marcador por posição
+    if (r.pred_scorer_id != null) {
+      const id = String(r.pred_scorer_id);
+      const bonus = scorerBonusByPlayer.get(id) ?? 0;
+      pts += bonus;
+    }
+
     const first_pred_at = r.pred_created_at
       ? new Date(r.pred_created_at).getTime()
       : null;
@@ -332,7 +431,7 @@ rankings.get('/game', async (c) => {
       user_id: r.user_id,
       name: r.name ?? 'Jogador',
       avatar_url: r.avatar_url,
-      points: s.points,
+      points: pts,
       exact: s.exact,
       diff: s.diff,
       winner: s.winner,

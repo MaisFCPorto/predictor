@@ -252,17 +252,25 @@ export default function JogosPage() {
           const a = (p as any).away_goals;
           const pts =
             (p as any).points ?? (p as any).uefa_points ?? null;
-          const scorer = (p as any).scorer_player_id ?? null;
+            const scorerRaw = (p as any).scorer_player_id;
 
-          if (typeof h === 'number' && typeof a === 'number') {
-            map[fixtureKey] = {
-              home: h,
-              away: a,
-              points: typeof pts === 'number' ? pts : null,
-              scorer_player_id:
-                typeof scorer === 'string' ? scorer : null,
-            };
-          }
+            let scorerId: string | null = null;
+            if (typeof scorerRaw === 'string') {
+              const t = scorerRaw.trim();
+              scorerId = t || null;
+            } else if (typeof scorerRaw === 'number' && Number.isFinite(scorerRaw)) {
+              scorerId = String(scorerRaw);
+            }
+            
+            if (typeof h === 'number' && typeof a === 'number') {
+              map[fixtureKey] = {
+                home: h,
+                away: a,
+                points: typeof pts === 'number' ? pts : null,
+                scorer_player_id: scorerId,
+              };
+            }
+            
         }
 
         if (!abort) {

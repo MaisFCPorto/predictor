@@ -3,6 +3,19 @@ import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { scoreUEFA } from './rankings';
 
+const SCORER_BONUS_BY_POS: Record<string, number> = {
+  GR: 10,
+  D: 5,
+  M: 3,
+  A: 1,
+};
+
+function scorerBonusForPosition(pos: string | null | undefined): number {
+  if (!pos) return 0;
+  const key = pos.toUpperCase();
+  return SCORER_BONUS_BY_POS[key] ?? 0;
+}
+
 type Env = {
   DB: D1Database;
   ADMIN_KEY: string;
@@ -23,19 +36,40 @@ export async function recomputePointsForFixture(DB: D1Database, fixtureId: strin
     .bind(fixtureId)
     .first<{ id: string; home_score: number | null; away_score: number | null }>();
 
-  // Se ainda não houver resultado, não há nada para fazer
   if (!fx || fx.home_score == null || fx.away_score == null) {
     return;
   }
 
-  // 2) Ir buscar as predictions desse jogo
+  // 2) Buscar marcadores reais desse jogo + posição
+  const { results: scorerRows } = await DB.prepare(
+    `
+      SELECT fs.player_id, p.position
+      FROM fixture_scorers fs
+      LEFT JOIN players p ON p.id = fs.player_id
+      WHERE fs.fixture_id = ?
+    `,
+  )
+    .bind(fixtureId)
+    .all<{ player_id: string; position: string | null }>();
+
+  const bonusByPlayer = new Map<string, number>();
+  for (const r of scorerRows ?? []) {
+    const bonus = scorerBonusForPosition(r.position);
+    if (bonus) {
+      bonusByPlayer.set(String(r.player_id), bonus);
+    }
+  }
+
+  // 3) Ir buscar as predictions desse jogo (inclui scorer_player_id)
   const { results } = await DB.prepare(
     `
       SELECT
         user_id,
         fixture_id,
         home_goals,
-        away_goals
+        away_goals,
+        scorer_player_id,
+        points
       FROM predictions
       WHERE fixture_id = ?
     `,
@@ -46,13 +80,22 @@ export async function recomputePointsForFixture(DB: D1Database, fixtureId: strin
       fixture_id: string;
       home_goals: number | null;
       away_goals: number | null;
+      scorer_player_id: string | number | null;
+      points: number | null;
     }>();
 
-  // 3) Calcular pontos UEFA + gravar no campo "points"
+  // 4) Calcular pontos UEFA + bónus marcador e gravar em points
   for (const p of results ?? []) {
     const s = scoreUEFA(p.home_goals, p.away_goals, fx.home_score, fx.away_score);
 
-    // uso user_id + fixture_id para identificar a row (não assumo que tens coluna id)
+    let pts = s.points;
+
+    if (p.scorer_player_id != null) {
+      const key = String(p.scorer_player_id);
+      const bonus = bonusByPlayer.get(key) ?? 0;
+      pts += bonus;
+    }
+
     await DB.prepare(
       `
         UPDATE predictions
@@ -61,10 +104,11 @@ export async function recomputePointsForFixture(DB: D1Database, fixtureId: strin
           AND fixture_id = ?
       `,
     )
-      .bind(s.points, p.user_id, p.fixture_id)
+      .bind(pts, p.user_id, p.fixture_id)
       .run();
   }
 }
+
 
 // Middleware: exige header x-admin-key (chave guardada no Worker)
 const requireAdminKey: import('hono').MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {

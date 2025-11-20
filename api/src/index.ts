@@ -850,23 +850,28 @@ app.put('/api/admin/fixtures/:id/scorers', async (c) => {
     ? body!.player_ids.map((x) => String(x)).filter(Boolean)
     : [];
 
+  // limpa marcadores anteriores
   await run(c.env.DB, `DELETE FROM fixture_scorers WHERE fixture_id = ?`, fixtureId);
 
+  // insere novos (cada um com id gerado)
   for (const pid of ids) {
     await run(
       c.env.DB,
       `
       INSERT INTO fixture_scorers (id, fixture_id, player_id)
       VALUES (lower(hex(randomblob(16))), ?, ?)
-      ON CONFLICT(fixture_id, player_id) DO NOTHING
     `,
       fixtureId,
       pid,
     );
   }
 
+  // 🔁 sempre que alteras marcadores, volta a calcular pontos
+  await recomputePointsForFixture(c.env.DB, fixtureId);
+
   return c.json({ ok: true, count: ids.length });
 });
+
 
 // ----------------------------------------------------
 // USERS: Roles

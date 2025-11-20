@@ -23,43 +23,49 @@ adminFixtureScorers.get('/:id/scorers', async (c) => {
     `,
     )
     .bind(fixtureId)
-    .all<{ player_id: string; name: string; position: string }>();
+    .all<{ player_id: string; name: string; position: string | null }>();
 
   return c.json(results ?? []);
 });
 
 // PUT /api/admin/fixtures/:id/scorers
+// body: { player_ids: string[] }
+// Substitui os marcadores desse jogo e recalcula pontos das predictions
 adminFixtureScorers.put('/:id/scorers', async (c) => {
   const fixtureId = c.req.param('id');
-  const body = await c.req.json<{ player_ids?: string[] | null }>().catch(() => ({
+
+  const body = await c.req.json<{ player_ids?: (string | number)[] }>().catch(() => ({
     player_ids: [],
   }));
 
-  const playerIds = Array.isArray(body.player_ids) ? body.player_ids : [];
+  const rawIds = body.player_ids ?? [];
+  const ids = rawIds
+    .map((x) => String(x).trim())
+    .filter((x) => x.length > 0);
 
   const db = c.env.DB;
 
-  // Limpa marcadores atuais
+  // Limpa marcadores existentes
   await db
-    .prepare('DELETE FROM fixture_scorers WHERE fixture_id = ?')
+    .prepare(`DELETE FROM fixture_scorers WHERE fixture_id = ?`)
     .bind(fixtureId)
     .run();
 
   // Insere novos
-  for (const pid of playerIds) {
+  for (const pid of ids) {
     await db
       .prepare(
         `
-        INSERT INTO fixture_scorers (fixture_id, player_id)
-        VALUES (?, ?)
+        INSERT INTO fixture_scorers (fixture_id, player_id, created_at)
+        VALUES (?, ?, datetime('now'))
       `,
       )
       .bind(fixtureId, pid)
       .run();
   }
 
-  // Recalcular pontos de todas as predictions desse jogo
+  // Recalcula pontos das predictions deste jogo (incluindo bónus de marcador)
   await recomputePointsForFixture(db, fixtureId);
 
-  return c.json({ ok: true, count: playerIds.length });
+  return c.json({ ok: true, fixture_id: fixtureId, player_ids: ids });
 });

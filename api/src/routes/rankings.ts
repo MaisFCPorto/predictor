@@ -77,7 +77,6 @@ export function scoreUEFA(
 ============================ */
 
 // AJUSTA ESTES VALORES consoante a regra que tinhas:
-// aqui é só um exemplo:
 const SCORER_BONUS_BY_POS: Record<string, number> = {
   GR: 10,
   D: 5,
@@ -108,11 +107,11 @@ function cmpRanking<T extends {
 /* ======================================================
    /api/rankings  (geral ou mensal se ?ym=YYYY-MM)
 
-   Agora:
    - só conta jogos FINISHED
    - se ym existir, filtra por strftime('%Y-%m', fixtures.kickoff_at)
    - predictions.created_at só entra para desempate final
    - soma também bónus por marcador acertado (conforme posição)
+   - NOVO: campo scorers_hits = nº de marcadores acertados
 ====================================================== */
 rankings.get('/', async (c) => {
   const ym = c.req.query('ym'); // ex: '2025-10'  -> modo mensal
@@ -227,6 +226,7 @@ rankings.get('/', async (c) => {
     exact: number;
     diff: number;
     winner: number;
+    scorers_hits: number;    // <-- novo: nº de marcadores acertados
     first_pred_at: number | null; // epoch ms do palpite mais antigo (entre os jogos que contam)
   };
 
@@ -244,6 +244,7 @@ rankings.get('/', async (c) => {
         exact: 0,
         diff: 0,
         winner: 0,
+        scorers_hits: 0,
         first_pred_at: null,
       };
     }
@@ -260,7 +261,11 @@ rankings.get('/', async (c) => {
       const predId = String(p.scorer_player_id);
       const key = `${p.fixture_id}:${predId}`;
       const bonus = bonusByFixtureAndPlayer.get(key) ?? 0;
-      pts += bonus;
+      if (bonus > 0) {
+        pts += bonus;
+        // contou como marcador acertado
+        acc.scorers_hits += 1;
+      }
     }
 
     acc.points += pts;
@@ -332,6 +337,7 @@ rankings.get('/games', async (c) => {
    /api/rankings/game?fixtureId=...
    Ranking por jogo (mostra todos os users; 0 pts sem palpite)
    Agora também com bónus por marcador acertado
+   NOVO: campo scorer_hit = 1 se acertou o marcador, senão 0
 ====================================================== */
 rankings.get('/game', async (c) => {
   const fixtureId = c.req.query('fixtureId');
@@ -415,12 +421,16 @@ rankings.get('/game', async (c) => {
     const s = scoreUEFA(r.pred_home, r.pred_away, fx.home_score, fx.away_score);
 
     let pts = s.points;
+    let scorer_hit = 0;
 
     // Bónus marcador por posição
     if (r.pred_scorer_id != null) {
       const id = String(r.pred_scorer_id);
       const bonus = scorerBonusByPlayer.get(id) ?? 0;
-      pts += bonus;
+      if (bonus > 0) {
+        pts += bonus;
+        scorer_hit = 1;
+      }
     }
 
     const first_pred_at = r.pred_created_at
@@ -435,7 +445,8 @@ rankings.get('/game', async (c) => {
       exact: s.exact,
       diff: s.diff,
       winner: s.winner,
-      first_pred_at, // para desempate final
+      scorer_hit,      // 0 ou 1, para ranking por jogo
+      first_pred_at,   // para desempate final
     };
   });
 

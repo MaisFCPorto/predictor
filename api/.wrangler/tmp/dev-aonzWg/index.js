@@ -1674,6 +1674,7 @@ rankings.get("/", async (c) => {
         exact: 0,
         diff: 0,
         winner: 0,
+        scorers_hits: 0,
         first_pred_at: null
       };
     }
@@ -1684,7 +1685,10 @@ rankings.get("/", async (c) => {
       const predId = String(p.scorer_player_id);
       const key = `${p.fixture_id}:${predId}`;
       const bonus = bonusByFixtureAndPlayer.get(key) ?? 0;
-      pts += bonus;
+      if (bonus > 0) {
+        pts += bonus;
+        acc.scorers_hits += 1;
+      }
     }
     acc.points += pts;
     acc.exact += s.exact;
@@ -1775,10 +1779,14 @@ rankings.get("/game", async (c) => {
   const rows = (results ?? []).map((r) => {
     const s = scoreUEFA(r.pred_home, r.pred_away, fx.home_score, fx.away_score);
     let pts = s.points;
+    let scorer_hit = 0;
     if (r.pred_scorer_id != null) {
       const id = String(r.pred_scorer_id);
       const bonus = scorerBonusByPlayer.get(id) ?? 0;
-      pts += bonus;
+      if (bonus > 0) {
+        pts += bonus;
+        scorer_hit = 1;
+      }
     }
     const first_pred_at = r.pred_created_at ? new Date(r.pred_created_at).getTime() : null;
     return {
@@ -1789,6 +1797,8 @@ rankings.get("/game", async (c) => {
       exact: s.exact,
       diff: s.diff,
       winner: s.winner,
+      scorer_hit,
+      // 0 ou 1, para ranking por jogo
       first_pred_at
       // para desempate final
     };

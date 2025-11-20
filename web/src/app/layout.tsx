@@ -161,6 +161,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -276,22 +277,34 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               ))}
 
               {user && (
-                <>
-                  <div className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setUserMenuOpen((open) => !open)}
+                    className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] hover:bg-white/10"
+                  >
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-[11px] font-semibold">
                       {initials}
                     </div>
-                    <span className="max-w-[120px] truncate">{user.name}</span>
-                  </div>
-
-                  <button
-                    onClick={handleLogout}
-                    className="inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs text-rose-100 shadow-[0_0_0_1px_rgba(248,113,113,0.25)] transition hover:bg-white/10"
-                  >
-                    <span className="text-[13px]">↪</span>
-                    <span>Terminar sessão</span>
+                    <span className="max-w-[120px] truncate text-left">{user.name}</span>
+                    <span className="text-[10px] opacity-70">▾</span>
                   </button>
-                </>
+
+                  {userMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-2xl border border-white/10 bg-black/95 text-sm shadow-xl">
+                      <button
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-white/90 hover:bg-white/10"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          handleLogout();
+                        }}
+                      >
+                        Terminar sessão
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
 
               {!user && !loadingUser && (

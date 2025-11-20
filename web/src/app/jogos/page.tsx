@@ -717,7 +717,7 @@ export default function JogosPage() {
               </p>
               <button
                 onClick={() => router.push('/auth')}
-                className="rounded-2xl border border-white/10 bg-white/[0.10] px-6 py-3 text-base font-medium hover:bg-white/[0.15] transition shadow-card"
+                className="cursor-pointer rounded-2xl border border-white/10 bg-white/[0.10] px-6 py-3 text-base font-medium hover:bg-white/[0.15] transition shadow-card"
               >
                 🔐 Entrar / Criar Conta
               </button>
@@ -777,6 +777,7 @@ export default function JogosPage() {
                     players={players}
                     onSave={onSave}
                     saving={savingId === f.id}
+                    canEdit={!!userId}
                     variant="default"
                   />
                 ))}

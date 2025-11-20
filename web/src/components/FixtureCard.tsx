@@ -44,6 +44,7 @@ type Props = {
   ) => Promise<void> | void;
   saving?: boolean;
   variant?: 'default' | 'past';
+  canEdit?: boolean;
 };
 
 function formatLocalDate(isoUTC: string) {
@@ -93,6 +94,7 @@ export default function FixtureCard({
   saving,
   variant = 'default',
   scorersNames = [],
+  canEdit = true,
 }: Props) {
   // usado só para formatação de datas (mantive caso uses noutro lado)
   const dateTxt = useMemo(() => formatLocalDate(kickoff_at), [kickoff_at]);
@@ -179,7 +181,8 @@ export default function FixtureCard({
     return () => clearInterval(timerId);
   }, [lock_at_utc, variant, lockedBase]);
 
-  const nowLocked = lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0);
+  const nowLocked =
+    lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0) || !canEdit;
 
   // jogo é do Porto?
   const involvesPorto =
@@ -223,6 +226,7 @@ export default function FixtureCard({
   const pickerEnabled =
     variant !== 'past' &&
     !nowLocked &&
+    canEdit &&
     involvesPorto &&
     !!players &&
     players.length > 0;
@@ -245,6 +249,7 @@ export default function FixtureCard({
   // pode guardar se mudou em relação aos props + não está bloqueado
   const canSave =
     !nowLocked &&
+    canEdit &&
     typeof home === 'number' &&
     typeof away === 'number' &&
     (home !== (pred_home ?? null) ||
@@ -349,6 +354,7 @@ export default function FixtureCard({
 
   // handler comum para guardar
   const handleSave = () => {
+    if (!canEdit) return;
     if (typeof home !== 'number' || typeof away !== 'number') return;
     onSave(id, home, away, scorerId ?? null);
   };
@@ -509,10 +515,18 @@ export default function FixtureCard({
         {/* SCORE */}
         <div className="flex items-center justify-center w-[45%]">
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-            <ScoreBox disabled={nowLocked} value={home} onChange={(v) => setHome(v)} />
+            <ScoreBox
+              disabled={nowLocked || !canEdit}
+              value={home}
+              onChange={(v) => setHome(v)}
+            />
             <span className="opacity-60 text-white text-xl sm:text-2xl">–</span>
             <div className="relative flex items-center">
-              <ScoreBox disabled={nowLocked} value={away} onChange={(v) => setAway(v)} />
+              <ScoreBox
+                disabled={nowLocked || !canEdit}
+                value={away}
+                onChange={(v) => setAway(v)}
+              />
               {variant !== 'past' && (
                 <button
                   type="button"
@@ -655,10 +669,10 @@ export default function FixtureCard({
       {variant !== 'past' && (
         <div className="md:hidden flex justify-center mt-2">
           <button
-            disabled={!canSave || !!saving || nowLocked}
+            disabled={!canSave || !!saving || nowLocked || !canEdit}
             className={clsx(
               'rounded-full px-4 py-2 text-sm font-medium',
-              !canSave || saving || nowLocked
+              !canSave || saving || nowLocked || !canEdit
                 ? 'bg-white/5 text-white/50 cursor-not-allowed'
                 : 'bg-white/10 hover:bg-white/15 text-white',
             )}

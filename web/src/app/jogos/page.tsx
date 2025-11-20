@@ -25,6 +25,9 @@ type FixtureDTO = {
   lock_at_utc?: string | null;
   home_score?: number | null;
   away_score?: number | null;
+
+  // NOVO: nomes dos marcadores reais, vindo da API
+  scorers_names?: string[] | null;
 };
 
 type PlayerDTO = {
@@ -252,25 +255,27 @@ export default function JogosPage() {
           const a = (p as any).away_goals;
           const pts =
             (p as any).points ?? (p as any).uefa_points ?? null;
-            const scorerRaw = (p as any).scorer_player_id;
+          const scorerRaw = (p as any).scorer_player_id;
 
-            let scorerId: string | null = null;
-            if (typeof scorerRaw === 'string') {
-              const t = scorerRaw.trim();
-              scorerId = t || null;
-            } else if (typeof scorerRaw === 'number' && Number.isFinite(scorerRaw)) {
-              scorerId = String(scorerRaw);
-            }
-            
-            if (typeof h === 'number' && typeof a === 'number') {
-              map[fixtureKey] = {
-                home: h,
-                away: a,
-                points: typeof pts === 'number' ? pts : null,
-                scorer_player_id: scorerId,
-              };
-            }
-            
+          let scorerId: string | null = null;
+          if (typeof scorerRaw === 'string') {
+            const t = scorerRaw.trim();
+            scorerId = t || null;
+          } else if (
+            typeof scorerRaw === 'number' &&
+            Number.isFinite(scorerRaw)
+          ) {
+            scorerId = String(scorerRaw);
+          }
+
+          if (typeof h === 'number' && typeof a === 'number') {
+            map[fixtureKey] = {
+              home: h,
+              away: a,
+              points: typeof pts === 'number' ? pts : null,
+              scorer_player_id: scorerId,
+            };
+          }
         }
 
         if (!abort) {
@@ -289,52 +294,50 @@ export default function JogosPage() {
   }, [userId]);
 
   // --- carregar lista de jogadores (com fallback admin) ---
- // --- carregar lista de jogadores (com fallback admin) ---
-async function loadPlayers() {
-  try {
-    const base =
-      API_BASE && API_BASE.length > 0 ? API_BASE.replace(/\/+$/, '') : '';
-    const publicUrl = base ? `${base}/api/players` : '/api/players';
-    const adminUrl = base
-      ? `${base}/api/admin/players?team_id=fcp`
-      : '/api/admin/players?team_id=fcp';
+  async function loadPlayers() {
+    try {
+      const base =
+        API_BASE && API_BASE.length > 0 ? API_BASE.replace(/\/+$/, '') : '';
+      const publicUrl = base ? `${base}/api/players` : '/api/players';
+      const adminUrl = base
+        ? `${base}/api/admin/players?team_id=fcp`
+        : '/api/admin/players?team_id=fcp';
 
-    // 1) tenta rota pública
-    let res = await fetch(publicUrl, { cache: 'no-store' });
+      // 1) tenta rota pública
+      let res = await fetch(publicUrl, { cache: 'no-store' });
 
-    // se der 404/401/403, tenta rota admin (backoffice)
-    if (res.status === 404 || res.status === 401 || res.status === 403) {
-      console.warn(
-        'Rota /api/players indisponível, a cair para /api/admin/players…',
-      );
-      res = await fetch(adminUrl, { cache: 'no-store' });
-    }
+      // se der 404/401/403, tenta rota admin (backoffice)
+      if (res.status === 404 || res.status === 401 || res.status === 403) {
+        console.warn(
+          'Rota /api/players indisponível, a cair para /api/admin/players…',
+        );
+        res = await fetch(adminUrl, { cache: 'no-store' });
+      }
 
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      console.error('Falha a carregar jogadores:', res.status, txt);
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        console.error('Falha a carregar jogadores:', res.status, txt);
+        setPlayers([]);
+        return;
+      }
+
+      const json = await res.json();
+      const raw: any[] = Array.isArray(json) ? json : [];
+
+      // 🔑 aqui garantimos que o ID é SEMPRE string
+      const list: PlayerDTO[] = raw.map((p) => ({
+        id: String(p.id),
+        name: String(p.name ?? ''),
+        position: String(p.position ?? ''),
+      }));
+
+      console.log('PLAYERS NORMALIZED 👉', list);
+      setPlayers(list);
+    } catch (err) {
+      console.error('Erro a carregar jogadores', err);
       setPlayers([]);
-      return;
     }
-
-    const json = await res.json();
-    const raw: any[] = Array.isArray(json) ? json : [];
-
-    // 🔑 aqui garantimos que o ID é SEMPRE string
-    const list: PlayerDTO[] = raw.map((p) => ({
-      id: String(p.id),
-      name: String(p.name ?? ''),
-      position: String(p.position ?? ''),
-    }));
-
-    console.log('PLAYERS NORMALIZED 👉', list);
-    setPlayers(list);
-  } catch (err) {
-    console.error('Erro a carregar jogadores', err);
-    setPlayers([]);
   }
-}
-
 
   useEffect(() => {
     void loadPlayers();
@@ -821,6 +824,8 @@ async function loadPlayers() {
                     onSave={onSave}
                     saving={false}
                     variant="past"
+                    // 👇 NOVO: passa lista de marcadores reais para o card
+                    scorersNames={f.scorers_names ?? []}
                   />
                 ))}
 

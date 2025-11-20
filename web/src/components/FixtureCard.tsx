@@ -28,9 +28,11 @@ type Props = {
   pred_home?: number | null;
   pred_away?: number | null;
   points?: number | null;
-  scorersNames?: string[]; 
 
-  // NOVO
+  // lista de nomes dos marcadores reais do jogo (do BO)
+  scorersNames?: string[];
+
+  // palpite de marcador do utilizador
   pred_scorer_id?: string | null;
   players?: PlayerOption[];
 
@@ -90,9 +92,11 @@ export default function FixtureCard({
   onSave,
   saving,
   variant = 'default',
-  scorersNames = [],  
+  scorersNames = [],
 }: Props) {
+  // usado só para formatação de datas (mantive caso uses noutro lado)
   const dateTxt = useMemo(() => formatLocalDate(kickoff_at), [kickoff_at]);
+
   const comp = compName(competition_code);
   const rnd = roundText(round_label);
 
@@ -140,6 +144,7 @@ export default function FixtureCard({
     parts.push(`${h}h`, `${m}m`, `${s}s`);
     return parts.join(' ');
   }
+
   function formatCompactRemaining(ms: number) {
     if (ms <= 0) return '0s';
     const total = Math.floor(ms / 1000);
@@ -151,8 +156,9 @@ export default function FixtureCard({
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m ${s}s`;
   }
+
   function urgencyClass(ms: number) {
-    if (ms <= 3600_000) return 'bg-red-400/15 text-red-100';
+    if (ms <= 3_600_000) return 'bg-red-400/15 text-red-100';
     if (ms <= 86_400_000) return 'bg-amber-400/15 text-amber-100';
     return 'bg-white/5 text-gray-200';
   }
@@ -199,7 +205,7 @@ export default function FixtureCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pred_home, pred_away, variant]);
 
-  // marcador escolhido
+  // marcador escolhido (palpite)
   const [scorerId, setScorerId] = useState<string | null>(pred_scorer_id ?? null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
@@ -241,11 +247,9 @@ export default function FixtureCard({
     !nowLocked &&
     typeof home === 'number' &&
     typeof away === 'number' &&
-    (
-      home !== (pred_home ?? null) ||
+    (home !== (pred_home ?? null) ||
       away !== (pred_away ?? null) ||
-      (scorerId ?? null) !== (pred_scorer_id ?? null)
-    );
+      (scorerId ?? null) !== (pred_scorer_id ?? null));
 
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
@@ -569,7 +573,7 @@ export default function FixtureCard({
         </div>
       </div>
 
-      {/* Marcador */}
+      {/* Marcador (palpite) */}
       <div className="mt-2 flex flex-col items-center gap-1">
         <button
           type="button"
@@ -612,8 +616,8 @@ export default function FixtureCard({
         )}
       </div>
 
-          {/* Badge de Resultado + Pontos (jogos passados) */}
-          {pointsBadge && (
+      {/* Badge de Resultado + Pontos (jogos passados) */}
+      {pointsBadge && (
         <div className="flex flex-col items-center mt-3 gap-2">
           {finalScoreText && (
             <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
@@ -629,23 +633,14 @@ export default function FixtureCard({
             {pointsBadge.label}
           </span>
 
-          {/* Jogos passados: mostrar marcadores reais */}
+          {/* Jogos passados: marcadores reais do jogo (do BO) */}
           {variant === 'past' && scorersNames.length > 0 && (
             <span className="mt-1 text-[12px] text-white/70">
               Marcadores do jogo: {scorersNames.join(', ')}
             </span>
           )}
-
-          {/* Jogos em aberto: mostrar marcador escolhido (se houver) */}
-          {variant !== 'past' && scorerPlayer && (
-            <span className="mt-1 text-[12px] text-white/70">
-              Marcador escolhido: {scorerPlayer.name} (
-              {positionLabel(scorerPlayer.position)})
-            </span>
-          )}
         </div>
       )}
-
 
       {/* Pill "Última previsão" para jogos em aberto */}
       {!pointsBadge && lastPredText && (

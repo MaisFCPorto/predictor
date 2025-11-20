@@ -56,6 +56,7 @@ const isLocked = (kickoffISO: string, nowMs: number, lockMs: number) => {
 
 // ----------------------------------------------------
 // Helper: recalcular pontos UEFA para um fixture
+// (versão simples, sem bónus de marcador)
 // ----------------------------------------------------
 async function recomputePointsForFixture(db: D1Database, fixtureId: string) {
   // 1) Buscar o resultado oficial do jogo
@@ -299,6 +300,7 @@ app.get('/api/fixtures/finished', async (c) => {
 
 // ----------------------------------------------------
 // PUBLIC: Closed fixtures (FINISHED or locked)
+//  -- AGORA COM marcadores reais (scorers_names)
 // ----------------------------------------------------
 app.get('/api/fixtures/closed', async (c) => {
   const limitQ = Number(c.req.query('limit') ?? '10');
@@ -313,18 +315,31 @@ app.get('/api/fixtures/closed', async (c) => {
     .prepare(
       `
       SELECT 
-        f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
-        f.competition_id, f.round_label,
+        f.id,
+        f.kickoff_at,
+        f.home_score,
+        f.away_score,
+        f.status,
+        f.competition_id,
+        f.round_label,
         f.leg AS leg,
-        ht.name AS home_team_name, at.name AS away_team_name,
-        ht.crest_url AS home_crest, at.crest_url AS away_crest,
-        co.code AS competition_code, co.name AS competition_name
+        ht.name       AS home_team_name,
+        at.name       AS away_team_name,
+        ht.crest_url  AS home_crest,
+        at.crest_url  AS away_crest,
+        co.code       AS competition_code,
+        co.name       AS competition_name,
+        -- nomes dos marcadores reais (se existirem)
+        GROUP_CONCAT(p.name, ',') AS scorers_names
       FROM fixtures f
       JOIN teams ht ON ht.id = f.home_team_id
       JOIN teams at ON at.id = f.away_team_id
-      LEFT JOIN competitions co ON co.id = f.competition_id
+      LEFT JOIN competitions    co ON co.id = f.competition_id
+      LEFT JOIN fixture_scorers fs ON fs.fixture_id = f.id
+      LEFT JOIN players         p  ON p.id = fs.player_id
       WHERE f.status = 'FINISHED'
          OR DATETIME('now') >= DATETIME(f.kickoff_at, '-' || ? || ' minutes')
+      GROUP BY f.id
       ORDER BY f.kickoff_at DESC
       LIMIT ? OFFSET ?
     `,
@@ -345,9 +360,23 @@ app.get('/api/fixtures/closed', async (c) => {
       leg: number | null;
       home_score: number | null;
       away_score: number | null;
+      scorers_names: string | null; // <- vem em CSV do GROUP_CONCAT
     }>();
 
-  return c.json(results ?? []);
+  const rows = results ?? [];
+
+  // converter "Samu,Alberto Costa" -> ["Samu","Alberto Costa"]
+  const enriched = rows.map((r) => ({
+    ...r,
+    scorers_names: r.scorers_names
+      ? r.scorers_names
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [],
+  }));
+
+  return c.json(enriched);
 });
 
 // ----------------------------------------------------
@@ -505,16 +534,15 @@ app.get('/api/predictions', async (c) => {
         scorer_player_id: string | null;
       }>();
 
-      const safe = (results ?? []).map((r) => ({
-        fixture_id: String(r.fixture_id),
-        home_goals: r.home_goals ?? 0,
-        away_goals: r.away_goals ?? 0,
-        points: r.points,
-        scorer_player_id: r.scorer_player_id ?? null,
-        // extra alias em camelCase, para o front que use scorerPlayerId
-        scorerPlayerId: r.scorer_player_id ?? null,
-      }));
-      
+    const safe = (results ?? []).map((r) => ({
+      fixture_id: String(r.fixture_id),
+      home_goals: r.home_goals ?? 0,
+      away_goals: r.away_goals ?? 0,
+      points: r.points,
+      scorer_player_id: r.scorer_player_id ?? null,
+      // extra alias em camelCase, para o front que use scorerPlayerId
+      scorerPlayerId: r.scorer_player_id ?? null,
+    }));
 
     console.log(
       'GET /api/predictions →',

@@ -28,6 +28,7 @@ type Props = {
   pred_home?: number | null;
   pred_away?: number | null;
   points?: number | null;
+  scorersNames?: string[]; 
 
   // NOVO
   pred_scorer_id?: string | null;
@@ -89,6 +90,7 @@ export default function FixtureCard({
   onSave,
   saving,
   variant = 'default',
+  scorersNames = [],  
 }: Props) {
   const dateTxt = useMemo(() => formatLocalDate(kickoff_at), [kickoff_at]);
   const comp = compName(competition_code);
@@ -610,8 +612,8 @@ export default function FixtureCard({
         )}
       </div>
 
-      {/* Badge de Resultado + Pontos (jogos passados) */}
-      {pointsBadge && (
+          {/* Badge de Resultado + Pontos (jogos passados) */}
+          {pointsBadge && (
         <div className="flex flex-col items-center mt-3 gap-2">
           {finalScoreText && (
             <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
@@ -626,7 +628,16 @@ export default function FixtureCard({
           >
             {pointsBadge.label}
           </span>
-          {scorerPlayer && (
+
+          {/* Jogos passados: mostrar marcadores reais */}
+          {variant === 'past' && scorersNames.length > 0 && (
+            <span className="mt-1 text-[12px] text-white/70">
+              Marcadores do jogo: {scorersNames.join(', ')}
+            </span>
+          )}
+
+          {/* Jogos em aberto: mostrar marcador escolhido (se houver) */}
+          {variant !== 'past' && scorerPlayer && (
             <span className="mt-1 text-[12px] text-white/70">
               Marcador escolhido: {scorerPlayer.name} (
               {positionLabel(scorerPlayer.position)})
@@ -634,6 +645,7 @@ export default function FixtureCard({
           )}
         </div>
       )}
+
 
       {/* Pill "Última previsão" para jogos em aberto */}
       {!pointsBadge && lastPredText && (

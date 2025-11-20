@@ -288,39 +288,52 @@ export default function JogosPage() {
     };
   }, [userId]);
 
-  // --- carregar lista de jogadores (com fallback admin) ---
-  async function loadPlayers() {
-    try {
-      const base = API_BASE && API_BASE.length > 0 ? API_BASE.replace(/\/+$/, '') : '';
-      const publicUrl = base ? `${base}/api/players` : '/api/players';
-      const adminUrl = base
-        ? `${base}/api/admin/players?team_id=fcp`
-        : '/api/admin/players?team_id=fcp';
+ // --- carregar lista de jogadores (com fallback admin) ---
+async function loadPlayers() {
+  try {
+    const base =
+      API_BASE && API_BASE.length > 0 ? API_BASE.replace(/\/+$/, '') : '';
+    const publicUrl = base ? `${base}/api/players` : '/api/players';
+    const adminUrl = base
+      ? `${base}/api/admin/players?team_id=fcp`
+      : '/api/admin/players?team_id=fcp`;
 
-      // 1) tenta rota pública
-      let res = await fetch(publicUrl, { cache: 'no-store' });
+    // 1) tenta rota pública
+    let res = await fetch(publicUrl, { cache: 'no-store' });
 
-      // se der 404, tenta rota admin
-      if (res.status === 404) {
-        console.warn('Rota /api/players 404, a cair para /api/admin/players…');
-        res = await fetch(adminUrl, { cache: 'no-store' });
-      }
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        console.error('Falha a carregar jogadores:', res.status, txt);
-        setPlayers([]);
-        return;
-      }
-
-      const json = await res.json();
-      const list: PlayerDTO[] = Array.isArray(json) ? json : [];
-      setPlayers(list);
-    } catch (err) {
-      console.error('Erro a carregar jogadores', err);
-      setPlayers([]);
+    // se der 404/401/403, tenta rota admin (backoffice)
+    if (res.status === 404 || res.status === 401 || res.status === 403) {
+      console.warn(
+        'Rota /api/players indisponível, a cair para /api/admin/players…',
+      );
+      res = await fetch(adminUrl, { cache: 'no-store' });
     }
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      console.error('Falha a carregar jogadores:', res.status, txt);
+      setPlayers([]);
+      return;
+    }
+
+    const json = await res.json();
+    const raw: any[] = Array.isArray(json) ? json : [];
+
+    // 🔑 aqui garantimos que o ID é SEMPRE string
+    const list: PlayerDTO[] = raw.map((p) => ({
+      id: String(p.id),
+      name: String(p.name ?? ''),
+      position: String(p.position ?? ''),
+    }));
+
+    console.log('PLAYERS NORMALIZED 👉', list);
+    setPlayers(list);
+  } catch (err) {
+    console.error('Erro a carregar jogadores', err);
+    setPlayers([]);
   }
+}
+
 
   useEffect(() => {
     void loadPlayers();

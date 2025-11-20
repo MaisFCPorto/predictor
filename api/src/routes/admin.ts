@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { scoreUEFA } from './rankings';
 
+// ---------------- Pontos extra por posição ----------------
 const SCORER_BONUS_BY_POS: Record<string, number> = {
   GR: 10,
   D: 5,
@@ -16,14 +17,18 @@ function scorerBonusForPosition(pos: string | null | undefined): number {
   return SCORER_BONUS_BY_POS[key] ?? 0;
 }
 
-type Env = {
+// ---------------- Env bindings ----------------
+export type Env = {
   DB: D1Database;
   ADMIN_KEY: string;
   FOOTBALL_DATA_TOKEN: string;
 };
 
-// 🔥 Exportar para usar noutros ficheiros (index.ts)
-export async function recomputePointsForFixture(DB: D1Database, fixtureId: string) {
+// ---------------- Recompute pontos por jogo ----------------
+export async function recomputePointsForFixture(
+  DB: D1Database,
+  fixtureId: string,
+) {
   // 1) Obter o resultado oficial do jogo
   const fx = await DB.prepare(
     `
@@ -86,7 +91,12 @@ export async function recomputePointsForFixture(DB: D1Database, fixtureId: strin
 
   // 4) Calcular pontos UEFA + bónus marcador e gravar em points
   for (const p of results ?? []) {
-    const s = scoreUEFA(p.home_goals, p.away_goals, fx.home_score, fx.away_score);
+    const s = scoreUEFA(
+      p.home_goals,
+      p.away_goals,
+      fx.home_score,
+      fx.away_score,
+    );
 
     let pts = s.points;
 
@@ -109,15 +119,31 @@ export async function recomputePointsForFixture(DB: D1Database, fixtureId: strin
   }
 }
 
+// ---------------- Middleware admin ----------------
 
-// Middleware: exige header x-admin-key (chave guardada no Worker)
-const requireAdminKey: import('hono').MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
-  const key = c.req.header('x-admin-key');
-  if (!key || key !== c.env.ADMIN_KEY) return c.json({ error: 'forbidden' }, 403);
+// Este middleware aceita SEM chave se o pedido vier do teu site
+// (maispredictor.app ou localhost:3000), mas exige x-admin-key
+// para pedidos diretos.
+export const requireAdminKey: import('hono').MiddlewareHandler<{
+  Bindings: Env;
+}> = async (c, next) => {
+  const key = c.req.header('x-admin-key')?.trim() || '';
+  const origin = c.req.header('origin') || '';
+
+  const trustedOrigin =
+    origin.startsWith('https://maispredictor.app') ||
+    origin.startsWith('http://localhost:3000');
+
+  // Se não vier de origem "de confiança", obriga à admin key
+  if (!trustedOrigin && (!key || key !== c.env.ADMIN_KEY)) {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+
   await next();
 };
 
-// Exporta um router Hono (não a app global)
+// ---------------- Router admin ----------------
+
 export const admin = new Hono<{ Bindings: Env }>();
 
 admin.get('/health', (c) => c.json({ ok: true }));
@@ -134,27 +160,30 @@ admin.get('/role', requireAdminKey, async (c) => {
   return c.json({ role: row?.role ?? 'user' });
 });
 
-// --- NOVO: lista de equipas
+// --- Lista de equipas
 admin.get('/teams', requireAdminKey, async (c) => {
   const { results } = await c.env.DB
-    .prepare(`SELECT id, name FROM teams ORDER BY name`)
+    .prepare('SELECT id, name FROM teams ORDER BY name')
     .all();
   return c.json(results);
 });
 
-// --- NOVO: lista de competições
+// --- Lista de competições
 admin.get('/competitions', requireAdminKey, async (c) => {
   const { results } = await c.env.DB
-    .prepare(`SELECT id, code, name FROM competitions ORDER BY name`)
+    .prepare('SELECT id, code, name FROM competitions ORDER BY name')
     .all();
   return c.json(results);
 });
 
+// --- Próximos jogos do FCP (Football-Data.org)
 admin.get('/fixtures/porto', requireAdminKey, async (c) => {
   const token = (c.env.FOOTBALL_DATA_TOKEN || '').trim();
   if (!token) return c.json({ error: 'missing token' }, 500);
 
-  const url = 'https://api.football-data.org/v4/teams/503/matches?status=SCHEDULED';
+  const url =
+    'https://api.football-data.org/v4/teams/503/matches?status=SCHEDULED';
+
   const res = await fetch(url, {
     method: 'GET',
     headers: {
@@ -173,7 +202,9 @@ admin.get('/fixtures/porto', requireAdminKey, async (c) => {
       body = text;
     }
     const status =
-      res.status === 204 || res.status === 205 || res.status === 304 ? 500 : res.status;
+      res.status === 204 || res.status === 205 || res.status === 304
+        ? 500
+        : res.status;
     return c.json(
       { error: 'upstream', status: res.status, body },
       status as ContentfulStatusCode,

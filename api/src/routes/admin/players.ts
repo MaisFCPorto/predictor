@@ -1,22 +1,15 @@
-// api/src/routes/admin/players.ts
+// predictor-porto/api/src/routes/admin/players.ts
 import { Hono } from 'hono';
-
-type Env = {
-  DB: D1Database;
-  ADMIN_KEY: string;
-};
+import type { Env } from '../admin';
+import { requireAdminKey } from '../admin';
 
 export const adminPlayers = new Hono<{ Bindings: Env }>();
 
-// GET /admin/players?team_id=fcp
-adminPlayers.get('/', async (c) => {
-  // valida admin key
-  const key = c.req.header('x-admin-key');
-  if (!key || key !== c.env.ADMIN_KEY) {
-    return c.json({ error: 'forbidden' }, 403);
-  }
+// Aplica o middleware a todos os métodos deste router
+adminPlayers.use('*', requireAdminKey);
 
-  // default: fcp
+// GET /api/admin/players?team_id=fcp
+adminPlayers.get('/', async (c) => {
   const teamId = c.req.query('team_id') ?? 'fcp';
 
   const stmt = c.env.DB.prepare(
@@ -33,10 +26,9 @@ adminPlayers.get('/', async (c) => {
         ELSE 5
       END,
       name
-    `
+  `,
   );
 
   const rs = await stmt.bind(teamId).all();
-
   return c.json(rs.results ?? []);
 });

@@ -1,73 +1,65 @@
-// api/src/routes/admin/fixture-scorers.ts
+// predictor-porto/api/src/routes/admin/fixture-scorers.ts
 import { Hono } from 'hono';
-
-type Env = {
-  DB: D1Database;
-  ADMIN_KEY: string;
-};
+import type { Env } from '../admin';
+import { requireAdminKey, recomputePointsForFixture } from '../admin';
 
 export const adminFixtureScorers = new Hono<{ Bindings: Env }>();
 
-// Middleware simples para validar admin
-function requireAdmin(c: any) {
-  const key = c.req.header('x-admin-key');
-  if (!key || key !== c.env.ADMIN_KEY) {
-    return c.json({ error: 'forbidden' }, 403);
-  }
-  return null;
-}
+// Middleware admin em todas as rotas deste router
+adminFixtureScorers.use('*', requireAdminKey);
 
 // GET /api/admin/fixtures/:id/scorers
 adminFixtureScorers.get('/:id/scorers', async (c) => {
-  const guard = requireAdmin(c);
-  if (guard) return guard;
-
   const fixtureId = c.req.param('id');
 
   const { results } = await c.env.DB
     .prepare(
-      `SELECT fs.player_id, p.name, p.position
-       FROM fixture_scorers fs
-       JOIN players p ON p.id = fs.player_id
-       WHERE fs.fixture_id = ?
-       ORDER BY p.name`
+      `
+      SELECT fs.player_id, p.name, p.position
+      FROM fixture_scorers fs
+      JOIN players p ON p.id = fs.player_id
+      WHERE fs.fixture_id = ?
+      ORDER BY p.name
+    `,
     )
     .bind(fixtureId)
-    .all();
+    .all<{ player_id: string; name: string; position: string }>();
 
   return c.json(results ?? []);
 });
 
 // PUT /api/admin/fixtures/:id/scorers
 adminFixtureScorers.put('/:id/scorers', async (c) => {
-  const guard = requireAdmin(c);
-  if (guard) return guard;
-
   const fixtureId = c.req.param('id');
-  const body = await c.req.json().catch(() => null);
+  const body = await c.req.json<{ player_ids?: string[] | null }>().catch(() => ({
+    player_ids: [],
+  }));
 
-  if (!body || !Array.isArray(body.player_ids)) {
-    return c.json({ error: 'invalid_body' }, 400);
-  }
+  const playerIds = Array.isArray(body.player_ids) ? body.player_ids : [];
 
-  const playerIds: string[] = body.player_ids;
+  const db = c.env.DB;
 
-  // Limpar marcadores anteriores
-  await c.env.DB
-    .prepare(`DELETE FROM fixture_scorers WHERE fixture_id = ?`)
+  // Limpa marcadores atuais
+  await db
+    .prepare('DELETE FROM fixture_scorers WHERE fixture_id = ?')
     .bind(fixtureId)
     .run();
 
-  // Inserir novos
+  // Insere novos
   for (const pid of playerIds) {
-    await c.env.DB
+    await db
       .prepare(
-        `INSERT INTO fixture_scorers (id, fixture_id, player_id)
-         VALUES (lower(hex(randomblob(16))), ?, ?)`
+        `
+        INSERT INTO fixture_scorers (fixture_id, player_id)
+        VALUES (?, ?)
+      `,
       )
       .bind(fixtureId, pid)
       .run();
   }
+
+  // Recalcular pontos de todas as predictions desse jogo
+  await recomputePointsForFixture(db, fixtureId);
 
   return c.json({ ok: true, count: playerIds.length });
 });

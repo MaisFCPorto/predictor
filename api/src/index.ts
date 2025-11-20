@@ -866,7 +866,7 @@ app.put('/api/admin/fixtures/:id/scorers', async (c) => {
     );
   }
 
-  // 🔁 sempre que alteras marcadores, volta a calcular pontos
+  // 🔁 sempre que alteras marcadores, volta a calcular os pontos
   await recomputePointsForFixture(c.env.DB, fixtureId);
 
   return c.json({ ok: true, count: ids.length });

@@ -288,6 +288,7 @@ export default function JogosPage() {
     };
   }, [userId]);
 
+  // --- carregar lista de jogadores (com fallback admin) ---
  // --- carregar lista de jogadores (com fallback admin) ---
 async function loadPlayers() {
   try {
@@ -296,7 +297,7 @@ async function loadPlayers() {
     const publicUrl = base ? `${base}/api/players` : '/api/players';
     const adminUrl = base
       ? `${base}/api/admin/players?team_id=fcp`
-      : '/api/admin/players?team_id=fcp`;
+      : '/api/admin/players?team_id=fcp';
 
     // 1) tenta rota pública
     let res = await fetch(publicUrl, { cache: 'no-store' });

@@ -5,8 +5,19 @@ import axios, { AxiosError } from 'axios';
 import AdminGate from '../_components/AdminGate';
 import Link from 'next/link';
 
+const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || '';
+
 const adm = axios.create({
   baseURL: '',
+});
+
+// injeta sempre a admin key
+adm.interceptors.request.use((config) => {
+  if (ADMIN_KEY) {
+    config.headers = config.headers ?? {};
+    (config.headers as any)['x-admin-key'] = ADMIN_KEY;
+  }
+  return config;
 });
 
 adm.interceptors.response.use(

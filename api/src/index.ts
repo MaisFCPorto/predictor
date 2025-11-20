@@ -505,13 +505,16 @@ app.get('/api/predictions', async (c) => {
         scorer_player_id: string | null;
       }>();
 
-    const safe = (results ?? []).map((r) => ({
-      fixture_id: String(r.fixture_id),
-      home_goals: r.home_goals ?? 0,
-      away_goals: r.away_goals ?? 0,
-      points: r.points,
-      scorer_player_id: r.scorer_player_id ?? null,
-    }));
+      const safe = (results ?? []).map((r) => ({
+        fixture_id: String(r.fixture_id),
+        home_goals: r.home_goals ?? 0,
+        away_goals: r.away_goals ?? 0,
+        points: r.points,
+        scorer_player_id: r.scorer_player_id ?? null,
+        // extra alias em camelCase, para o front que use scorerPlayerId
+        scorerPlayerId: r.scorer_player_id ?? null,
+      }));
+      
 
     console.log(
       'GET /api/predictions →',

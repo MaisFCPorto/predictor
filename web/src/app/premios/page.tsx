@@ -1,16 +1,30 @@
 // apps/web/app/premios/page.tsx
 'use client';
 
+import Link from 'next/link';
 import clsx from 'clsx';
 
 export default function PremiosPage() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 md:py-14">
-      <h1 className="mb-6 text-3xl font-bold">Prémios</h1>
+      <header className="mb-8">
+        <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-white/40">
+          O que podes ganhar com o +Predictor
+        </p>
+        <h1 className="mb-3 text-3xl font-bold md:text-4xl">Prémios</h1>
+        <p className="max-w-2xl text-sm text-white/70 md:text-base">
+          Consulta os principais prémios do +Predictor: ranking geral, ranking mensal, melhores
+          palpites por jogo e experiências especiais em parceria com a Betano.
+        </p>
+      </header>
 
       {/* Destaques principais */}
       <div className="grid gap-6 md:grid-cols-2">
-        <Card title="Ranking Geral — 🥇 Camisola Oficial do FC Porto">
+        <Card
+          title="Ranking Geral — Camisola Oficial do FC Porto"
+          imageSrc="https://gmstorept.com/cdn/shop/files/image_4c62c7d2-8b48-4aa8-b921-7bd4a377f03a_1024x.jpg?v=1750164473"
+          imageAlt="Camisola de futebol azul e branca em destaque"
+        >
           <p className="text-white/80">
             O vencedor do <span className="font-medium">ranking geral</span> recebe uma{' '}
             <span className="font-semibold">camisola oficial do FC Porto</span> (época atual), tamanho
@@ -18,11 +32,21 @@ export default function PremiosPage() {
           </p>
           <ul className="mt-4 space-y-2 text-white/70 text-sm">
             <li>• Entrega após o término da competição definida para a época.</li>
-            <li>• Em caso de empate: critérios em “Regras”.</li>
+            <li>
+              • Em caso de empate: critérios em{' '}
+              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
+                Regras
+              </Link>
+              .
+            </li>
           </ul>
         </Card>
 
-        <Card title="Ranking Mensal — 🎁 Freebets 30€ / 20€ / 10€">
+        <Card
+          title="Ranking Mensal — Freebets 30€ / 20€ / 10€"
+          imageSrc="https://www.freebets.com/wp-content/uploads/2024/06/betano-logo-webp.webp"
+          imageAlt="Freebets Betano"
+        >
           <p className="text-white/80">
             Todos os meses premiamos o pódio do ranking mensal com{' '}
             <span className="font-semibold">freebets</span>:
@@ -37,18 +61,56 @@ export default function PremiosPage() {
           </p>
         </Card>
 
-        <Card title="Vencedor por Jogo — 💥 Freebet 10€">
+        <Card
+          title="Vencedor da Jornada Europeia — Experiência Betano"
+          imageSrc="https://media.assettype.com/dn/import/dncxpgxxypnfpero/kth2kooxyeyh.jpg?w=1200&h=675&auto=format%2Ccompress&fit=max&enlarge=true"
+          imageAlt="Estádio de futebol do Dragão"
+        >
+          <p className="text-white/80">
+            Em cada jornada da <span className="font-medium">Europa League</span>, o participante com a
+            <span className="font-semibold"> maior pontuação</span> ganha uma{' '}
+            <span className="font-semibold">Experiência Betano</span>:
+            <span className="font-semibold"> bilhete duplo para jogo no Dragão</span>.
+          </p>
+          <ul className="mt-4 space-y-2 text-white/70 text-sm">
+            <li>• Critério: maior pontuação numa jornada da Europa League.</li>
+            <li>
+              • Em caso de empate, aplicam-se os critérios de desempate em{' '}
+              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
+                Regras
+              </Link>
+              .
+            </li>
+            <li>• Sujeito a disponibilidade de jogo/data e validação de conta Betano.</li>
+          </ul>
+        </Card>
+
+        <Card
+          title="Vencedor por Jogo — Freebet 10€"
+          imageSrc="https://www.freebets.com/wp-content/uploads/2024/06/betano-logo-webp.webp"
+          imageAlt="Freebets Betano"
+        >
           <p className="text-white/80">
             Em cada jogo, o melhor palpite (maior pontuação) ganha uma{' '}
             <span className="font-semibold">freebet de 10€</span>.
           </p>
           <ul className="mt-4 space-y-2 text-white/70 text-sm">
-            <li>• Em caso de empate, aplicam-se os critérios de desempate.</li>
-            <li>• Apenas participantes elegíveis (ver “Regras”).</li>
+            <li>
+              • Em caso de empate, aplicam-se os critérios de desempate em{' '}
+              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
+                Regras
+              </Link>
+              .
+            </li>
+            <li>• Apenas participantes elegíveis (ver{' '}
+              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
+                Regras
+              </Link>
+              ).</li>
           </ul>
         </Card>
 
-        <Card title="Sorteios — 🎟️ Bilhetes, Freebets & Experiências">
+        {/* <Card title="Sorteios — 🎟️ Bilhetes, Freebets & Experiências">
           <p className="text-white/80">
             Ao longo da temporada, realizaremos <span className="font-semibold">sorteios</span> para a
             comunidade: bilhetes de jogo, freebets e experiências exclusivas.
@@ -57,7 +119,7 @@ export default function PremiosPage() {
             <li>• Elegibilidade definida em cada campanha.</li>
             <li>• Comunicação no Instagram do MaisFCPorto e dentro da app.</li>
           </ul>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Nota legal curta */}
@@ -77,15 +139,29 @@ export default function PremiosPage() {
 
 function Card({
   title,
+  imageSrc,
+  imageAlt,
   children,
 }: {
   title: string;
+  imageSrc?: string;
+  imageAlt?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-6 shadow-[0_8px_40px_rgba(0,0,0,0.35)]">
-      <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+    <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.015] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] md:p-6">
+      <h2 className="mb-3 text-base font-semibold tracking-tight md:text-lg">{title}</h2>
       {children}
+      {imageSrc ? (
+        <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
+          <img
+            src={imageSrc}
+            alt={imageAlt ?? title}
+            className="h-40 w-full object-cover md:h-44"
+            loading="lazy"
+          />
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -6,10 +6,19 @@ import Link from 'next/link';
 export default function RegrasPage() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 md:py-14">
-      <h1 className="mb-6 text-3xl font-bold">Regras</h1>
+      <header className="mb-8">
+        <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-white/40">
+          Como funciona o +Predictor
+        </p>
+        <h1 className="mb-3 text-3xl font-bold md:text-4xl">Regras</h1>
+        <p className="max-w-2xl text-sm text-white/70 md:text-base">
+          Aqui encontras um resumo simples de quem pode participar, como funcionam os
+          palpites, a pontuação e o que é preciso para estares elegível aos prémios.
+        </p>
+      </header>
 
       {/* Sumário rápido / TOC */}
-      <div className="mb-6 grid gap-3 md:grid-cols-2">
+      <div className="mb-8 grid gap-3 md:grid-cols-2">
         <AnchorCard title="Quem pode participar" href="#quem-pode-participar" />
         <AnchorCard title="Como funciona" href="#como-funciona" />
         <AnchorCard title="Pontuação" href="#pontuacao" />
@@ -23,7 +32,7 @@ export default function RegrasPage() {
       <RuleCard id="quem-pode-participar" title="Quem pode participar">
         <ul className="space-y-2 text-white/80">
           <li>• Ser <span className="font-medium">maior de 18 anos</span>.</li>
-          <li>• Ter um registo válido na nossa plataforma (email ou Google).</li>
+          <li>• Ter um registo válido na plataforma (email ou Google).</li>
           <li>
             • Seguir o Instagram{' '}
             <a
@@ -37,9 +46,10 @@ export default function RegrasPage() {
             para acompanhar avisos e sorteios.
           </li>
           <li>
-            • Registo na Betano através do nosso link de parceiro (para prémios com freebets):{' '}
+            • Registo na Betano através do nosso link de parceiro (necessário para prémios em
+            freebets):{' '}
             <a
-              href="https://betano.pt/??parceiro=teu_codigo" // substitui pelo teu link de afiliado
+              href="https://gml-grp.com/C.ashx?btag=a_15985b_289c_&affid=5177&siteid=15985&adid=289&c=&asclurl=https://promos.betano.pt/confia-fcporto/index.html?cod=MAISFCP"
               target="_blank"
               rel="noreferrer"
               className="underline decoration-white/30 hover:decoration-white"
@@ -92,11 +102,22 @@ export default function RegrasPage() {
 
       <RuleCard id="elegibilidade" title="Elegibilidade aos prémios">
         <ul className="space-y-2 text-white/80">
-          <li>• Maior de idade.</li>
-          <li>• Conta válida e sem comportamentos abusivos.</li>
-          <li>• Seguir o Instagram @maisfcporto (comunicação e validações).</li>
-          <li>• Para freebets: conta Betano ativa e verificada através do link de parceiro.</li>
-          <li>• Podemos solicitar prova de identidade e/ou dados mínimos para entrega.</li>
+          <li>• Maior de idade (18+).</li>
+          <li>
+            • Conta na plataforma válida e sem comportamentos abusivos (por exemplo, spam ou
+            uso de múltiplas contas).
+          </li>
+          <li>
+            • Seguir o Instagram @maisfcporto para comunicação, atualizações e validações.
+          </li>
+          <li>
+            • Para freebets: conta Betano ativa, verificada e criada através do link de parceiro
+            indicado.
+          </li>
+          <li>
+            • Podemos solicitar prova de identidade e/ou dados mínimos apenas para efeitos de
+            entrega dos prémios.
+          </li>
         </ul>
       </RuleCard>
 
@@ -116,16 +137,25 @@ export default function RegrasPage() {
       </RuleCard>
 
       {/* CTA rápido */}
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <CtaButton
-          label="Seguir @maisfcporto"
-          href="https://instagram.com/maisfcporto"
-        />
-        <CtaButton
-          label="Criar conta Betano"
-          href="https://gml-grp.com/C.ashx?btag=a_15985b_289c_&affid=5177&siteid=15985&adid=289&c=&asclurl=https://promos.betano.pt/confia-fcporto/index.html?cod=MAISFCP "
-        />
-      </div>
+      <section className="mt-10 rounded-3xl border border-white/10 bg-white/[0.02] p-5 md:p-6">
+        <div className="mb-4">
+          <h2 className="mb-1 text-base font-semibold md:text-lg">Pronto para começar?</h2>
+          <p className="text-sm text-white/70">
+            Garante que cumpres os requisitos acima e usa os botões abaixo para seguir o projeto
+            e criar a tua conta na Betano.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <CtaButton
+            label="Seguir @maisfcporto"
+            href="https://instagram.com/maisfcporto"
+          />
+          <CtaButton
+            label="Criar conta Betano"
+            href="https://gml-grp.com/C.ashx?btag=a_15985b_289c_&affid=5177&siteid=15985&adid=289&c=&asclurl=https://promos.betano.pt/confia-fcporto/index.html?cod=MAISFCP"
+          />
+        </div>
+      </section>
     </main>
   );
 }
@@ -136,9 +166,12 @@ function AnchorCard({ title, href }: { title: string; href: string }) {
   return (
     <Link
       href={href}
-      className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/80 hover:bg-white/[0.06]"
+      className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/80 shadow-sm transition hover:border-white/25 hover:bg-white/[0.06]"
     >
-      {title}
+      <span>{title}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wide text-white/40">
+        ver secção
+      </span>
     </Link>
   );
 }
@@ -155,9 +188,9 @@ function RuleCard({
   return (
     <section
       id={id}
-      className="mb-6 rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-6 shadow-[0_8px_40px_rgba(0,0,0,0.35)]"
+      className="mb-6 rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.015] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] md:mb-7 md:p-6"
     >
-      <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+      <h2 className="mb-3 text-base font-semibold tracking-tight md:text-lg">{title}</h2>
       {children}
     </section>
   );

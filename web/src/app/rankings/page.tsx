@@ -177,6 +177,7 @@ export default function RankingsPage() {
 
   return (
     <main className="mx-auto max-w-6xl p-6">
+      <title>+Predictor - Rankings</title>
       <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
 
       {/* Tabs + filtros */}

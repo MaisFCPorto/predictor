@@ -616,6 +616,7 @@ export default function AdminFixtures() {
   return (
     <AdminGate>
       <main className="max-w-6xl mx-auto p-6 space-y-4">
+        <title>+Predictor - Admin Jogos</title>
         <h1 className="text-2xl font-semibold">Backoffice — Jogos</h1>
 
         <datalist id="teams-list">

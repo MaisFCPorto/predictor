@@ -37,6 +37,7 @@ export default function Teams() {
   return (
     <AdminGate>
       <main className="max-w-4xl mx-auto p-6 space-y-4">
+        <title>+Predictor - Admin Equipas</title>
         <h1 className="text-2xl font-bold">Teams</h1>
 
         <div className="flex gap-2 items-center">

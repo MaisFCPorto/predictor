@@ -7,6 +7,7 @@ import clsx from 'clsx';
 export default function PremiosPage() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 md:py-14">
+      <title>+Predictor - Prémios</title>
       <header className="mb-8">
         <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-white/40">
           O que podes ganhar com o +Predictor

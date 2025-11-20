@@ -628,6 +628,7 @@ export default function JogosPage() {
 
   return (
     <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-6 sm:py-8">
+      <title>+Predictor - Jogos</title>
       <Toaster position="top-center" />
 
       <div className="mx-auto w-full max-w-6xl space-y-8">

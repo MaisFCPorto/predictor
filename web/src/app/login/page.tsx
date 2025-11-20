@@ -45,6 +45,7 @@ export default function LoginPage() {
 
   return (
     <main className="h-screen flex items-center justify-center">
+      <title>+Predictor - Login</title>
       <div className="flex flex-col items-center gap-4 border rounded-xl p-8">
         <h1 className="text-2xl font-bold">Entrar</h1>
         <button

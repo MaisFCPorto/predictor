@@ -6,6 +6,7 @@ export default function AdminIndex() {
   return (
     <RequireAuth>
       <main className="space-y-4">
+        <title>+Predictor - Backoffice</title>
         <h1 className="text-2xl font-semibold">Backoffice</h1>
         <ul className="list-inside list-disc opacity-80">
           <li><a className="underline" href="/admin/users">Users</a></li>

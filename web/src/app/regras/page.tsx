@@ -6,6 +6,7 @@ import Link from 'next/link';
 export default function RegrasPage() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 md:py-14">
+      <title>+Predictor - Regras</title>
       <header className="mb-8">
         <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-white/40">
           Como funciona o +Predictor

@@ -38,6 +38,7 @@ export default function Matchdays() {
   return (
     <AdminGate>
       <main className="max-w-6xl mx-auto p-6 space-y-4">
+        <title>+Predictor - Admin Matchdays</title>
         <h1 className="text-2xl font-bold">Matchdays</h1>
 
         <div className="grid grid-cols-6 gap-2">

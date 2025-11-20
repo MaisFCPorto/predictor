@@ -4,7 +4,7 @@ import './globals.css';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabasePKCE } from '@/utils/supabase/client';
 
 type UserInfo = {
@@ -162,6 +162,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [loadingUser, setLoadingUser] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -194,8 +195,32 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       }
     })();
 
+    const { data } = supabasePKCE.auth.onAuthStateChange((_event, session) => {
+      if (ignore) return;
+
+      const authUser = session?.user ?? null;
+      if (authUser) {
+        const friendlyName =
+          (authUser.user_metadata?.name as string | undefined) ??
+          authUser.email?.split('@')[0] ??
+          'Jogador';
+
+        setUser({
+          id: authUser.id,
+          name: friendlyName,
+          avatar_url:
+            (authUser.user_metadata?.avatar_url as string | undefined) ?? null,
+        });
+      } else {
+        setUser(null);
+      }
+
+      setLoadingUser(false);
+    });
+
     return () => {
       ignore = true;
+      data.subscription.unsubscribe();
     };
   }, []);
 
@@ -227,6 +252,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       .slice(0, 2)
       .map((p) => p[0]!.toUpperCase())
       .join('') || 'M';
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+
+    function handleClickOutside(ev: MouseEvent) {
+      const target = ev.target as Node | null;
+      if (!userMenuRef.current || !target) return;
+      if (!userMenuRef.current.contains(target)) {
+        setUserMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
 
   return (
     <html lang="pt">
@@ -277,7 +317,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               ))}
 
               {user && (
-                <div className="relative">
+                <div className="relative" ref={userMenuRef}>
                   <button
                     type="button"
                     onClick={() => setUserMenuOpen((open) => !open)}

@@ -170,7 +170,7 @@ export default function RankingsPage() {
     if (mode === 'general') return 'Ranking Geral';
     if (mode === 'monthly') return `Ranking Mensal - ${formatYmLabel(ym)}`;
     const g = games.find((x) => x.id === fixtureId);
-    return g ? `Ranking por Jogo — ${g.home_team_name} vs ${g.away_team_name}` : 'Ranking por Jogo';
+    return g ? `Ranking Jogo — ${g.home_team_name} vs ${g.away_team_name}` : 'Ranking Jogo';
   }, [mode, ym, games, fixtureId]);
 
   const selectedGame = useMemo(() => games.find((x) => x.id === fixtureId) || null, [games, fixtureId]);
@@ -214,7 +214,7 @@ export default function RankingsPage() {
                 : 'text-white/80 hover:bg-white/10')
             }
           >
-            Por jogo
+            Jogo
           </button>
         </div>
 

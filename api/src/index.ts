@@ -7,7 +7,7 @@ import { adminPlayers } from './routes/admin/players';
 import { adminFixtureScorers } from './routes/admin/fixture-scorers';
 import { corsMiddleware } from './cors';
 import { auth } from './routes/auth';
-import { admin, recomputePointsForFixture } from './routes/admin';
+import { admin } from './routes/admin';
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -53,6 +53,58 @@ const isLocked = (kickoffISO: string, nowMs: number, lockMs: number) => {
   const ko = new Date(kickoffISO).getTime();
   return nowMs >= ko - lockMs;
 };
+
+// ----------------------------------------------------
+// Helper: recalcular pontos UEFA para um fixture
+// (versão simples, sem bónus de marcador)
+// ----------------------------------------------------
+async function recomputePointsForFixture(db: D1Database, fixtureId: string) {
+  // 1) Buscar o resultado oficial do jogo
+  const fx = await db
+    .prepare(`
+      SELECT home_score, away_score
+      FROM fixtures
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(fixtureId)
+    .first<{ home_score: number | null; away_score: number | null }>();
+
+  // Se ainda não há resultado, não há pontos a recalcular
+  if (!fx || fx.home_score == null || fx.away_score == null) {
+    return;
+  }
+
+  // 2) Ir buscar todas as predictions desse jogo
+  const { results } = await db
+    .prepare(`
+      SELECT user_id, fixture_id, home_goals, away_goals
+      FROM predictions
+      WHERE fixture_id = ?
+    `)
+    .bind(fixtureId)
+    .all<{
+      user_id: string;
+      fixture_id: string;
+      home_goals: number | null;
+      away_goals: number | null;
+    }>();
+
+  // 3) Calcular pontos UEFA e gravar no campo "points"
+  for (const p of results ?? []) {
+    const s = scoreUEFA(p.home_goals, p.away_goals, fx.home_score, fx.away_score);
+
+    await db
+      .prepare(`
+        UPDATE predictions
+        SET points = ?
+        WHERE user_id = ?
+          AND fixture_id = ?
+      `)
+      .bind(s.points, p.user_id, p.fixture_id)
+      .run();
+  }
+}
 
 // ----------------------------------------------------
 // Utilitários e Ctes
@@ -248,7 +300,7 @@ app.get('/api/fixtures/finished', async (c) => {
 
 // ----------------------------------------------------
 // PUBLIC: Closed fixtures (FINISHED or locked)
-//  -- COM marcadores reais (scorers_names)
+//  -- AGORA COM marcadores reais (scorers_names)
 // ----------------------------------------------------
 app.get('/api/fixtures/closed', async (c) => {
   const limitQ = Number(c.req.query('limit') ?? '10');
@@ -277,6 +329,7 @@ app.get('/api/fixtures/closed', async (c) => {
         at.crest_url  AS away_crest,
         co.code       AS competition_code,
         co.name       AS competition_name,
+        -- nomes dos marcadores reais (se existirem)
         GROUP_CONCAT(p.name, ',') AS scorers_names
       FROM fixtures f
       JOIN teams ht ON ht.id = f.home_team_id
@@ -307,11 +360,12 @@ app.get('/api/fixtures/closed', async (c) => {
       leg: number | null;
       home_score: number | null;
       away_score: number | null;
-      scorers_names: string | null;
+      scorers_names: string | null; // <- vem em CSV do GROUP_CONCAT
     }>();
 
   const rows = results ?? [];
 
+  // converter "Samu,Alberto Costa" -> ["Samu","Alberto Costa"]
   const enriched = rows.map((r) => ({
     ...r,
     scorers_names: r.scorers_names
@@ -328,6 +382,8 @@ app.get('/api/fixtures/closed', async (c) => {
 // ----------------------------------------------------
 // PUBLIC: Predictions
 // ----------------------------------------------------
+
+// POST /api/predictions  → cria OU atualiza palpite (update → insert)
 app.post('/api/predictions', async (c) => {
   try {
     const body = (await c.req.json().catch(() => null)) as
@@ -348,6 +404,7 @@ app.post('/api/predictions', async (c) => {
       return c.json({ error: 'missing_data' }, 400);
     }
 
+    // aceitar string OU number e normalizar para string ou null
     let scorerId: string | null = null;
     if (typeof scorer_player_id === 'string') {
       const t = scorer_player_id.trim();
@@ -369,12 +426,14 @@ app.post('/api/predictions', async (c) => {
 
     const db = c.env.DB;
 
+    // valida user
     const userExists = await db
       .prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`)
       .bind(userId)
       .first();
     if (!userExists) return c.json({ error: 'user_missing' }, 400);
 
+    // valida fixture + lock
     const fx = await db
       .prepare(
         `SELECT kickoff_at, status
@@ -395,6 +454,7 @@ app.post('/api/predictions', async (c) => {
       return c.json({ error: 'locked' }, 400);
     }
 
+    // 1) tentar UPDATE
     const updateRes = await db
       .prepare(
         `
@@ -410,6 +470,7 @@ app.post('/api/predictions', async (c) => {
 
     let mode: 'update' | 'insert' = 'update';
 
+    // 2) se não atualizou nenhuma linha, fazer INSERT
     if (!updateRes.meta?.changes) {
       const insertRes = await db
         .prepare(
@@ -443,6 +504,7 @@ app.post('/api/predictions', async (c) => {
   }
 });
 
+// GET /api/predictions  → lista palpites do user
 app.get('/api/predictions', async (c) => {
   try {
     const userId = c.req.query('userId');
@@ -478,6 +540,7 @@ app.get('/api/predictions', async (c) => {
       away_goals: r.away_goals ?? 0,
       points: r.points,
       scorer_player_id: r.scorer_player_id ?? null,
+      // extra alias em camelCase, para o front que use scorerPlayerId
       scorerPlayerId: r.scorer_player_id ?? null,
     }));
 
@@ -568,12 +631,12 @@ app.get('/api/admin/teams', async (c) => {
 // --- ADMIN: check -------------------------------------------------
 app.get('/api/admin/check', (c) => {
   const guard = requireAdmin(c);
-  if (guard) return guard;
+  if (guard) return guard; // devolve 403 se a x-admin-key não bater certo
   return c.json({ ok: true });
 });
 
 // ----------------------------------------------------
-// ADMIN: Fixtures (modelo sem matchday_id obrigatório)
+// ADMIN: Fixtures (NOVO modelo sem matchday_id obrigatório)
 // ----------------------------------------------------
 app.get('/api/admin/fixtures', async (c) => {
   const guard = requireAdmin(c);
@@ -609,17 +672,21 @@ app.post('/api/admin/fixtures', async (c) => {
 
     const id = (b.id && String(b.id)) || genId();
 
+    // valida mínimos
     if (!b.home_team_id || !b.away_team_id)
       return c.json({ error: 'missing_team' }, 400);
     if (b.home_team_id === b.away_team_id)
       return c.json({ error: 'same_team' }, 400);
     if (!b.kickoff_at) return c.json({ error: 'missing_kickoff' }, 400);
 
+    // campos opcionais
     const competition_id = b.competition_id ?? null;
     const round_label = b.round_label ?? null;
 
+    // usar 'leg_number' como coluna canónica
     const leg = (b.leg_number ?? b.leg) ?? null;
 
+    // se ainda tens a coluna matchday_id e queres um default:
     const matchday_id = b.matchday_id ?? 'md1';
 
     await run(
@@ -783,24 +850,28 @@ app.put('/api/admin/fixtures/:id/scorers', async (c) => {
     ? body!.player_ids.map((x) => String(x)).filter(Boolean)
     : [];
 
+  // limpa marcadores anteriores
   await run(c.env.DB, `DELETE FROM fixture_scorers WHERE fixture_id = ?`, fixtureId);
 
+  // insere novos (cada um com id gerado)
   for (const pid of ids) {
     await run(
       c.env.DB,
       `
-      INSERT INTO fixture_scorers (id, fixture_id, player_id, created_at)
-      VALUES (lower(hex(randomblob(16))), ?, ?, DATETIME('now'))
+      INSERT INTO fixture_scorers (id, fixture_id, player_id)
+      VALUES (lower(hex(randomblob(16))), ?, ?)
     `,
       fixtureId,
       pid,
     );
   }
 
+  // 🔁 sempre que alteras marcadores, volta a calcular os pontos
   await recomputePointsForFixture(c.env.DB, fixtureId);
 
   return c.json({ ok: true, count: ids.length });
 });
+
 
 // ----------------------------------------------------
 // USERS: Roles
@@ -831,6 +902,7 @@ app.get('/api/users/role/:id', async (c) => {
 
 // ----------------------------------------------------
 // USERS: Last points (resumo do último jogo pontuado)
+// GET /api/users/:id/last-points
 // ----------------------------------------------------
 app.get('/api/users/:id/last-points', async (c) => {
   const userId = c.req.param('id');
@@ -838,6 +910,7 @@ app.get('/api/users/:id/last-points', async (c) => {
 
   const db = c.env.DB;
 
+  // 1) último jogo TERMINADO em que este user tem prediction
   const last = await db
     .prepare(
       `
@@ -866,11 +939,13 @@ app.get('/api/users/:id/last-points', async (c) => {
     }>();
 
   if (!last) {
+    // ainda não tem jogos pontuados
     return c.json(null);
   }
 
   const { fixture_id, kickoff_at, home_score, away_score } = last;
 
+  // 2) ir buscar TODAS as predictions desse jogo
   const { results } = await db
     .prepare(
       `
@@ -887,6 +962,7 @@ app.get('/api/users/:id/last-points', async (c) => {
       points: number | null;
     }>();
 
+  // 3) calcular pontuação UEFA para cada user e ordenar
   type Row = {
     user_id: string;
     points: number;
@@ -902,6 +978,7 @@ app.get('/api/users/:id/last-points', async (c) => {
       home_score,
       away_score,
     );
+    // assumo que scoreUEFA devolve { points, exact, diff, winner }
     const pts = typeof r.points === 'number' ? r.points : s.points;
 
     return {
@@ -914,7 +991,9 @@ app.get('/api/users/:id/last-points', async (c) => {
   });
 
   table.sort((a, b) => {
+    // ordenação básica: mais pontos primeiro
     if (b.points !== a.points) return b.points - a.points;
+    // se quiseres, dá para pôr mais critérios aqui
     return 0;
   });
 
@@ -922,6 +1001,8 @@ app.get('/api/users/:id/last-points', async (c) => {
   const me = idx >= 0 ? table[idx] : null;
 
   if (!me) {
+    // user não participou nesse fixture (não devia acontecer pela query de cima,
+    // mas guardo o fallback)
     return c.json(null);
   }
 

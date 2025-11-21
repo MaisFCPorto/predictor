@@ -5,6 +5,7 @@ import { rankings, scoreUEFA } from './routes/rankings';
 import { adminCompetitions } from './routes/admin/competitions';
 import { adminPlayers } from './routes/admin/players';
 import { adminFixtureScorers } from './routes/admin/fixture-scorers';
+import { adminTeams } from './routes/admin/teams';
 import { corsMiddleware } from './cors';
 import { auth } from './routes/auth';
 import { admin, recomputePointsForFixture } from './routes/admin';
@@ -85,6 +86,7 @@ app.route('/api/admin/players', adminPlayers);
 app.route('/api/admin/fixtures', adminFixtureScorers);
 app.route('/api/auth', auth);
 app.route('/api/admin', admin);
+app.route('/api/admin/teams', adminTeams);
 
 // ----------------------------------------------------
 // PUBLIC: Fixtures list
@@ -562,7 +564,12 @@ app.get('/api/admin/teams', async (c) => {
   const guard = requireAdmin(c);
   if (guard) return guard;
 
-  const { results } = await all<any>(
+  const { results } = await all<{
+    id: string;
+    name: string;
+    short_name: string | null;
+    crest_url: string | null;
+  }>(
     c.env.DB,
     `
     SELECT
@@ -583,7 +590,7 @@ app.post('/api/admin/teams', async (c) => {
   const guard = requireAdmin(c);
   if (guard) return guard;
 
-  const body = await c.req.json().catch(() => null) as
+  const body = (await c.req.json().catch(() => null)) as
     | { id?: string; name?: string; short_name?: string; crest_url?: string }
     | null;
 
@@ -612,7 +619,7 @@ app.patch('/api/admin/teams/:id', async (c) => {
   if (guard) return guard;
 
   const id = c.req.param('id');
-  const body = await c.req.json().catch(() => null) as
+  const body = (await c.req.json().catch(() => null)) as
     | { name?: string; short_name?: string | null; crest_url?: string | null }
     | null;
 
@@ -662,7 +669,6 @@ app.delete('/api/admin/teams/:id', async (c) => {
 
   return c.json({ ok: true });
 });
-
 
 // --- ADMIN: check -------------------------------------------------
 app.get('/api/admin/check', (c) => {
@@ -716,9 +722,7 @@ app.post('/api/admin/fixtures', async (c) => {
 
     const competition_id = b.competition_id ?? null;
     const round_label = b.round_label ?? null;
-
-    const leg = (b.leg_number ?? b.leg) ?? null;
-
+    const leg = b.leg_number ?? b.leg ?? null;
     const matchday_id = b.matchday_id ?? 'md1';
 
     await run(
@@ -776,7 +780,7 @@ app.patch('/api/admin/fixtures/:id', async (c) => {
     b.status ?? null,
     b.competition_id ?? null,
     b.round_label ?? null,
-    (b.leg_number ?? b.leg ?? null),
+    b.leg_number ?? b.leg ?? null,
     b.home_score ?? null,
     b.away_score ?? null,
     id,
@@ -994,7 +998,7 @@ app.get('/api/users/:id/last-points', async (c) => {
     winner: number;
   };
 
-  const table: Row[] = results.map((r) => {
+  const table: Row[] = (results ?? []).map((r) => {
     const s = scoreUEFA(
       r.home_goals ?? 0,
       r.away_goals ?? 0,

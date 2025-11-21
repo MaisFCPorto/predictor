@@ -160,10 +160,13 @@ admin.get('/role', requireAdminKey, async (c) => {
   return c.json({ role: row?.role ?? 'user' });
 });
 
-// --- Lista de equipas
 admin.get('/teams', requireAdminKey, async (c) => {
   const { results } = await c.env.DB
-    .prepare('SELECT id, name FROM teams ORDER BY name')
+    .prepare(`
+      SELECT id, name, short_name, crest_url
+      FROM teams
+      ORDER BY name
+    `)
     .all();
   return c.json(results);
 });

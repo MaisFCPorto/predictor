@@ -23,29 +23,20 @@ export default function PremiosPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card
           title="Ranking Geral — Camisola Oficial do FC Porto"
-          imageSrc="https://gmstorept.com/cdn/shop/files/image_4c62c7d2-8b48-4aa8-b921-7bd4a377f03a_1024x.jpg?v=1750164473"
+          imageSrc="/win-icons-01.svg"
           imageAlt="Camisola de futebol azul e branca em destaque"
+          imageClassName="h-60 w-auto object-contain md:h-76"
         >
           <p className="text-white/80">
             O vencedor do <span className="font-medium">ranking geral</span> recebe uma{' '}
             <span className="font-semibold">camisola oficial do FC Porto</span> (época atual), tamanho
             e personalização a combinar mediante disponibilidade.
           </p>
-          <ul className="mt-4 space-y-2 text-white/70 text-sm">
-            <li>• Entrega após o término da competição definida para a época.</li>
-            <li>
-              • Em caso de empate: critérios em{' '}
-              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
-                Regras
-              </Link>
-              .
-            </li>
-          </ul>
         </Card>
 
         <Card
           title="Ranking Mensal — Freebets 30€ / 20€ / 10€"
-          imageSrc="https://www.freebets.com/wp-content/uploads/2024/06/betano-logo-webp.webp"
+          imageSrc="/win-icons-03.svg"
           imageAlt="Freebets Betano"
         >
           <p className="text-white/80">
@@ -64,8 +55,8 @@ export default function PremiosPage() {
 
         <Card
           title="Vencedor da Jornada Europeia — Experiência Betano"
-          imageSrc="https://media.assettype.com/dn/import/dncxpgxxypnfpero/kth2kooxyeyh.jpg?w=1200&h=675&auto=format%2Ccompress&fit=max&enlarge=true"
-          imageAlt="Estádio de futebol do Dragão"
+          imageSrc="/win-icons-04.svg"
+          imageAlt="Experiência Betano"
         >
           <p className="text-white/80">
             Em cada jornada da <span className="font-medium">Europa League</span>, o participante com a
@@ -73,42 +64,18 @@ export default function PremiosPage() {
             <span className="font-semibold">Experiência Betano</span>:
             <span className="font-semibold"> bilhete duplo para jogo no Dragão</span>.
           </p>
-          <ul className="mt-4 space-y-2 text-white/70 text-sm">
-            <li>• Critério: maior pontuação numa jornada da Europa League.</li>
-            <li>
-              • Em caso de empate, aplicam-se os critérios de desempate em{' '}
-              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
-                Regras
-              </Link>
-              .
-            </li>
-            <li>• Sujeito a disponibilidade de jogo/data e validação de conta Betano.</li>
-          </ul>
         </Card>
 
         <Card
           title="Vencedor por Jogo — Freebet 10€"
-          imageSrc="https://www.freebets.com/wp-content/uploads/2024/06/betano-logo-webp.webp"
+          imageSrc="/win-icons-02.svg"
           imageAlt="Freebets Betano"
         >
           <p className="text-white/80">
             Em cada jogo, o melhor palpite (maior pontuação) ganha uma{' '}
             <span className="font-semibold">freebet de 10€</span>.
           </p>
-          <ul className="mt-4 space-y-2 text-white/70 text-sm">
-            <li>
-              • Em caso de empate, aplicam-se os critérios de desempate em{' '}
-              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
-                Regras
-              </Link>
-              .
-            </li>
-            <li>• Apenas participantes elegíveis (ver{' '}
-              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
-                Regras
-              </Link>
-              ).</li>
-          </ul>
+          <br />
         </Card>
 
         {/* <Card title="Sorteios — 🎟️ Bilhetes, Freebets & Experiências">
@@ -130,6 +97,11 @@ export default function PremiosPage() {
           disponibilidade, validações de conta e termos do parceiro. Freebets são atribuídas a
           contas Betano válidas e verificadas. Reservamo-nos o direito de ajustar as condições
           dos prémios por razões operacionais ou legais.
+          <br />
+          Em caso de empate, são aplicados os critérios de desempate em{' '}
+              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
+                Regras
+              </Link>
         </p>
       </div>
     </main>
@@ -142,11 +114,13 @@ function Card({
   title,
   imageSrc,
   imageAlt,
+  imageClassName,
   children,
 }: {
   title: string;
   imageSrc?: string;
   imageAlt?: string;
+  imageClassName?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -154,11 +128,11 @@ function Card({
       <h2 className="mb-3 text-base font-semibold tracking-tight md:text-lg">{title}</h2>
       {children}
       {imageSrc ? (
-        <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
+        <div className="mt-4 overflow-hidden rounded-2xl bg-black/10 flex items-center justify-center p-3 md:p-4">
           <img
             src={imageSrc}
             alt={imageAlt ?? title}
-            className="h-40 w-full object-cover md:h-44"
+            className={clsx('h-44 w-auto object-contain md:h-52', imageClassName)}
             loading="lazy"
           />
         </div>

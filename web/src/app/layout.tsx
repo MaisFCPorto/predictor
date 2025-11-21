@@ -437,7 +437,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     onClick={handleLogout}
                     className="mt-2 flex w-full items-center gap-2 rounded-xl bg-rose-500/10 px-4 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/15"
                   >
-                    <span className="text-lg">↪</span>
                     <span>Terminar sessão</span>
                   </button>
                 ) : (

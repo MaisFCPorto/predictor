@@ -110,7 +110,18 @@ export default function FixtureCard({
     return [name, null];
   }, [comp]);
 
-  const fullDateLabel = useMemo(() => {
+  const fullDateLabelShort = useMemo(() => {
+    const d = new Date(kickoff_at);
+    const weekdayRaw = d.toLocaleDateString('pt-PT', { weekday: 'long' });
+    const weekdayNorm = weekdayRaw.replace('-', ' ');
+    const weekdayCap =
+      weekdayNorm.charAt(0).toUpperCase() + weekdayNorm.slice(1);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${weekdayCap}, ${dd}/${mm}`;
+  }, [kickoff_at]);
+
+  const fullDateLabelLong = useMemo(() => {
     const d = new Date(kickoff_at);
     return new Intl.DateTimeFormat('pt-PT', {
       weekday: 'long',
@@ -404,7 +415,7 @@ export default function FixtureCard({
         </div>
 
         <div className="text-center text-sm text-white/90 px-14">
-          <div className="leading-tight">{fullDateLabel}</div>
+          <div className="leading-tight">{fullDateLabelShort}</div>
           <div className="text-xs text-white/70">{timeLabel}</div>
         </div>
 
@@ -445,7 +456,7 @@ export default function FixtureCard({
         <div className="min-w-0 justify-self-start">
           {comp && (
             <span
-              className="inline-flex max-w-full items-center justify-center text-center gap-2 rounded-full px-3 py-1 text-[12px] font-medium leading-none"
+              className="inline-flex max-w-full items-center justify-center text-center gap-2 rounded-full px-3.5 py-1 text-[12px] font-medium leading-none"
               style={{
                 background:
                   subtle === 'transparent'
@@ -453,6 +464,7 @@ export default function FixtureCard({
                     : `linear-gradient(90deg, ${accent} 0%, ${subtle} 100%)`,
                 color: '#e9eef9',
                 border: `1px solid ${accent}66`,
+                boxShadow: '0 0 0 1px rgba(0,0,0,0.15) inset',
               }}
               title={comp + (rnd ? ` — ${rnd}` : '')}
             >
@@ -464,7 +476,7 @@ export default function FixtureCard({
 
         <div className="justify-self-center text-center">
           <div className="text-sm md:text-base text-white/90 leading-tight">
-            <div>{fullDateLabel}</div>
+            <div>{fullDateLabelLong}</div>
             <div>{timeLabel}</div>
           </div>
         </div>

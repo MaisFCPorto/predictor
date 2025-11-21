@@ -13,10 +13,10 @@ export const COMP_META: Record<
     accent2?: string;
   }
 > = {
-  LP: { name: 'Liga Portugal', accent: '#001334', subtle: '#E5141E' },
-  LE: { name: 'Liga Europa', accent: '#FF9100', subtle: '#FFB547' },
-  TP: { name: 'Taça de Portugal', accent: '#00B762', subtle: '#F44336' },
-  TL: { name: 'Taça da Liga', accent: '#091534', subtle: '#091534' },
+  LP: { name: 'Liga Portugal', accent: '#001334', subtle: '#022b6dff' },
+  LE: { name: 'Liga Europa', accent: '#5f3601ff', subtle: '#c27502ff' },
+  TP: { name: 'Taça de Portugal', accent: '#005e32ff', subtle: '#F44336' },
+  TL: { name: 'Taça da Liga', accent: '#022786ff', subtle: '#0233afff' },
 };
 
 export function compName(code?: string | null) {

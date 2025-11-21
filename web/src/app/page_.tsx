@@ -54,7 +54,7 @@ export default function HomePage() {
 
   return (
     <main className="p-6 space-y-4">
-      <h1 className="text-xl font-semibold">Bem-vindo, {session.user.email}</h1>
+      <h1 className="text-xl font-semibold">Bem-vind@, {session.user.email}</h1>
       {/* … o resto da tua home autenticada … */}
     </main>
   );

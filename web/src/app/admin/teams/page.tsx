@@ -313,7 +313,7 @@ export default function AdminTeamsPage() {
                   className="flex flex-col gap-3 rounded-2xl border border-white/12 bg-black/35 p-3 md:flex-row md:items-center"
                 >
                   {/* Esquerda: crest + nome */}
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3 md:basis-5/12">
                     <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-white/5">
                       {t._crest || t.crest_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -352,7 +352,7 @@ export default function AdminTeamsPage() {
                   </div>
 
                   {/* Direita: edição rápida */}
-                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.7fr)_minmax(0,2fr)_minmax(0,0.5fr)] md:items-end">
+                  <div className="grid flex-1 gap-2 md:basis-7/12 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.7fr)_minmax(0,1.6fr)_auto] md:items-end">
                     <div className="space-y-1">
                       <label className="text-[11px] uppercase tracking-wide opacity-60">
                         Nome

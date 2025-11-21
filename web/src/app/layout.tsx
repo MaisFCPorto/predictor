@@ -11,6 +11,7 @@ type UserInfo = {
   id: string;
   name: string | null;
   avatar_url: string | null;
+  isAdmin: boolean;
 };
 
 /* ------------------------------------------------------------------
@@ -163,6 +164,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -181,11 +183,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             user.email?.split('@')[0] ??
             'Jogador';
 
+          const isAdmin = (user.user_metadata as any)?.role === 'admin';
+
           setUser({
             id: user.id,
             name: friendlyName,
             avatar_url:
               (user.user_metadata?.avatar_url as string | undefined) ?? null,
+            isAdmin,
           });
         } else {
           setUser(null);
@@ -205,11 +210,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           authUser.email?.split('@')[0] ??
           'Jogador';
 
+        const isAdmin = (authUser.user_metadata as any)?.role === 'admin';
+
         setUser({
           id: authUser.id,
           name: friendlyName,
           avatar_url:
             (authUser.user_metadata?.avatar_url as string | undefined) ?? null,
+          isAdmin,
         });
       } else {
         setUser(null);
@@ -240,6 +248,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     { href: '/premios', label: 'Prémios' },
     { href: '/regras', label: 'Regras' },
   ];
+
+  const fullNavLinks = user?.isAdmin
+    ? [{ href: '/admin', label: 'Admin' }, ...navLinks]
+    : navLinks;
 
   const isActive = (href: string) =>
     pathname === href ||
@@ -295,7 +307,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
             {/* NAV DESKTOP (direita) */}
             <nav className="ml-auto hidden items-center gap-6 text-sm md:flex">
-              {navLinks.map((link) => (
+              {fullNavLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
@@ -416,7 +428,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
 
               <div className="space-y-1 text-base">
-                {navLinks.map((link) => (
+                {fullNavLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
@@ -460,6 +472,46 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* FOOTER */}
         <footer className="mt-10 border-t border-white/10">
+          <div className="mt-3 flex flex-col items-center gap-2 text-[15px] text-white/75">
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 hover:bg-white/10"
+              onClick={() => setReportOpen((v) => !v)}
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-red-500/20 text-[10px] text-red-200">
+                🐞
+              </span>
+              <span>Encontraste um erro? Reporta aqui</span>
+            </button>
+
+            {reportOpen && (
+              <div className="mt-1 w-full max-w-xs rounded-2xl border border-white/15 bg-black/70 px-3 py-2 text-left text-[11px] leading-relaxed shadow-lg">
+                <div className="font-medium text-white/90 mb-1">
+                  Contactos para feedback/bugs
+                  </div>
+                  <div>
+                    Email:{' '}
+                    <a
+                      href="mailto:geral@maisfcporto.com"
+                      className="underline decoration-white/40 hover:decoration-white"
+                    >
+                      geral@maisfcporto.com
+                    </a>
+                  </div>
+                  <div className="mt-1">
+                    Instagram:{' '}
+                    <a
+                      href="https://www.instagram.com/maisfcporto"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline decoration-white/40 hover:decoration-white"
+                    >
+                      @maisfcporto
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
           <div className="mx-auto w-full max-w-6xl px-4 py-6 text-center text-xs leading-relaxed text-white/70">
             <div className="opacity-80">
               © {new Date().getFullYear()} +FCPorto Predictor. Todos os direitos

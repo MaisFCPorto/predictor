@@ -1,3 +1,4 @@
+// web/src/app/rankings/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -10,6 +11,7 @@ type Row = {
   exact: number;
   diff: number;
   winner: number;
+  scorer_hits?: number; // NOVO: nº de vezes que acertou no marcador
 };
 
 type GameLite = {
@@ -173,7 +175,10 @@ export default function RankingsPage() {
     return g ? `Ranking Jogo — ${g.home_team_name} vs ${g.away_team_name}` : 'Ranking Jogo';
   }, [mode, ym, games, fixtureId]);
 
-  const selectedGame = useMemo(() => games.find((x) => x.id === fixtureId) || null, [games, fixtureId]);
+  const selectedGame = useMemo(
+    () => games.find((x) => x.id === fixtureId) || null,
+    [games, fixtureId]
+  );
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -309,7 +314,8 @@ export default function RankingsPage() {
                           {r.name ?? 'Jogador'}
                         </div>
                         <div className="mt-0.5 text-xs text-white/60">
-                          Exatos {r.exact} • Dif. {r.diff} • Tend. {r.winner}
+                          Exatos {r.exact} • Dif. {r.diff} • Tend. {r.winner} • Marc.{' '}
+                          {r.scorer_hits ?? 0}
                         </div>
                       </div>
                       <div className="ml-auto rounded-full bg-white/10 px-3 py-1 text-sm font-semibold tabular-nums">
@@ -338,6 +344,7 @@ export default function RankingsPage() {
                   <col style={{ width: 'clamp(6.5rem, 12vw, 8rem)' }} />
                   <col style={{ width: 'clamp(6.5rem, 12vw, 8rem)' }} />
                   <col style={{ width: 'clamp(6.5rem, 12vw, 8rem)' }} />
+                  <col style={{ width: 'clamp(6.5rem, 12vw, 8rem)' }} />
                 </colgroup>
 
                 <thead>
@@ -347,15 +354,30 @@ export default function RankingsPage() {
                     <th className="px-5 py-3 text-right font-semibold whitespace-nowrap">
                       <span className="inline-flex items-center gap-1">
                         {/* small medal icon */}
-                        <svg className="h-3.5 w-3.5 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg
+                          className="h-3.5 w-3.5 opacity-80"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
                           <path d="M12 17l-5.5 3 1.5-6.5L3 8.5l6.5-.5L12 2l2.5 6 6.5.5-5 5 1.5 6.5z" />
                         </svg>
                         Pontos
                       </span>
                     </th>
-                    <th className="px-5 py-3 text-right whitespace-nowrap">Exatos</th>
-                    <th className="px-5 py-3 text-right whitespace-nowrap">Diferença</th>
-                    <th className="px-5 py-3 text-right whitespace-nowrap">Tendência</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">
+                      Marcadores
+                    </th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">
+                      Exatos
+                    </th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">
+                      Diferença
+                    </th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">
+                      Tendência
+                    </th>
                   </tr>
                 </thead>
 
@@ -364,7 +386,7 @@ export default function RankingsPage() {
                     <tr>
                       <td
                         className="px-5 py-6 text-center text-white/60"
-                        colSpan={6}
+                        colSpan={7}
                       >
                         Sem resultados para mostrar.
                       </td>
@@ -401,6 +423,9 @@ export default function RankingsPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-right tabular-nums whitespace-nowrap">
+                          {r.scorer_hits ?? 0}
+                        </td>
+                        <td className="px-5 py-3 text-right tabular-nums whitespace-nowrap">
                           {r.exact}
                         </td>
                         <td className="px-5 py-3 text-right tabular-nums whitespace-nowrap">
@@ -423,7 +448,9 @@ export default function RankingsPage() {
           <span className="font-semibold text-white">Legenda:</span>{' '}
           Resultado exato = <span className="text-white/90">5 pontos</span>,{' '}
           diferença correta = <span className="text-white/90">3 pontos</span>,{' '}
-          tendência correta = <span className="text-white/90">1 ponto</span>.
+          tendência correta = <span className="text-white/90">1 ponto</span>,{' '}
+          bónus por marcador acertado depende da posição (
+          <span className="text-white/90">GR=10, D=5, M=3, A=1</span>).
         </div>
       </section>
     </main>

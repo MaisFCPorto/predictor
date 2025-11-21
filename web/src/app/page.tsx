@@ -1,17 +1,23 @@
 // web/src/app/page.tsx
-import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
+'use client';
 
-export default async function Home() {
-  // cookies() agora é async
-  const cookieStore = await cookies();
-  const token = cookieStore.get('session')?.value;
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-  // Se existir sessão -> vai para /jogos
-  if (token) {
-    redirect('/jogos');
-  }
+export default function Home() {
+  const router = useRouter();
 
-  // Senão -> vai para /auth
-  redirect('/auth');
+  useEffect(() => {
+    // ajusta o nome da key se for diferente
+    const token = window.localStorage.getItem('session');
+
+    if (token) {
+      router.replace('/jogos');
+    } else {
+      router.replace('/auth');
+    }
+  }, [router]);
+
+  // não precisa renderizar nada, só redireciona
+  return null;
 }

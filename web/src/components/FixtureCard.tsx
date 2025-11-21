@@ -619,7 +619,7 @@ export default function FixtureCard({
           <span>
             {scorerPlayer
               ? `Marcador: ${scorerPlayer.name}`
-              : 'Escolher marcador (opcional)'}
+              : 'Escolher marcador'}
           </span>
           {scorerPlayer && (
             <span className="text-[10px] uppercase opacity-70">

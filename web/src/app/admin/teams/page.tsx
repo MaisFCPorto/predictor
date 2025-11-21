@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import AdminGate from '../_components/AdminGate';
 
-const API = process.env.NEXT_PUBLIC_API_BASE!;
+// Usamos sempre a rota de API interna do Next, que faz proxy para o worker
+const TEAMS_API = '/api/admin/teams';
 
 type Team = {
   id: string;
@@ -49,7 +50,7 @@ export default function AdminTeamsPage() {
     setLoading(true);
     setErr(null);
     try {
-      const { data } = await axios.get<Team[]>(`${API}/api/admin/teams`, {
+      const { data } = await axios.get<Team[]>(TEAMS_API, {
         headers: { 'cache-control': 'no-store' },
       });
 
@@ -80,8 +81,9 @@ export default function AdminTeamsPage() {
         return;
       }
       setNewTeam((v) => ({ ...v, creating: true }));
+
       await axios.post(
-        `${API}/api/admin/teams`,
+        TEAMS_API,
         {
           id: newTeam.id.trim(),
           name: newTeam.name.trim(),
@@ -90,6 +92,7 @@ export default function AdminTeamsPage() {
         },
         { headers: { 'cache-control': 'no-store' } },
       );
+
       notify('Equipa criada ✅');
       setNewTeam({ id: '', name: '', short_name: '', crest_url: '' });
       await loadTeams();
@@ -105,8 +108,9 @@ export default function AdminTeamsPage() {
       setTeams((list) =>
         list.map((x) => (x.id === t.id ? { ...x, saving: true } : x)),
       );
+
       await axios.patch(
-        `${API}/api/admin/teams/${t.id}`,
+        `${TEAMS_API}/${t.id}`,
         {
           name: t._name.trim() || t.name,
           short_name: t._short.trim() || null,
@@ -114,6 +118,7 @@ export default function AdminTeamsPage() {
         },
         { headers: { 'cache-control': 'no-store' } },
       );
+
       notify('Equipa atualizada ✅');
       await loadTeams();
     } catch (e: any) {
@@ -131,7 +136,7 @@ export default function AdminTeamsPage() {
     if (ok !== 'APAGAR') return;
 
     try {
-      await axios.delete(`${API}/api/admin/teams/${id}`, {
+      await axios.delete(`${TEAMS_API}/${id}`, {
         headers: { 'cache-control': 'no-store' },
       });
       notify('Equipa apagada ✅');
@@ -261,130 +266,141 @@ export default function AdminTeamsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {teams.map((t) => {
-                const valueName = t._name;
-                const valueShort = t._short !== undefined ? t._short : t.short_name ?? '';
-                const valueCrest = t._crest !== undefined ? t._crest : t.crest_url ?? '';
-
-                return (
-                  <div
-                    key={t.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-white/12 bg-black/35 p-3 md:flex-row md:items-center"
-                  >
-                    {/* Esquerda: crest + nome */}
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/5">
-                        {valueCrest ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={valueCrest}
-                            alt={valueName || t.name}
-                            className="h-full w-full bg-white object-contain"
-                          />
-                        ) : (
-                          <span className="text-sm font-semibold text-white/70">
-                            {valueShort?.slice(0, 3).toUpperCase() ||
-                              t.id.slice(0, 3).toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="max-w-[22ch] truncate font-medium">
-                            {valueName || t.name}
-                          </span>
-                          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] uppercase tracking-wide text-white/80">
-                            {t.id}
-                          </span>
-                        </div>
-                        {valueShort ? (
-                          <div className="text-xs text-white/60">
-                            Nome curto: {valueShort}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-white/40">
-                            Sem nome curto definido
-                          </div>
-                        )}
-                      </div>
+              {teams.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-white/12 bg-black/35 p-3 md:flex-row md:items-center"
+                >
+                  {/* Esquerda: crest + nome */}
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/5">
+                      {t._crest || t.crest_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={t._crest || t.crest_url || ''}
+                          alt={t._name || t.name}
+                          className="h-full w-full bg-white object-contain"
+                        />
+                      ) : (
+                        <span className="text-sm font-semibold text-white/70">
+                          {t._short?.slice(0, 3).toUpperCase() ||
+                            t.short_name?.slice(0, 3).toUpperCase() ||
+                            t.id.slice(0, 3).toUpperCase()}
+                        </span>
+                      )}
                     </div>
 
-                    {/* Direita: edição rápida */}
-                    <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.5fr)_auto]">
-                      <div className="space-y-1">
-                        <label className="text-[11px] uppercase tracking-wide opacity-60">
-                          Nome
-                        </label>
-                        <input
-                          className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
-                          value={valueName}
-                          onChange={(e) =>
-                            setTeams((list) =>
-                              list.map((x) =>
-                                x.id === t.id ? { ...x, _name: e.target.value } : x,
-                              ),
-                            )
-                          }
-                        />
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="max-w-[22ch] truncate font-medium">
+                          {t._name || t.name}
+                        </span>
+                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] uppercase tracking-wide text-white/80">
+                          {t.id}
+                        </span>
                       </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] uppercase tracking-wide opacity-60">
-                          Nome curto
-                        </label>
-                        <input
-                          className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
-                          value={valueShort}
-                          onChange={(e) =>
-                            setTeams((list) =>
-                              list.map((x) =>
-                                x.id === t.id ? { ...x, _short: e.target.value } : x,
-                              ),
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] uppercase tracking-wide opacity-60">
-                          Crest URL
-                        </label>
-                        <input
-                          className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
-                          value={valueCrest}
-                          onChange={(e) =>
-                            setTeams((list) =>
-                              list.map((x) =>
-                                x.id === t.id ? { ...x, _crest: e.target.value } : x,
-                              ),
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div className="flex items-end justify-end gap-2">
-                        <button
-                          type="button"
-                          title="Apagar equipa"
-                          className="flex h-8 w-8 items-center justify-center rounded-full border border-red-400/60 bg-red-500/10 text-xs text-red-200 hover:bg-red-500/20"
-                          onClick={() => deleteTeam(t.id)}
-                        >
-                          🗑
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-full bg-emerald-500/85 px-3 py-1.5 text-[11px] font-medium text-white shadow-md hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={t.saving}
-                          onClick={() => void saveTeam({ ...t, _name: valueName, _short: valueShort, _crest: valueCrest })}
-                        >
-                          {t.saving ? 'A guardar…' : 'Guardar'}
-                        </button>
-                      </div>
+                      {t._short || t.short_name ? (
+                        <div className="text-xs text-white/60">
+                          Nome curto: {t._short || t.short_name}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-white/40">
+                          Sem nome curto definido
+                        </div>
+                      )}
                     </div>
                   </div>
-                );
-              })}
+
+                  {/* Direita: edição rápida */}
+                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.5fr)_auto]">
+                    <div className="space-y-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-60">
+                        Nome
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
+                        value={t._name}
+                        onChange={(e) =>
+                          setTeams((list) =>
+                            list.map((x) =>
+                              x.id === t.id ? { ...x, _name: e.target.value } : x,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-60">
+                        Nome curto
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
+                        value={t._short}
+                        onChange={(e) =>
+                          setTeams((list) =>
+                            list.map((x) =>
+                              x.id === t.id ? { ...x, _short: e.target.value } : x,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-60">
+                        Crest URL
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
+                        value={t._crest}
+                        onChange={(e) =>
+                          setTeams((list) =>
+                            list.map((x) =>
+                              x.id === t.id ? { ...x, _crest: e.target.value } : x,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-end justify-end gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-red-300 hover:bg-red-500/10"
+                        onClick={() => deleteTeam(t.id)}
+                        title="Apagar equipa"
+                      >
+                        {/* Trash icon */}
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14H6L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                          <path d="M9 6V4h6v2" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="rounded-full bg-emerald-500/85 px-3 py-1.5 text-[11px] font-medium text-white shadow-md hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={t.saving}
+                        onClick={() => void saveTeam(t)}
+                      >
+                        {t.saving ? 'A guardar…' : 'Guardar'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>

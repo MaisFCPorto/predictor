@@ -1,6 +1,7 @@
 // web/src/app/rankings/page.tsx
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 type Row = {
@@ -445,12 +446,16 @@ export default function RankingsPage() {
 
         {/* Rodapé (legenda de pontuação) */}
         <div className="border-t border-white/10 px-5 py-3 text-center text-xs text-white/70">
-          <span className="font-semibold text-white">Legenda:</span>{' '}
-          Resultado exato = <span className="text-white/90">5 pontos</span>,{' '}
-          diferença correta = <span className="text-white/90">3 pontos</span>,{' '}
-          tendência correta = <span className="text-white/90">1 ponto</span>,{' '}
-          bónus por marcador acertado depende da posição (
-          <span className="text-white/90">GR=10, D=5, M=3, A=1</span>).
+          <span className="font-semibold text-white">
+            Detalhes acerca da pontuação, poderão ser encontrados em{' '}
+            <Link
+              href="/regras#pontuacao"
+              className="underline underline-offset-2 hover:text-white/90"
+            >
+              Regras - Pontuação
+            </Link>
+          </span>
+          
         </div>
       </section>
     </main>

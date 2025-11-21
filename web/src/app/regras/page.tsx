@@ -97,9 +97,18 @@ export default function RegrasPage() {
 
       <RuleCard id="pontuacao" title="Pontuação">
         <ul className="space-y-2 text-white/80">
-          <li>• <span className="font-semibold">Resultado exato</span>: 5 pontos</li>
-          <li>• <span className="font-semibold">Diferença correta</span> (tendência e margem corretas): 3 pontos</li>
-          <li>• <span className="font-semibold">Tendência correta</span> (vitória/empate/derrota): 1 ponto</li>
+          <li>
+            • <span className="font-semibold">Vencedor / empate correto</span> (tendência correta): 3 pontos
+          </li>
+          <li>
+            • <span className="font-semibold">Golos da equipa da casa corretos</span>: 2 pontos
+          </li>
+          <li>
+            • <span className="font-semibold">Golos da equipa de fora corretos</span>: 2 pontos
+          </li>
+          <li>
+            • <span className="font-semibold">Diferença de golos correta</span>: 3 pontos
+          </li>
           <li>
             • <span className="font-semibold">Bónus por marcador acertado</span>:
             <br />
@@ -110,7 +119,13 @@ export default function RegrasPage() {
           </li>
         </ul>
         <p className="mt-3 text-sm text-white/60">
-          Ex.: jogo termina 2-1. Quem apostou 2-1 recebe 5; quem apostou 3-2 recebe 4 (diferença + tendência); quem apostou 2-0 recebe 1 (tendência); quem apostou 0-2 recebe 0.
+          Ex.: jogo termina 2-1. Não inclui bónus de marcador.
+          <br />
+          • Palpite 2-1: vencedor/empate correto (+3) + golos casa corretos (+2) + golos fora corretos (+2) + diferença correta (+3) = 10 pontos.
+          <br />
+          • Palpite 1-0: vencedor/empate (+3) e diferença corretos (+3), mas golos errados = 6 pontos.
+          <br />
+          • Palpite 0-1: vencedor/empate errado (0), mas golos fora certos (+2) = 2 pontos.
         </p>
       </RuleCard>
 

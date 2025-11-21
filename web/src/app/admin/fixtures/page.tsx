@@ -386,20 +386,6 @@ export default function AdminFixtures() {
     return [portoTeam, ...teams.filter((t) => t.id !== portoTeam.id)];
   }, [teams, portoTeam]);
 
-  // Preencher por defeito FC Porto em casa e fora na criação
-  useEffect(() => {
-    if (!portoTeam) return;
-    setNewFx((v) => {
-      if (v.home_team_id || v.away_team_id) return v; // não pisar se já foi escolhido
-      return {
-        ...v,
-        home_team_id: portoTeam.id,
-        away_team_id: portoTeam.id,
-      };
-    });
-    setHomeSearch((prev) => prev || portoTeam.name);
-    setAwaySearch((prev) => prev || portoTeam.name);
-  }, [portoTeam]);
 
   /* -------------------- Mutations -------------------- */
   async function updateField(id: string, patch: Partial<Fx>) {
@@ -481,25 +467,25 @@ export default function AdminFixtures() {
 
       notify('Criado ✅');
 
-      // Reset mantendo Porto por defeito para facilitar o próximo
-      setNewFx({
-        competition_id: '',
-        round_label: '',
-        leg_number: null,
-        home_team_id: portoTeam?.id ?? '',
-        away_team_id: portoTeam?.id ?? '',
-        kickoff_local: '',
-        status: 'SCHEDULED',
-      });
-      setHomeSearch(portoTeam?.name ?? '');
-      setAwaySearch(portoTeam?.name ?? '');
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      setNewDate(`${yyyy}-${mm}-${dd}`);
-      setNewTime('21:00');
-      await loadFixtures();
+      // Reset simples (sem Porto por defeito)
+setNewFx({
+  competition_id: '',
+  round_label: '',
+  leg_number: null,
+  home_team_id: '',
+  away_team_id: '',
+  kickoff_local: '',
+  status: 'SCHEDULED',
+});
+setHomeSearch('');
+setAwaySearch('');
+const now = new Date();
+const yyyy = now.getFullYear();
+const mm = String(now.getMonth() + 1).padStart(2, '0');
+const dd = String(now.getDate()).padStart(2, '0');
+setNewDate(`${yyyy}-${mm}-${dd}`);
+setNewTime('21:00');
+await loadFixtures();
     } catch (e: unknown) {
       alert(errorMessage(e) || 'Falha a criar jogo');
     } finally {

@@ -561,9 +561,108 @@ app.get('/api/players', async (c) => {
 app.get('/api/admin/teams', async (c) => {
   const guard = requireAdmin(c);
   if (guard) return guard;
-  const { results } = await all<any>(c.env.DB, `SELECT id, name FROM teams ORDER BY name`);
-  return c.json(results);
+
+  const { results } = await all<any>(
+    c.env.DB,
+    `
+    SELECT
+      id,
+      name,
+      short_name,
+      crest_url
+    FROM teams
+    ORDER BY name
+    `,
+  );
+
+  return c.json(results ?? []);
 });
+
+// Criar equipa
+app.post('/api/admin/teams', async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+
+  const body = await c.req.json().catch(() => null) as
+    | { id?: string; name?: string; short_name?: string; crest_url?: string }
+    | null;
+
+  if (!body?.id || !body?.name) {
+    return c.json({ error: 'missing_id_or_name' }, 400);
+  }
+
+  await run(
+    c.env.DB,
+    `
+    INSERT INTO teams (id, name, short_name, crest_url)
+    VALUES (?, ?, ?, ?)
+    `,
+    body.id.trim(),
+    body.name.trim(),
+    body.short_name?.trim() || null,
+    body.crest_url?.trim() || null,
+  );
+
+  return c.json({ ok: true });
+});
+
+// Atualizar equipa
+app.patch('/api/admin/teams/:id', async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => null) as
+    | { name?: string; short_name?: string | null; crest_url?: string | null }
+    | null;
+
+  if (!id) return c.json({ error: 'missing_id' }, 400);
+  if (!body) return c.json({ error: 'invalid_json' }, 400);
+
+  await run(
+    c.env.DB,
+    `
+    UPDATE teams
+    SET
+      name       = COALESCE(?, name),
+      short_name = COALESCE(?, short_name),
+      crest_url  = COALESCE(?, crest_url)
+    WHERE id = ?
+    `,
+    body.name ?? null,
+    body.short_name ?? null,
+    body.crest_url ?? null,
+    id,
+  );
+
+  return c.json({ ok: true });
+});
+
+// Apagar equipa (+ fixtures associadas)
+app.delete('/api/admin/teams/:id', async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+
+  const id = c.req.param('id');
+  if (!id) return c.json({ error: 'missing_id' }, 400);
+
+  // Apagar fixtures onde esta equipa participa
+  await run(
+    c.env.DB,
+    `
+    DELETE FROM fixtures
+    WHERE home_team_id = ? OR away_team_id = ?
+    `,
+    id,
+    id,
+  );
+
+  // Apagar a própria equipa
+  await run(c.env.DB, `DELETE FROM teams WHERE id = ?`, id);
+
+  return c.json({ ok: true });
+});
+
 
 // --- ADMIN: check -------------------------------------------------
 app.get('/api/admin/check', (c) => {

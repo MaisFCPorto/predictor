@@ -3792,8 +3792,80 @@ app.get("/api/players", async (c) => {
 app.get("/api/admin/teams", async (c) => {
   const guard = requireAdmin(c);
   if (guard) return guard;
-  const { results } = await all(c.env.DB, `SELECT id, name FROM teams ORDER BY name`);
-  return c.json(results);
+  const { results } = await all(
+    c.env.DB,
+    `
+    SELECT
+      id,
+      name,
+      short_name,
+      crest_url
+    FROM teams
+    ORDER BY name
+    `
+  );
+  return c.json(results ?? []);
+});
+app.post("/api/admin/teams", async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+  const body = await c.req.json().catch(() => null);
+  if (!body?.id || !body?.name) {
+    return c.json({ error: "missing_id_or_name" }, 400);
+  }
+  await run(
+    c.env.DB,
+    `
+    INSERT INTO teams (id, name, short_name, crest_url)
+    VALUES (?, ?, ?, ?)
+    `,
+    body.id.trim(),
+    body.name.trim(),
+    body.short_name?.trim() || null,
+    body.crest_url?.trim() || null
+  );
+  return c.json({ ok: true });
+});
+app.patch("/api/admin/teams/:id", async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => null);
+  if (!id) return c.json({ error: "missing_id" }, 400);
+  if (!body) return c.json({ error: "invalid_json" }, 400);
+  await run(
+    c.env.DB,
+    `
+    UPDATE teams
+    SET
+      name       = COALESCE(?, name),
+      short_name = COALESCE(?, short_name),
+      crest_url  = COALESCE(?, crest_url)
+    WHERE id = ?
+    `,
+    body.name ?? null,
+    body.short_name ?? null,
+    body.crest_url ?? null,
+    id
+  );
+  return c.json({ ok: true });
+});
+app.delete("/api/admin/teams/:id", async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+  const id = c.req.param("id");
+  if (!id) return c.json({ error: "missing_id" }, 400);
+  await run(
+    c.env.DB,
+    `
+    DELETE FROM fixtures
+    WHERE home_team_id = ? OR away_team_id = ?
+    `,
+    id,
+    id
+  );
+  await run(c.env.DB, `DELETE FROM teams WHERE id = ?`, id);
+  return c.json({ ok: true });
 });
 app.get("/api/admin/check", (c) => {
   const guard = requireAdmin(c);

@@ -110,8 +110,7 @@ export default function RegrasPage() {
           </li>
         </ul>
         <p className="mt-3 text-sm text-white/60">
-          Ex.: jogo termina 2–1. Quem apostou 2–1 recebe 5; quem apostou 3–2 recebe 3;
-          quem apostou 2–0 recebe 1; quem apostou 0–2 recebe 0.
+          Ex.: jogo termina 2-1. Quem apostou 2-1 recebe 5; quem apostou 3-2 recebe 4 (diferença + tendência); quem apostou 2-0 recebe 1 (tendência); quem apostou 0-2 recebe 0.
         </p>
       </RuleCard>
 

@@ -352,6 +352,22 @@ export default function FixtureCard({
     return `${ph}-${pa}`;
   }, [variant, pred_home, pred_away]);
 
+  const lastPredScorerLabel = useMemo(() => {
+    if (variant === 'past') return null;
+
+    const hasScores =
+      typeof pred_home === 'number' && typeof pred_away === 'number';
+    if (!hasScores) return null;
+
+    // pred_scorer_id === null significa "ninguém" explicitamente guardado
+    if (pred_scorer_id == null) return 'ninguém';
+
+    if (!players || players.length === 0) return null;
+    const sid = String(pred_scorer_id);
+    const p = players.find((pl) => pl.id === sid);
+    return p ? p.name : null;
+  }, [variant, pred_home, pred_away, pred_scorer_id, players]);
+
   const headerStatusLabel = useMemo(() => {
     if (variant === 'past')
       return status === 'FINISHED' ? 'Terminado' : 'Bloqueado';
@@ -688,6 +704,7 @@ export default function FixtureCard({
         <div className="flex justify-center mt-2">
           <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
             Última previsão: {lastPredText}
+            {lastPredScorerLabel && ` | Marcador: ${lastPredScorerLabel}`}
           </span>
         </div>
       )}

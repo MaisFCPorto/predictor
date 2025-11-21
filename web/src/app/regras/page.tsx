@@ -100,6 +100,14 @@ export default function RegrasPage() {
           <li>• <span className="font-semibold">Resultado exato</span>: 5 pontos</li>
           <li>• <span className="font-semibold">Diferença correta</span> (tendência e margem corretas): 3 pontos</li>
           <li>• <span className="font-semibold">Tendência correta</span> (vitória/empate/derrota): 1 ponto</li>
+          <li>
+            • <span className="font-semibold">Bónus por marcador acertado</span>:
+            <br />
+            <span className="block pl-4">GR = 10 pontos</span>
+            <span className="block pl-4">D = 5 pontos</span>
+            <span className="block pl-4">M = 3 pontos</span>
+            <span className="block pl-4">A = 1 ponto</span>
+          </li>
         </ul>
         <p className="mt-3 text-sm text-white/60">
           Ex.: jogo termina 2–1. Quem apostou 2–1 recebe 5; quem apostou 3–2 recebe 3;

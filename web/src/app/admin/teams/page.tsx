@@ -1,35 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import axios, { AxiosError } from 'axios';
+import { useEffect, useState } from 'react';
+import axios from 'axios';
 import AdminGate from '../_components/AdminGate';
 
-/* -------------------------------------------
-   Axios admin (igual ao usado em admin/fixtures)
--------------------------------------------- */
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || '';
-
-const adm = axios.create({
-  baseURL: '',
-});
-
-adm.interceptors.request.use((config) => {
-  if (ADMIN_KEY) {
-    config.headers = config.headers ?? {};
-    (config.headers as any)['x-admin-key'] = ADMIN_KEY;
-  }
-  return config;
-});
-
-adm.interceptors.response.use(
-  (res) => res,
-  (error) => {
-    const status = error?.response?.status;
-    if (status === 401) alert('Sessão expirada ou em falta. Faz login novamente.');
-    if (status === 403) alert('Acesso negado (precisas de ser admin).');
-    return Promise.reject(error);
-  },
-);
+const API = process.env.NEXT_PUBLIC_API_BASE!;
 
 type Team = {
   id: string;
@@ -38,23 +13,22 @@ type Team = {
   crest_url?: string | null;
 };
 
-function errorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    const e = err as AxiosError<{ error?: string; message?: string }>;
-    return e.response?.data?.error ?? e.response?.data?.message ?? e.message;
-  }
-  if (err instanceof Error) return err.message;
-  return 'Ocorreu um erro';
-}
+type EditableTeam = Team & { _name: string; _short: string; _crest: string; saving?: boolean };
 
 export default function AdminTeamsPage() {
-  const [teams, setTeams] = useState<Team[]>([]);
+  const [teams, setTeams] = useState<EditableTeam[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const [newTeam, setNewTeam] = useState<Team>({
+  // Form criação
+  const [newTeam, setNewTeam] = useState<{
+    id: string;
+    name: string;
+    short_name: string;
+    crest_url: string;
+    creating?: boolean;
+  }>({
     id: '',
     name: '',
     short_name: '',
@@ -63,19 +37,25 @@ export default function AdminTeamsPage() {
 
   const notify = (m: string) => {
     setMsg(m);
-    setTimeout(() => setMsg(null), 1500);
+    setTimeout(() => setMsg(null), 1800);
   };
 
-  /* ----------------- Load ----------------- */
   async function loadTeams() {
     setLoading(true);
+    setErr(null);
     try {
-      const { data } = await adm.get<Team[]>('/api/admin/teams', {
+      const { data } = await axios.get<Team[]>(`${API}/api/admin/teams`, {
         headers: { 'cache-control': 'no-store' },
       });
-      setTeams(Array.isArray(data) ? data : []);
-    } catch (e) {
-      alert(errorMessage(e));
+      const list: EditableTeam[] = (Array.isArray(data) ? data : []).map((t) => ({
+        ...t,
+        _name: t.name ?? '',
+        _short: t.short_name ?? '',
+        _crest: t.crest_url ?? '',
+      }));
+      setTeams(list);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Falha a carregar equipas');
       setTeams([]);
     } finally {
       setLoading(false);
@@ -86,107 +66,106 @@ export default function AdminTeamsPage() {
     void loadTeams();
   }, []);
 
-  /* ----------------- Create ----------------- */
   async function createTeam() {
     try {
-      setCreating(true);
       if (!newTeam.id.trim() || !newTeam.name.trim()) {
-        throw new Error('ID e Nome são obrigatórios.');
+        alert('ID e Nome são obrigatórios.');
+        return;
       }
-
-      await adm.post('/api/admin/teams', {
-        id: newTeam.id.trim(),
-        name: newTeam.name.trim(),
-        short_name: newTeam.short_name?.trim() || null,
-        crest_url: newTeam.crest_url?.trim() || null,
-      });
-
-      setNewTeam({ id: '', name: '', short_name: '', crest_url: '' });
+      setNewTeam((v) => ({ ...v, creating: true }));
+      await axios.post(
+        `${API}/api/admin/teams`,
+        {
+          id: newTeam.id.trim(),
+          name: newTeam.name.trim(),
+          short_name: newTeam.short_name.trim() || null,
+          crest_url: newTeam.crest_url.trim() || null,
+        },
+        { headers: { 'cache-control': 'no-store' } },
+      );
       notify('Equipa criada ✅');
+      setNewTeam({ id: '', name: '', short_name: '', crest_url: '' });
       await loadTeams();
-    } catch (e) {
-      alert(errorMessage(e));
+    } catch (e: any) {
+      alert(e?.response?.data?.error ?? e?.message ?? 'Erro a criar equipa');
     } finally {
-      setCreating(false);
+      setNewTeam((v) => ({ ...v, creating: false }));
     }
   }
 
-  /* ----------------- Update ----------------- */
-  async function updateTeam(partial: Partial<Team> & { id: string }) {
+  async function saveTeam(t: EditableTeam) {
     try {
-      await adm.patch(`/api/admin/teams/${partial.id}`, partial);
+      setTeams((list) =>
+        list.map((x) => (x.id === t.id ? { ...x, saving: true } : x)),
+      );
+      await axios.patch(
+        `${API}/api/admin/teams/${t.id}`,
+        {
+          name: t._name.trim() || t.name,
+          short_name: t._short.trim() || null,
+          crest_url: t._crest.trim() || null,
+        },
+        { headers: { 'cache-control': 'no-store' } },
+      );
       notify('Equipa atualizada ✅');
       await loadTeams();
-    } catch (e) {
-      alert(errorMessage(e));
+    } catch (e: any) {
+      alert(e?.response?.data?.error ?? e?.message ?? 'Erro a atualizar equipa');
+      setTeams((list) =>
+        list.map((x) => (x.id === t.id ? { ...x, saving: false } : x)),
+      );
     }
   }
 
-  /* ----------------- Delete ----------------- */
-  async function deleteTeam(id: string, name: string) {
-    const confirmText = prompt(
-      `Para confirmar a eliminação da equipa "${name}" e de eventuais fixtures relacionadas, escreve: APAGAR`,
+  async function deleteTeam(id: string) {
+    const ok = prompt(
+      'Para confirmar a eliminação da equipa e fixtures relacionadas, escreve: APAGAR',
     );
-    if (confirmText !== 'APAGAR') return;
+    if (ok !== 'APAGAR') return;
 
     try {
-      await adm.delete(`/api/admin/teams/${id}`);
+      await axios.delete(`${API}/api/admin/teams/${id}`, {
+        headers: { 'cache-control': 'no-store' },
+      });
       notify('Equipa apagada ✅');
       await loadTeams();
-    } catch (e) {
-      alert(errorMessage(e));
+    } catch (e: any) {
+      alert(e?.response?.data?.error ?? e?.message ?? 'Erro ao apagar equipa');
     }
   }
-
-  /* ----------------- Filtro ----------------- */
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return teams;
-    return teams.filter((t) => {
-      const id = t.id.toLowerCase();
-      const name = t.name.toLowerCase();
-      const short = (t.short_name ?? '').toLowerCase();
-      return id.includes(q) || name.includes(q) || short.includes(q);
-    });
-  }, [teams, query]);
-
-  const hasCreateErrors =
-    !newTeam.id.trim() || !newTeam.name.trim();
 
   return (
     <AdminGate>
-      <main className="max-w-5xl mx-auto p-6 space-y-4">
+      <main className="mx-auto max-w-5xl space-y-4 p-6">
         <title>+Predictor — Admin Equipas</title>
         <h1 className="text-2xl font-semibold">Backoffice — Equipas</h1>
 
-        {/* Card: criar nova equipa */}
-        <section className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Card criação */}
+        <section className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4">
+          <header className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-medium">Criar nova equipa</h2>
-            {hasCreateErrors && (
-              <span className="text-xs text-amber-300">
-                ID e Nome são obrigatórios
-              </span>
-            )}
-          </div>
+            <span className="text-xs text-white/70">
+              ID e Nome são obrigatórios. ID deve ser curto (ex: FCP, MCI…)
+            </span>
+          </header>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,0.4fr)_minmax(0,1.3fr)_minmax(0,0.7fr)_minmax(0,1.4fr)]">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,0.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.7fr)]">
             <div className="space-y-1">
-              <label className="text-[11px] uppercase tracking-wide opacity-70">
+              <label className="text-xs uppercase tracking-wide opacity-70">
                 ID *
               </label>
               <input
                 className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-sm uppercase"
-                placeholder="ex: fcp, mci, avs"
+                placeholder="ex: FCP"
                 value={newTeam.id}
                 onChange={(e) =>
-                  setNewTeam((v) => ({ ...v, id: e.target.value }))
+                  setNewTeam((v) => ({ ...v, id: e.target.value.toUpperCase() }))
                 }
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[11px] uppercase tracking-wide opacity-70">
+              <label className="text-xs uppercase tracking-wide opacity-70">
                 Nome *
               </label>
               <input
@@ -200,13 +179,13 @@ export default function AdminTeamsPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[11px] uppercase tracking-wide opacity-70">
+              <label className="text-xs uppercase tracking-wide opacity-70">
                 Nome curto
               </label>
               <input
                 className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-sm"
-                placeholder="FCP"
-                value={newTeam.short_name ?? ''}
+                placeholder="Porto"
+                value={newTeam.short_name}
                 onChange={(e) =>
                   setNewTeam((v) => ({ ...v, short_name: e.target.value }))
                 }
@@ -214,133 +193,183 @@ export default function AdminTeamsPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[11px] uppercase tracking-wide opacity-70">
+              <label className="text-xs uppercase tracking-wide opacity-70">
                 Crest URL
               </label>
               <input
                 className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-sm"
                 placeholder="https://…"
-                value={newTeam.crest_url ?? ''}
+                value={newTeam.crest_url}
                 onChange={(e) =>
                   setNewTeam((v) => ({ ...v, crest_url: e.target.value }))
                 }
               />
             </div>
-          </div>
 
-          <div className="flex justify-end pt-1">
-            <button
-              onClick={() => void createTeam()}
-              disabled={creating || hasCreateErrors}
-              className="inline-flex items-center justify-center rounded-full bg-emerald-500/85 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-500"
-            >
-              {creating ? 'A criar…' : 'Criar equipa'}
-            </button>
+            <div className="flex flex-col items-end justify-between gap-2">
+              {/* preview crest criação */}
+              <div className="flex w-full items-center justify-end gap-2">
+                {newTeam.crest_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={newTeam.crest_url}
+                    alt="preview crest"
+                    className="h-10 w-10 rounded-full border border-white/20 object-contain bg-white"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-white/20 text-xs text-white/40">
+                    ?
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => void createTeam()}
+                disabled={newTeam.creating}
+                className="inline-flex items-center justify-center rounded-full bg-emerald-500/85 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:cursor-not-allowed disabled:opacity-40 hover:bg-emerald-500"
+              >
+                {newTeam.creating ? 'A criar…' : 'Criar equipa'}
+              </button>
+            </div>
           </div>
         </section>
 
-        {/* Card: lista de equipas */}
-        <section className="rounded-2xl border border-white/10 bg-black/25 p-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-medium">Lista de equipas</h2>
-            <div className="flex-1" />
-            <input
-              className="rounded-md border border-white/15 bg-black/40 px-3 py-1.5 text-sm w-full max-w-xs"
-              placeholder="Filtrar por id / nome…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
+        {/* Lista de equipas */}
+        <section className="space-y-3 rounded-2xl border border-white/10 bg-black/25 p-4">
+          <header className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-medium">Equipas existentes</h2>
+            <span className="text-xs text-white/60">
+              Total: {teams.length}
+            </span>
+          </header>
+
+          {err && (
+            <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+              {err}
+            </div>
+          )}
 
           {loading ? (
-            <div className="opacity-70 text-sm">A carregar equipas…</div>
-          ) : filtered.length === 0 ? (
-            <div className="opacity-70 text-sm">
-              Sem equipas para mostrar.
+            <div className="px-2 py-4 text-sm text-white/70">A carregar…</div>
+          ) : teams.length === 0 ? (
+            <div className="px-2 py-6 text-sm text-white/60">
+              Ainda não existem equipas.
             </div>
           ) : (
-            <div className="space-y-2">
-              {filtered.map((t) => (
+            <div className="space-y-3">
+              {teams.map((t) => (
                 <div
                   key={t.id}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-white/12 bg-black/30 px-3 py-3"
+                  className="flex flex-col gap-3 rounded-2xl border border-white/12 bg-black/35 p-3 md:flex-row md:items-center"
                 >
-                  {/* Crest + ID */}
-                  <div className="flex items-center gap-3 min-w-[160px]">
-                    <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
-                      {t.crest_url ? (
+                  {/* Esquerda: crest + nome */}
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/5">
+                      {t._crest || t.crest_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={t.crest_url}
-                          alt={t.name}
-                          className="h-full w-full object-contain"
+                          src={t._crest || t.crest_url || ''}
+                          alt={t._name || t.name}
+                          className="h-full w-full object-contain bg-white"
                         />
                       ) : (
-                        <span className="text-xs uppercase opacity-70">
-                          {t.short_name || t.id}
+                        <span className="text-sm font-semibold text-white/70">
+                          {t.short_name?.slice(0, 3).toUpperCase() ||
+                            t.id.slice(0, 3).toUpperCase()}
                         </span>
                       )}
                     </div>
-                    <div className="space-y-0.5">
-                      <div className="text-xs uppercase opacity-60">
-                        ID: <span className="font-mono">{t.id}</span>
+
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="max-w-[22ch] truncate font-medium">
+                          {t._name || t.name}
+                        </span>
+                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] uppercase tracking-wide text-white/80">
+                          {t.id}
+                        </span>
                       </div>
-                      <input
-                        className="rounded-md border border-white/15 bg-black/40 px-2 py-1 text-sm min-w-[180px]"
-                        defaultValue={t.name}
-                        onBlur={(e) =>
-                          updateTeam({
-                            id: t.id,
-                            name: e.target.value || t.name,
-                          })
-                        }
-                      />
+                      {t._short || t.short_name ? (
+                        <div className="text-xs text-white/60">
+                          Nome curto: {t._short || t.short_name}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-white/40">
+                          Sem nome curto definido
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Nome curto */}
-                  <div className="flex-1 min-w-[120px] max-w-[140px]">
-                    <label className="text-[11px] uppercase tracking-wide opacity-60">
-                      Nome curto
-                    </label>
-                    <input
-                      className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1 text-sm"
-                      defaultValue={t.short_name ?? ''}
-                      onBlur={(e) =>
-                        updateTeam({
-                          id: t.id,
-                          short_name: e.target.value || null,
-                        })
-                      }
-                    />
-                  </div>
+                  {/* Direita: edição rápida */}
+                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.5fr)_minmax(0,0.7fr)]">
+                    <div className="space-y-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-60">
+                        Nome
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
+                        value={t._name}
+                        onChange={(e) =>
+                          setTeams((list) =>
+                            list.map((x) =>
+                              x.id === t.id ? { ...x, _name: e.target.value } : x,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
 
-                  {/* Crest URL */}
-                  <div className="flex-1 min-w-[220px]">
-                    <label className="text-[11px] uppercase tracking-wide opacity-60">
-                      Crest URL
-                    </label>
-                    <input
-                      className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1 text-xs"
-                      defaultValue={t.crest_url ?? ''}
-                      onBlur={(e) =>
-                        updateTeam({
-                          id: t.id,
-                          crest_url: e.target.value || null,
-                        })
-                      }
-                    />
-                  </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-60">
+                        Nome curto
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
+                        value={t._short}
+                        onChange={(e) =>
+                          setTeams((list) =>
+                            list.map((x) =>
+                              x.id === t.id ? { ...x, _short: e.target.value } : x,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
 
-                  {/* Ações */}
-                  <div className="ml-auto flex items-end">
-                    <button
-                      type="button"
-                      className="rounded-full px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
-                      onClick={() => void deleteTeam(t.id, t.name)}
-                    >
-                      Apagar
-                    </button>
+                    <div className="space-y-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-60">
+                        Crest URL
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
+                        value={t._crest}
+                        onChange={(e) =>
+                          setTeams((list) =>
+                            list.map((x) =>
+                              x.id === t.id ? { ...x, _crest: e.target.value } : x,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-end justify-end gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full bg-white/8 px-3 py-1.5 text-[11px] text-red-300 hover:bg-red-500/10"
+                        onClick={() => deleteTeam(t.id)}
+                      >
+                        Apagar
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full bg-emerald-500/85 px-3 py-1.5 text-[11px] font-medium text-white shadow-md hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={t.saving}
+                        onClick={() => void saveTeam(t)}
+                      >
+                        {t.saving ? 'A guardar…' : 'Guardar'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -350,7 +379,7 @@ export default function AdminTeamsPage() {
 
         {/* Toast simples */}
         {msg && (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-sm shadow-lg">
+          <div className="fixed bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-sm text-white shadow-lg shadow-black/60">
             {msg}
           </div>
         )}

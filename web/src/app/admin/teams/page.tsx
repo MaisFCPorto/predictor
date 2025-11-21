@@ -13,7 +13,12 @@ type Team = {
   crest_url?: string | null;
 };
 
-type EditableTeam = Team & { _name: string; _short: string; _crest: string; saving?: boolean };
+type EditableTeam = Team & {
+  _name: string;
+  _short: string;
+  _crest: string;
+  saving?: boolean;
+};
 
 export default function AdminTeamsPage() {
   const [teams, setTeams] = useState<EditableTeam[]>([]);
@@ -47,12 +52,14 @@ export default function AdminTeamsPage() {
       const { data } = await axios.get<Team[]>(`${API}/api/admin/teams`, {
         headers: { 'cache-control': 'no-store' },
       });
+
       const list: EditableTeam[] = (Array.isArray(data) ? data : []).map((t) => ({
         ...t,
         _name: t.name ?? '',
         _short: t.short_name ?? '',
         _crest: t.crest_url ?? '',
       }));
+
       setTeams(list);
     } catch (e: any) {
       setErr(e?.message ?? 'Falha a carregar equipas');
@@ -214,7 +221,7 @@ export default function AdminTeamsPage() {
                   <img
                     src={newTeam.crest_url}
                     alt="preview crest"
-                    className="h-10 w-10 rounded-full border border-white/20 object-contain bg-white"
+                    className="h-10 w-10 rounded-full border border-white/20 bg-white object-contain"
                   />
                 ) : (
                   <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-white/20 text-xs text-white/40">
@@ -225,7 +232,7 @@ export default function AdminTeamsPage() {
               <button
                 onClick={() => void createTeam()}
                 disabled={newTeam.creating}
-                className="inline-flex items-center justify-center rounded-full bg-emerald-500/85 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:cursor-not-allowed disabled:opacity-40 hover:bg-emerald-500"
+                className="inline-flex items-center justify-center rounded-full bg-emerald-500/85 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {newTeam.creating ? 'A criar…' : 'Criar equipa'}
               </button>
@@ -237,9 +244,7 @@ export default function AdminTeamsPage() {
         <section className="space-y-3 rounded-2xl border border-white/10 bg-black/25 p-4">
           <header className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-medium">Equipas existentes</h2>
-            <span className="text-xs text-white/60">
-              Total: {teams.length}
-            </span>
+            <span className="text-xs text-white/60">Total: {teams.length}</span>
           </header>
 
           {err && (
@@ -256,123 +261,130 @@ export default function AdminTeamsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {teams.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-white/12 bg-black/35 p-3 md:flex-row md:items-center"
-                >
-                  {/* Esquerda: crest + nome */}
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/5">
-                      {t._crest || t.crest_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={t._crest || t.crest_url || ''}
-                          alt={t._name || t.name}
-                          className="h-full w-full object-contain bg-white"
-                        />
-                      ) : (
-                        <span className="text-sm font-semibold text-white/70">
-                          {t.short_name?.slice(0, 3).toUpperCase() ||
-                            t.id.slice(0, 3).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
+              {teams.map((t) => {
+                const valueName = t._name;
+                const valueShort = t._short !== undefined ? t._short : t.short_name ?? '';
+                const valueCrest = t._crest !== undefined ? t._crest : t.crest_url ?? '';
 
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="max-w-[22ch] truncate font-medium">
-                          {t._name || t.name}
-                        </span>
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] uppercase tracking-wide text-white/80">
-                          {t.id}
-                        </span>
+                return (
+                  <div
+                    key={t.id}
+                    className="flex flex-col gap-3 rounded-2xl border border-white/12 bg-black/35 p-3 md:flex-row md:items-center"
+                  >
+                    {/* Esquerda: crest + nome */}
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/5">
+                        {valueCrest ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={valueCrest}
+                            alt={valueName || t.name}
+                            className="h-full w-full bg-white object-contain"
+                          />
+                        ) : (
+                          <span className="text-sm font-semibold text-white/70">
+                            {valueShort?.slice(0, 3).toUpperCase() ||
+                              t.id.slice(0, 3).toUpperCase()}
+                          </span>
+                        )}
                       </div>
-                      {t._short || t.short_name ? (
-                        <div className="text-xs text-white/60">
-                          Nome curto: {t._short || t.short_name}
+
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="max-w-[22ch] truncate font-medium">
+                            {valueName || t.name}
+                          </span>
+                          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] uppercase tracking-wide text-white/80">
+                            {t.id}
+                          </span>
                         </div>
-                      ) : (
-                        <div className="text-xs text-white/40">
-                          Sem nome curto definido
-                        </div>
-                      )}
+                        {valueShort ? (
+                          <div className="text-xs text-white/60">
+                            Nome curto: {valueShort}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-white/40">
+                            Sem nome curto definido
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Direita: edição rápida */}
+                    <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.5fr)_auto]">
+                      <div className="space-y-1">
+                        <label className="text-[11px] uppercase tracking-wide opacity-60">
+                          Nome
+                        </label>
+                        <input
+                          className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
+                          value={valueName}
+                          onChange={(e) =>
+                            setTeams((list) =>
+                              list.map((x) =>
+                                x.id === t.id ? { ...x, _name: e.target.value } : x,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] uppercase tracking-wide opacity-60">
+                          Nome curto
+                        </label>
+                        <input
+                          className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
+                          value={valueShort}
+                          onChange={(e) =>
+                            setTeams((list) =>
+                              list.map((x) =>
+                                x.id === t.id ? { ...x, _short: e.target.value } : x,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] uppercase tracking-wide opacity-60">
+                          Crest URL
+                        </label>
+                        <input
+                          className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
+                          value={valueCrest}
+                          onChange={(e) =>
+                            setTeams((list) =>
+                              list.map((x) =>
+                                x.id === t.id ? { ...x, _crest: e.target.value } : x,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-end justify-end gap-2">
+                        <button
+                          type="button"
+                          title="Apagar equipa"
+                          className="flex h-8 w-8 items-center justify-center rounded-full border border-red-400/60 bg-red-500/10 text-xs text-red-200 hover:bg-red-500/20"
+                          onClick={() => deleteTeam(t.id)}
+                        >
+                          🗑
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-full bg-emerald-500/85 px-3 py-1.5 text-[11px] font-medium text-white shadow-md hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={t.saving}
+                          onClick={() => void saveTeam({ ...t, _name: valueName, _short: valueShort, _crest: valueCrest })}
+                        >
+                          {t.saving ? 'A guardar…' : 'Guardar'}
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  {/* Direita: edição rápida */}
-                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.5fr)_minmax(0,0.7fr)]">
-                    <div className="space-y-1">
-                      <label className="text-[11px] uppercase tracking-wide opacity-60">
-                        Nome
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
-                        value={t._name}
-                        onChange={(e) =>
-                          setTeams((list) =>
-                            list.map((x) =>
-                              x.id === t.id ? { ...x, _name: e.target.value } : x,
-                            ),
-                          )
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] uppercase tracking-wide opacity-60">
-                        Nome curto
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
-                        value={t._short}
-                        onChange={(e) =>
-                          setTeams((list) =>
-                            list.map((x) =>
-                              x.id === t.id ? { ...x, _short: e.target.value } : x,
-                            ),
-                          )
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] uppercase tracking-wide opacity-60">
-                        Crest URL
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-white/20 bg-black/40 px-2 py-1.5 text-xs"
-                        value={t._crest}
-                        onChange={(e) =>
-                          setTeams((list) =>
-                            list.map((x) =>
-                              x.id === t.id ? { ...x, _crest: e.target.value } : x,
-                            ),
-                          )
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-end justify-end gap-2">
-                      <button
-                        type="button"
-                        className="rounded-full bg-white/8 px-3 py-1.5 text-[11px] text-red-300 hover:bg-red-500/10"
-                        onClick={() => deleteTeam(t.id)}
-                      >
-                        Apagar
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full bg-emerald-500/85 px-3 py-1.5 text-[11px] font-medium text-white shadow-md hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={t.saving}
-                        onClick={() => void saveTeam(t)}
-                      >
-                        {t.saving ? 'A guardar…' : 'Guardar'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

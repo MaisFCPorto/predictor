@@ -221,11 +221,13 @@ export default function FixtureCard({
 
   // marcador escolhido (palpite)
   const [scorerId, setScorerId] = useState<string | null>(pred_scorer_id ?? null);
+  const [scorerCleared, setScorerCleared] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
 
   useEffect(() => {
     setScorerId(pred_scorer_id ?? null);
+    setScorerCleared(false);
   }, [pred_scorer_id]);
 
   const scorerPlayer = useMemo(
@@ -619,8 +621,8 @@ export default function FixtureCard({
           <span>
             {scorerPlayer
               ? `Marcador: ${scorerPlayer.name}`
-              : pred_scorer_id
-              ? 'Sem marcador'
+              : scorerCleared
+              ? 'Marcador: ninguém'
               : 'Escolher marcador'}
           </span>
           {scorerPlayer && (
@@ -637,9 +639,10 @@ export default function FixtureCard({
             onClick={() => {
               if (!pickerEnabled) return;
               setScorerId(null);
+              setScorerCleared(true);
             }}
           >
-            Não escolher marcador
+            Limpar escolha
           </button>
         )}
       </div>
@@ -736,6 +739,7 @@ export default function FixtureCard({
                     )}
                     onClick={() => {
                       setScorerId(p.id);
+                      setScorerCleared(false);
                       setPickerOpen(false);
                     }}
                   >

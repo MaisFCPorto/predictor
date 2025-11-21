@@ -224,6 +224,7 @@ export default function FixtureCard({
   const [scorerCleared, setScorerCleared] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
+  const [positionFilter, setPositionFilter] = useState<'ALL' | 'GR' | 'D' | 'M' | 'A'>('ALL');
 
   useEffect(() => {
     setScorerId(pred_scorer_id ?? null);
@@ -247,17 +248,23 @@ export default function FixtureCard({
   const filteredPlayers = useMemo(() => {
     if (!players) return [];
     const q = pickerSearch.trim().toLowerCase();
-    const base = !q
-      ? players
-      : players.filter((p) =>
-          p.name
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/\p{Diacritic}/gu, '')
-            .includes(q.normalize('NFD').replace(/\p{Diacritic}/gu, '')),
-        );
-    return base;
-  }, [players, pickerSearch]);
+
+    const byPos =
+      positionFilter === 'ALL'
+        ? players
+        : players.filter((p) => p.position === positionFilter);
+
+    if (!q) return byPos;
+
+    const normQ = q.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+    return byPos.filter((p) =>
+      p.name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .includes(normQ),
+    );
+  }, [players, pickerSearch, positionFilter]);
 
   // pode guardar se mudou em relação aos props + não está bloqueado
   const canSave =
@@ -615,6 +622,7 @@ export default function FixtureCard({
           onClick={() => {
             if (!pickerEnabled) return;
             setPickerSearch('');
+            setPositionFilter('ALL');
             setPickerOpen(true);
           }}
         >
@@ -711,6 +719,69 @@ export default function FixtureCard({
                 onClick={() => setPickerOpen(false)}
               >
                 Fechar
+              </button>
+            </div>
+
+            <div className="mb-2 flex flex-wrap gap-1 text-[11px] text-white/70">
+              <button
+                type="button"
+                className={clsx(
+                  'rounded-full px-2.5 py-0.5 border text-xs',
+                  positionFilter === 'ALL'
+                    ? 'border-white/50 bg-white/10 text-white'
+                    : 'border-white/15 bg-transparent hover:bg-white/5',
+                )}
+                onClick={() => setPositionFilter('ALL')}
+              >
+                Todos
+              </button>
+              <button
+                type="button"
+                className={clsx(
+                  'rounded-full px-2.5 py-0.5 border text-xs',
+                  positionFilter === 'GR'
+                    ? 'border-white/50 bg-white/10 text-white'
+                    : 'border-white/15 bg-transparent hover:bg-white/5',
+                )}
+                onClick={() => setPositionFilter('GR')}
+              >
+                Guarda-redes
+              </button>
+              <button
+                type="button"
+                className={clsx(
+                  'rounded-full px-2.5 py-0.5 border text-xs',
+                  positionFilter === 'D'
+                    ? 'border-white/50 bg-white/10 text-white'
+                    : 'border-white/15 bg-transparent hover:bg-white/5',
+                )}
+                onClick={() => setPositionFilter('D')}
+              >
+                Defesas
+              </button>
+              <button
+                type="button"
+                className={clsx(
+                  'rounded-full px-2.5 py-0.5 border text-xs',
+                  positionFilter === 'M'
+                    ? 'border-white/50 bg-white/10 text-white'
+                    : 'border-white/15 bg-transparent hover:bg-white/5',
+                )}
+                onClick={() => setPositionFilter('M')}
+              >
+                Médios
+              </button>
+              <button
+                type="button"
+                className={clsx(
+                  'rounded-full px-2.5 py-0.5 border text-xs',
+                  positionFilter === 'A'
+                    ? 'border-white/50 bg-white/10 text-white'
+                    : 'border-white/15 bg-transparent hover:bg-white/5',
+                )}
+                onClick={() => setPositionFilter('A')}
+              >
+                Avançados
               </button>
             </div>
 

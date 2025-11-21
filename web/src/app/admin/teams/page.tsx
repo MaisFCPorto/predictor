@@ -6,20 +6,14 @@ import AdminGate from '../_components/AdminGate';
 
 const API = process.env.NEXT_PUBLIC_API_BASE!;
 
-type TeamApi = {
-  id: string;
-  name?: string | null;
-  short_name?: string | null;
-  shortName?: string | null;
-  crest_url?: string | null;
-  crestUrl?: string | null;
-};
-
-type EditableTeam = {
+type Team = {
   id: string;
   name: string;
-  short_name: string | null;
-  crest_url: string | null;
+  short_name?: string | null;
+  crest_url?: string | null;
+};
+
+type EditableTeam = Team & {
   _name: string;
   _short: string;
   _crest: string;
@@ -55,36 +49,34 @@ export default function AdminTeamsPage() {
     setLoading(true);
     setErr(null);
     try {
-      const { data } = await axios.get<TeamApi[]>(`${API}/api/admin/teams`, {
+      const { data } = await axios.get<any[]>(`${API}/api/admin/teams`, {
         headers: { 'cache-control': 'no-store' },
       });
 
       const list: EditableTeam[] = (Array.isArray(data) ? data : []).map(
-        (raw) => {
-          // aceitar tanto snake_case como camelCase, só para o caso  👇
-          const name = (raw.name ?? '').toString();
-          const short =
-            (raw.short_name ??
-              raw.shortName ??
-              '')?.toString() ?? '';
-          const crest =
-            (raw.crest_url ?? raw.crestUrl ?? '')?.toString() ?? '';
+        (raw): EditableTeam => {
+          // Aceitar tanto snake_case como camelCase vindos da API
+          const id = String(raw.id ?? '');
+          const name: string = raw.name ?? '';
+          const shortName: string =
+            raw.short_name ?? raw.shortName ?? '';
+          const crestUrl: string =
+            raw.crest_url ?? raw.crestUrl ?? '';
 
           return {
-            id: raw.id,
+            id,
             name,
-            short_name: short || null,
-            crest_url: crest || null,
+            short_name: shortName || null,
+            crest_url: crestUrl || null,
             _name: name,
-            _short: short,
-            _crest: crest,
+            _short: shortName || '',
+            _crest: crestUrl || '',
           };
         },
       );
 
       setTeams(list);
     } catch (e: any) {
-      console.error('Erro a carregar /api/admin/teams:', e?.response?.data ?? e);
       setErr(e?.message ?? 'Falha a carregar equipas');
       setTeams([]);
     } finally {
@@ -117,7 +109,6 @@ export default function AdminTeamsPage() {
       setNewTeam({ id: '', name: '', short_name: '', crest_url: '' });
       await loadTeams();
     } catch (e: any) {
-      console.error('Erro a criar equipa:', e?.response?.data ?? e);
       alert(e?.response?.data?.error ?? e?.message ?? 'Erro a criar equipa');
     } finally {
       setNewTeam((v) => ({ ...v, creating: false }));
@@ -141,10 +132,7 @@ export default function AdminTeamsPage() {
       notify('Equipa atualizada ✅');
       await loadTeams();
     } catch (e: any) {
-      console.error('Erro a atualizar equipa:', e?.response?.data ?? e);
-      alert(
-        e?.response?.data?.error ?? e?.message ?? 'Erro a atualizar equipa',
-      );
+      alert(e?.response?.data?.error ?? e?.message ?? 'Erro a atualizar equipa');
       setTeams((list) =>
         list.map((x) => (x.id === t.id ? { ...x, saving: false } : x)),
       );
@@ -164,7 +152,6 @@ export default function AdminTeamsPage() {
       notify('Equipa apagada ✅');
       await loadTeams();
     } catch (e: any) {
-      console.error('Erro ao apagar equipa:', e?.response?.data ?? e);
       alert(e?.response?.data?.error ?? e?.message ?? 'Erro ao apagar equipa');
     }
   }
@@ -184,7 +171,7 @@ export default function AdminTeamsPage() {
             </span>
           </header>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,0.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_auto]">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,0.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.7fr)]">
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 ID *
@@ -249,7 +236,7 @@ export default function AdminTeamsPage() {
                   <img
                     src={newTeam.crest_url}
                     alt="preview crest"
-                    className="h-10 w-10 rounded-full border border-white/20 bg-white object-contain"
+                    className="h-10 w-10 rounded-full border border-white/20 object-contain bg-white"
                   />
                 ) : (
                   <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-white/20 text-xs text-white/40">
@@ -272,9 +259,7 @@ export default function AdminTeamsPage() {
         <section className="space-y-3 rounded-2xl border border-white/10 bg-black/25 p-4">
           <header className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-medium">Equipas existentes</h2>
-            <span className="text-xs text-white/60">
-              Total: {teams.length}
-            </span>
+            <span className="text-xs text-white/60">Total: {teams.length}</span>
           </header>
 
           {err && (
@@ -304,7 +289,7 @@ export default function AdminTeamsPage() {
                         <img
                           src={t._crest || t.crest_url || ''}
                           alt={t._name || t.name}
-                          className="h-full w-full bg-white object-contain"
+                          className="h-full w-full object-contain bg-white"
                         />
                       ) : (
                         <span className="text-sm font-semibold text-white/70">
@@ -336,7 +321,7 @@ export default function AdminTeamsPage() {
                   </div>
 
                   {/* Direita: edição rápida */}
-                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.4fr)_auto]">
+                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.5fr)_minmax(0,0.7fr)]">
                     <div className="space-y-1">
                       <label className="text-[11px] uppercase tracking-wide opacity-60">
                         Nome
@@ -389,28 +374,33 @@ export default function AdminTeamsPage() {
                     </div>
 
                     <div className="flex items-end justify-end gap-2">
-                      {/* Botão apagar com ícone de caixote, como em fixtures */}
                       <button
                         type="button"
-                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-[13px] text-red-300 hover:bg-red-500/15"
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-[11px] text-red-300 hover:bg-red-500/15"
                         onClick={() => deleteTeam(t.id)}
-                        title="Apagar equipa"
+                        aria-label={`Apagar equipa ${t.name}`}
                       >
+                        {/* ícone trash minimalista */}
                         <svg
-                          viewBox="0 0 20 20"
-                          className="h-4 w-4"
-                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
                         >
-                          <path
-                            d="M7 3h6l.5 2H17v2h-1v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7H3V5h3.5L7 3Zm1 4v7h2V7H8Zm4 0v7h2V7h-2Z"
-                            fill="currentColor"
-                          />
+                          <path d="M4 7h16" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                          <path d="M6 7l1 12a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7" />
+                          <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" />
                         </svg>
                       </button>
 
                       <button
                         type="button"
-                        className="rounded-full bg-emerald-500/85 px-3 py-1.5 text-[11px] font-medium text-white shadow-md hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-full bg-emerald-500/85 px-3 py-1.5 text-[11px] font-medium text-white shadow-md hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={t.saving}
                         onClick={() => void saveTeam(t)}
                       >

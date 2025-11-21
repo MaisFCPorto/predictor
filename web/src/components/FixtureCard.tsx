@@ -619,6 +619,8 @@ export default function FixtureCard({
           <span>
             {scorerPlayer
               ? `Marcador: ${scorerPlayer.name}`
+              : pred_scorer_id
+              ? 'Sem marcador'
               : 'Escolher marcador'}
           </span>
           {scorerPlayer && (
@@ -637,7 +639,7 @@ export default function FixtureCard({
               setScorerId(null);
             }}
           >
-            Limpar escolha
+            Não escolher marcador
           </button>
         )}
       </div>

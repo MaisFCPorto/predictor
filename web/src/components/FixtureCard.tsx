@@ -757,6 +757,7 @@ export default function FixtureCard({
               className="mt-3 text-xs text-white/70 underline"
               onClick={() => {
                 setScorerId(null);
+                setScorerCleared(true);
                 setPickerOpen(false);
               }}
             >

@@ -17,6 +17,7 @@ type Env = {
   DB: D1Database;
   ADMIN_KEY: string;
   LOCK_MINUTES_BEFORE?: string;
+  SUPABASE_URL: string;
 };
 
 // ----------------------------------------------------

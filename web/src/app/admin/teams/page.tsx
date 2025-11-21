@@ -4,14 +4,22 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import AdminGate from '../_components/AdminGate';
 
-type Team = {
+const API = process.env.NEXT_PUBLIC_API_BASE!;
+
+type TeamApi = {
   id: string;
-  name: string;
+  name?: string | null;
   short_name?: string | null;
+  shortName?: string | null;
   crest_url?: string | null;
+  crestUrl?: string | null;
 };
 
-type EditableTeam = Team & {
+type EditableTeam = {
+  id: string;
+  name: string;
+  short_name: string | null;
+  crest_url: string | null;
   _name: string;
   _short: string;
   _crest: string;
@@ -47,42 +55,36 @@ export default function AdminTeamsPage() {
     setLoading(true);
     setErr(null);
     try {
-      // Usa a rota interna do Next: /api/admin/teams
-      const { data } = await axios.get<Team[]>('/api/admin/teams', {
+      const { data } = await axios.get<TeamApi[]>(`${API}/api/admin/teams`, {
         headers: { 'cache-control': 'no-store' },
       });
 
       const list: EditableTeam[] = (Array.isArray(data) ? data : []).map(
         (raw) => {
-          // Normaliza possíveis variações de nomes de campo
-          const short_name =
-            (raw as any).short_name ??
-            (raw as any).shortName ??
-            null;
-          const crest_url =
-            (raw as any).crest_url ??
-            (raw as any).crestUrl ??
-            null;
-
-          const t: Team = {
-            id: raw.id,
-            name: raw.name,
-            short_name,
-            crest_url,
-          };
+          // aceitar tanto snake_case como camelCase, só para o caso  👇
+          const name = (raw.name ?? '').toString();
+          const short =
+            (raw.short_name ??
+              raw.shortName ??
+              '')?.toString() ?? '';
+          const crest =
+            (raw.crest_url ?? raw.crestUrl ?? '')?.toString() ?? '';
 
           return {
-            ...t,
-            _name: t.name ?? '',
-            _short: t.short_name ?? '',
-            _crest: t.crest_url ?? '',
+            id: raw.id,
+            name,
+            short_name: short || null,
+            crest_url: crest || null,
+            _name: name,
+            _short: short,
+            _crest: crest,
           };
         },
       );
 
       setTeams(list);
     } catch (e: any) {
-      console.error('Erro a carregar equipas:', e);
+      console.error('Erro a carregar /api/admin/teams:', e?.response?.data ?? e);
       setErr(e?.message ?? 'Falha a carregar equipas');
       setTeams([]);
     } finally {
@@ -101,9 +103,8 @@ export default function AdminTeamsPage() {
         return;
       }
       setNewTeam((v) => ({ ...v, creating: true }));
-
       await axios.post(
-        '/api/admin/teams',
+        `${API}/api/admin/teams`,
         {
           id: newTeam.id.trim(),
           name: newTeam.name.trim(),
@@ -112,12 +113,11 @@ export default function AdminTeamsPage() {
         },
         { headers: { 'cache-control': 'no-store' } },
       );
-
       notify('Equipa criada ✅');
       setNewTeam({ id: '', name: '', short_name: '', crest_url: '' });
       await loadTeams();
     } catch (e: any) {
-      console.error('Erro a criar equipa:', e);
+      console.error('Erro a criar equipa:', e?.response?.data ?? e);
       alert(e?.response?.data?.error ?? e?.message ?? 'Erro a criar equipa');
     } finally {
       setNewTeam((v) => ({ ...v, creating: false }));
@@ -129,9 +129,8 @@ export default function AdminTeamsPage() {
       setTeams((list) =>
         list.map((x) => (x.id === t.id ? { ...x, saving: true } : x)),
       );
-
       await axios.patch(
-        `/api/admin/teams/${t.id}`,
+        `${API}/api/admin/teams/${t.id}`,
         {
           name: t._name.trim() || t.name,
           short_name: t._short.trim() || null,
@@ -139,12 +138,13 @@ export default function AdminTeamsPage() {
         },
         { headers: { 'cache-control': 'no-store' } },
       );
-
       notify('Equipa atualizada ✅');
       await loadTeams();
     } catch (e: any) {
-      console.error('Erro a atualizar equipa:', e);
-      alert(e?.response?.data?.error ?? e?.message ?? 'Erro a atualizar equipa');
+      console.error('Erro a atualizar equipa:', e?.response?.data ?? e);
+      alert(
+        e?.response?.data?.error ?? e?.message ?? 'Erro a atualizar equipa',
+      );
       setTeams((list) =>
         list.map((x) => (x.id === t.id ? { ...x, saving: false } : x)),
       );
@@ -158,13 +158,13 @@ export default function AdminTeamsPage() {
     if (ok !== 'APAGAR') return;
 
     try {
-      await axios.delete(`/api/admin/teams/${id}`, {
+      await axios.delete(`${API}/api/admin/teams/${id}`, {
         headers: { 'cache-control': 'no-store' },
       });
       notify('Equipa apagada ✅');
       await loadTeams();
     } catch (e: any) {
-      console.error('Erro ao apagar equipa:', e);
+      console.error('Erro ao apagar equipa:', e?.response?.data ?? e);
       alert(e?.response?.data?.error ?? e?.message ?? 'Erro ao apagar equipa');
     }
   }
@@ -184,7 +184,7 @@ export default function AdminTeamsPage() {
             </span>
           </header>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,0.6fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.6fr)_auto]">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,0.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_auto]">
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 ID *
@@ -242,6 +242,7 @@ export default function AdminTeamsPage() {
             </div>
 
             <div className="flex flex-col items-end justify-between gap-2">
+              {/* preview crest criação */}
               <div className="flex w-full items-center justify-end gap-2">
                 {newTeam.crest_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -259,7 +260,7 @@ export default function AdminTeamsPage() {
               <button
                 onClick={() => void createTeam()}
                 disabled={newTeam.creating}
-                className="inline-flex items-center justify-center rounded-full bg-emerald-500/85 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center justify-center rounded-full bg-emerald-500/85 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:cursor-not-allowed disabled:opacity-40 hover:bg-emerald-500"
               >
                 {newTeam.creating ? 'A criar…' : 'Criar equipa'}
               </button>
@@ -307,9 +308,8 @@ export default function AdminTeamsPage() {
                         />
                       ) : (
                         <span className="text-sm font-semibold text-white/70">
-                          {(t._short || t.short_name || t.id)
-                            .slice(0, 3)
-                            .toUpperCase()}
+                          {t.short_name?.slice(0, 3).toUpperCase() ||
+                            t.id.slice(0, 3).toUpperCase()}
                         </span>
                       )}
                     </div>
@@ -336,7 +336,7 @@ export default function AdminTeamsPage() {
                   </div>
 
                   {/* Direita: edição rápida */}
-                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.6fr)_auto]">
+                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.4fr)_auto]">
                     <div className="space-y-1">
                       <label className="text-[11px] uppercase tracking-wide opacity-60">
                         Nome
@@ -364,9 +364,7 @@ export default function AdminTeamsPage() {
                         onChange={(e) =>
                           setTeams((list) =>
                             list.map((x) =>
-                              x.id === t.id
-                                ? { ...x, _short: e.target.value }
-                                : x,
+                              x.id === t.id ? { ...x, _short: e.target.value } : x,
                             ),
                           )
                         }
@@ -383,9 +381,7 @@ export default function AdminTeamsPage() {
                         onChange={(e) =>
                           setTeams((list) =>
                             list.map((x) =>
-                              x.id === t.id
-                                ? { ...x, _crest: e.target.value }
-                                : x,
+                              x.id === t.id ? { ...x, _crest: e.target.value } : x,
                             ),
                           )
                         }
@@ -393,32 +389,28 @@ export default function AdminTeamsPage() {
                     </div>
 
                     <div className="flex items-end justify-end gap-2">
-                      {/* botão apagar com ícone tipo fixtures */}
+                      {/* Botão apagar com ícone de caixote, como em fixtures */}
                       <button
                         type="button"
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500/10 text-red-300 hover:bg-red-500/20"
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-[13px] text-red-300 hover:bg-red-500/15"
                         onClick={() => deleteTeam(t.id)}
                         title="Apagar equipa"
                       >
                         <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
+                          viewBox="0 0 20 20"
                           className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={2}
+                          aria-hidden="true"
                         >
-                          <path d="M3 6h18" />
-                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                          <path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14" />
+                          <path
+                            d="M7 3h6l.5 2H17v2h-1v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7H3V5h3.5L7 3Zm1 4v7h2V7H8Zm4 0v7h2V7h-2Z"
+                            fill="currentColor"
+                          />
                         </svg>
                       </button>
 
                       <button
                         type="button"
-                        className="rounded-full bg-emerald-500/85 px-4 py-1.5 text-[11px] font-medium text-white shadow-md hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-full bg-emerald-500/85 px-3 py-1.5 text-[11px] font-medium text-white shadow-md hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                         disabled={t.saving}
                         onClick={() => void saveTeam(t)}
                       >

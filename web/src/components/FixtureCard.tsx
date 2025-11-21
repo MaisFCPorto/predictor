@@ -267,14 +267,16 @@ export default function FixtureCard({
   }, [players, pickerSearch, positionFilter]);
 
   // pode guardar se mudou em relação aos props + não está bloqueado
+  // e se o utilizador já escolheu um marcador (jogador) OU indicou explicitamente "ninguém"
+  const hasValidScores = typeof home === 'number' && typeof away === 'number';
+  const hasMarkerChoice = !!scorerPlayer || scorerCleared;
+  const predictionChanged =
+    home !== (pred_home ?? null) ||
+    away !== (pred_away ?? null) ||
+    (scorerId ?? null) !== (pred_scorer_id ?? null);
+
   const canSave =
-    !nowLocked &&
-    canEdit &&
-    typeof home === 'number' &&
-    typeof away === 'number' &&
-    (home !== (pred_home ?? null) ||
-      away !== (pred_away ?? null) ||
-      (scorerId ?? null) !== (pred_scorer_id ?? null));
+    !nowLocked && canEdit && hasValidScores && hasMarkerChoice && predictionChanged;
 
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
@@ -675,7 +677,7 @@ export default function FixtureCard({
           {/* Jogos passados: marcadores reais do jogo (do BO) */}
           {variant === 'past' && scorersNames.length > 0 && (
             <span className="mt-1 text-[12px] text-white/70">
-              Marcadores do jogo: {scorersNames.join(', ')}
+              Marcadores: {scorersNames.join(', ')}
             </span>
           )}
         </div>

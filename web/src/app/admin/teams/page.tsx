@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import AdminGate from '../_components/AdminGate';
 
@@ -25,6 +25,7 @@ export default function AdminTeamsPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   // Form criação
   const [newTeam, setNewTeam] = useState<{
@@ -58,10 +59,8 @@ export default function AdminTeamsPage() {
           // Aceitar tanto snake_case como camelCase vindos da API
           const id = String(raw.id ?? '');
           const name: string = raw.name ?? '';
-          const shortName: string =
-            raw.short_name ?? raw.shortName ?? '';
-          const crestUrl: string =
-            raw.crest_url ?? raw.crestUrl ?? '';
+          const shortName: string = raw.short_name ?? raw.shortName ?? '';
+          const crestUrl: string = raw.crest_url ?? raw.crestUrl ?? '';
 
           return {
             id,
@@ -156,6 +155,30 @@ export default function AdminTeamsPage() {
     }
   }
 
+  // Filtro por pesquisa (nome, id, nome curto)
+  const filteredTeams = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return teams;
+
+    const norm = (s: string) =>
+      s
+        .normalize('NFKD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase();
+
+    return teams.filter((t) => {
+      const name = norm(t._name || t.name || '');
+      const short = norm(t._short || t.short_name || '');
+      const id = norm(t.id || '');
+      const nq = norm(q);
+      return (
+        name.includes(nq) ||
+        short.includes(nq) ||
+        id.includes(nq)
+      );
+    });
+  }, [teams, query]);
+
   return (
     <AdminGate>
       <main className="mx-auto max-w-5xl space-y-4 p-6">
@@ -171,7 +194,7 @@ export default function AdminTeamsPage() {
             </span>
           </header>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,0.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.7fr)]">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,0.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.6fr)_auto]">
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 ID *
@@ -257,10 +280,28 @@ export default function AdminTeamsPage() {
 
         {/* Lista de equipas */}
         <section className="space-y-3 rounded-2xl border border-white/10 bg-black/25 p-4">
-          <header className="flex items-center justify-between gap-2">
+          <header className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-medium">Equipas existentes</h2>
-            <span className="text-xs text-white/60">Total: {teams.length}</span>
+            <span className="text-xs text-white/60">
+              Total: {filteredTeams.length}/{teams.length}
+            </span>
           </header>
+
+          {/* Pesquisa */}
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <input
+              className="w-full max-w-xs rounded border border-white/10 bg-black/20 px-3 py-2 text-sm"
+              placeholder="Pesquisar equipa / id / nome curto..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <button
+              className="rounded bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
+              onClick={() => setQuery('')}
+            >
+              Limpar
+            </button>
+          </div>
 
           {err && (
             <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-100">
@@ -270,13 +311,13 @@ export default function AdminTeamsPage() {
 
           {loading ? (
             <div className="px-2 py-4 text-sm text-white/70">A carregar…</div>
-          ) : teams.length === 0 ? (
+          ) : filteredTeams.length === 0 ? (
             <div className="px-2 py-6 text-sm text-white/60">
-              Ainda não existem equipas.
+              Nenhuma equipa encontrada.
             </div>
           ) : (
             <div className="space-y-3">
-              {teams.map((t) => (
+              {filteredTeams.map((t) => (
                 <div
                   key={t.id}
                   className="flex flex-col gap-3 rounded-2xl border border-white/12 bg-black/35 p-3 md:flex-row md:items-center"
@@ -321,7 +362,7 @@ export default function AdminTeamsPage() {
                   </div>
 
                   {/* Direita: edição rápida */}
-                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.5fr)_minmax(0,0.7fr)]">
+                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,2.1fr)_auto]">
                     <div className="space-y-1">
                       <label className="text-[11px] uppercase tracking-wide opacity-60">
                         Nome
@@ -374,28 +415,14 @@ export default function AdminTeamsPage() {
                     </div>
 
                     <div className="flex items-end justify-end gap-2">
+                      {/* Botão apagar no mesmo estilo dos fixtures */}
                       <button
                         type="button"
-                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-[11px] text-red-300 hover:bg-red-500/15"
+                        title="Apagar"
+                        className="rounded-full px-2 py-1 text-xs hover:bg-white/10"
                         onClick={() => deleteTeam(t.id)}
-                        aria-label={`Apagar equipa ${t.name}`}
                       >
-                        {/* ícone trash minimalista */}
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="h-3.5 w-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M4 7h16" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                          <path d="M6 7l1 12a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7" />
-                          <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" />
-                        </svg>
+                        🗑
                       </button>
 
                       <button

@@ -11,7 +11,6 @@ const adm = axios.create({
   baseURL: '',
 });
 
-// injeta sempre a admin key
 adm.interceptors.request.use((config) => {
   if (ADMIN_KEY) {
     config.headers = config.headers ?? {};
@@ -50,7 +49,7 @@ type Fx = {
   leg_number?: number | null | '';
   home_team_id: string;
   away_team_id: string;
-  kickoff_at: string; // UTC (YYYY-MM-DD HH:mm:ss)
+  kickoff_at: string;
   status: 'SCHEDULED' | 'FINISHED' | string;
   home_score?: number | null;
   away_score?: number | null;
@@ -60,7 +59,6 @@ type Fx = {
   _as?: number | '';
 };
 
-// jogadores FC Porto
 type Player = {
   id: string;
   team_id: string;
@@ -77,7 +75,7 @@ function toLocalDTValue(isoOrSqlUTC: string) {
   const d = new Date(asISO);
   const pad = (n: number) => (n < 10 ? '0' + n : String(n));
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
-    d.getDate()
+    d.getDate(),
   )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
@@ -123,7 +121,8 @@ export default function AdminFixtures() {
   const [msg, setMsg] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [compFilter, setCompFilter] = useState<string>('');
-  const [sortField, setSortField] = useState<'comp' | 'ronda' | 'kickoff' | ''>('');
+  const [sortField, setSortField] =
+    useState<'comp' | 'ronda' | 'kickoff' | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -157,17 +156,16 @@ export default function AdminFixtures() {
     status: 'SCHEDULED',
   });
 
-  // estados separados para data/hora do "Criar novo jogo"
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('21:00');
 
-  // texto dos campos com auto-complete
   const [homeSearch, setHomeSearch] = useState('');
   const [awaySearch, setAwaySearch] = useState('');
 
-  // jogadores + marcadores
   const [players, setPlayers] = useState<Player[]>([]);
-  const [scorersByFixture, setScorersByFixture] = useState<Record<string, string[]>>({});
+  const [scorersByFixture, setScorersByFixture] = useState<
+    Record<string, string[]>
+  >({});
 
   useEffect(() => {
     const homeName = teams.find((t) => t.id === newFx.home_team_id)?.name ?? '';
@@ -176,7 +174,6 @@ export default function AdminFixtures() {
     setAwaySearch(awayName);
   }, [teams, newFx.home_team_id, newFx.away_team_id]);
 
-  // validação
   const createErrors = useMemo(() => {
     const errs: Record<string, string | null> = {};
     errs.comp = newFx.competition_id ? null : 'Obrigatório';
@@ -195,10 +192,9 @@ export default function AdminFixtures() {
   }, [newFx]);
   const hasCreateErrors = useMemo(
     () => Object.values(createErrors).some(Boolean),
-    [createErrors]
+    [createErrors],
   );
 
-  // inicializar data/hora do novo jogo
   useEffect(() => {
     if (!newDate || !newTime) {
       const now = new Date();
@@ -210,7 +206,6 @@ export default function AdminFixtures() {
     }
   }, [newDate, newTime]);
 
-  // sempre que newDate/newTime mudam, atualiza kickoff_local
   useEffect(() => {
     if (!newDate || !newTime) return;
     const local = joinLocal(newDate, newTime);
@@ -307,7 +302,7 @@ export default function AdminFixtures() {
           );
         })
         .sort(
-          (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
+          (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime(),
         )
         .slice(0, 4);
       setPortoSuggest(items);
@@ -318,7 +313,6 @@ export default function AdminFixtures() {
     }
   }
 
-  // jogadores FCP
   async function loadPlayers() {
     try {
       const { data } = await adm.get<Player[]>('/api/admin/players', {
@@ -330,12 +324,11 @@ export default function AdminFixtures() {
     }
   }
 
-  // marcadores de um fixture
   async function loadFixtureScorers(fixtureId: string) {
     try {
       const { data } = await adm.get<{ player_id: string }[]>(
         `/api/admin/fixtures/${fixtureId}/scorers`,
-        { headers: { 'cache-control': 'no-store' } }
+        { headers: { 'cache-control': 'no-store' } },
       );
       const ids = (Array.isArray(data) ? data : []).map((r) => r.player_id);
       setScorersByFixture((prev) => ({ ...prev, [fixtureId]: ids }));
@@ -361,7 +354,7 @@ export default function AdminFixtures() {
       await adm.put(
         `/api/admin/fixtures/${fixtureId}/scorers`,
         { player_ids },
-        { headers: { 'cache-control': 'no-store' } }
+        { headers: { 'cache-control': 'no-store' } },
       );
       notify('Marcadores atualizados ✅');
     } catch (e) {
@@ -376,6 +369,37 @@ export default function AdminFixtures() {
     void loadPortoSuggestions();
     void loadPlayers();
   }, []);
+
+  /* -------------------- Porto em primeiro + defaults -------------------- */
+
+  const portoTeam = useMemo(() => {
+    const norm = (s: string) =>
+      s.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+    return teams.find((t) => {
+      const n = norm(t.name);
+      return n.includes('porto'); // FC Porto, Futebol Clube do Porto, etc.
+    });
+  }, [teams]);
+
+  const orderedTeams = useMemo(() => {
+    if (!portoTeam) return teams;
+    return [portoTeam, ...teams.filter((t) => t.id !== portoTeam.id)];
+  }, [teams, portoTeam]);
+
+  // Preencher por defeito FC Porto em casa e fora na criação
+  useEffect(() => {
+    if (!portoTeam) return;
+    setNewFx((v) => {
+      if (v.home_team_id || v.away_team_id) return v; // não pisar se já foi escolhido
+      return {
+        ...v,
+        home_team_id: portoTeam.id,
+        away_team_id: portoTeam.id,
+      };
+    });
+    setHomeSearch((prev) => prev || portoTeam.name);
+    setAwaySearch((prev) => prev || portoTeam.name);
+  }, [portoTeam]);
 
   /* -------------------- Mutations -------------------- */
   async function updateField(id: string, patch: Partial<Fx>) {
@@ -456,17 +480,19 @@ export default function AdminFixtures() {
       });
 
       notify('Criado ✅');
+
+      // Reset mantendo Porto por defeito para facilitar o próximo
       setNewFx({
         competition_id: '',
         round_label: '',
         leg_number: null,
-        home_team_id: '',
-        away_team_id: '',
+        home_team_id: portoTeam?.id ?? '',
+        away_team_id: portoTeam?.id ?? '',
         kickoff_local: '',
         status: 'SCHEDULED',
       });
-      setHomeSearch('');
-      setAwaySearch('');
+      setHomeSearch(portoTeam?.name ?? '');
+      setAwaySearch(portoTeam?.name ?? '');
       const now = new Date();
       const yyyy = now.getFullYear();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -482,6 +508,7 @@ export default function AdminFixtures() {
   }
 
   /* -------------------- Filtro + Ordenação + Paginação -------------------- */
+
   const totalCount = useMemo(() => {
     const q = query.trim().toLowerCase();
     const byIdToCode = new Map(competitions.map((c) => [c.id, c.code]));
@@ -573,7 +600,6 @@ export default function AdminFixtures() {
     setPage(1);
   }, [query, compFilter, statusFilter, sortField, sortDir]);
 
-  /* -------------------- Helpers -------------------- */
   function findTeamIdByName(name: string): string {
     const norm = (s: string) =>
       s.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
@@ -581,7 +607,7 @@ export default function AdminFixtures() {
     const exact = teams.find((t) => norm(t.name) === n)?.id;
     if (exact) return exact;
     const contains = teams.find(
-      (t) => norm(t.name).includes(n) || n.includes(norm(t.name))
+      (t) => norm(t.name).includes(n) || n.includes(norm(t.name)),
     )?.id;
     return contains || '';
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 import AdminGate from '../_components/AdminGate';
 
@@ -25,7 +25,7 @@ export default function AdminTeamsPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
 
   // Form criação
   const [newTeam, setNewTeam] = useState<{
@@ -56,7 +56,6 @@ export default function AdminTeamsPage() {
 
       const list: EditableTeam[] = (Array.isArray(data) ? data : []).map(
         (raw): EditableTeam => {
-          // Aceitar tanto snake_case como camelCase vindos da API
           const id = String(raw.id ?? '');
           const name: string = raw.name ?? '';
           const shortName: string = raw.short_name ?? raw.shortName ?? '';
@@ -155,29 +154,22 @@ export default function AdminTeamsPage() {
     }
   }
 
-  // Filtro por pesquisa (nome, id, nome curto)
   const filteredTeams = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = search.trim().toLowerCase();
     if (!q) return teams;
-
-    const norm = (s: string) =>
-      s
-        .normalize('NFKD')
-        .replace(/\p{Diacritic}/gu, '')
-        .toLowerCase();
-
     return teams.filter((t) => {
-      const name = norm(t._name || t.name || '');
-      const short = norm(t._short || t.short_name || '');
-      const id = norm(t.id || '');
-      const nq = norm(q);
+      const name = (t._name || t.name || '').toLowerCase();
+      const short = (t._short || t.short_name || '').toLowerCase();
+      const id = t.id.toLowerCase();
       return (
-        name.includes(nq) ||
-        short.includes(nq) ||
-        id.includes(nq)
+        name.includes(q) ||
+        short.includes(q) ||
+        id.includes(q)
       );
     });
-  }, [teams, query]);
+  }, [teams, search]);
+
+  const totalLabel = `${filteredTeams.length}/${teams.length || 0}`;
 
   return (
     <AdminGate>
@@ -194,7 +186,7 @@ export default function AdminTeamsPage() {
             </span>
           </header>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,0.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.6fr)_auto]">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,0.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.4fr)_minmax(0,0.7fr)]">
             <div className="space-y-1">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 ID *
@@ -237,7 +229,7 @@ export default function AdminTeamsPage() {
               />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-xs uppercase tracking-wide opacity-70">
                 Crest URL
               </label>
@@ -252,7 +244,6 @@ export default function AdminTeamsPage() {
             </div>
 
             <div className="flex flex-col items-end justify-between gap-2">
-              {/* preview crest criação */}
               <div className="flex w-full items-center justify-end gap-2">
                 {newTeam.crest_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -282,22 +273,21 @@ export default function AdminTeamsPage() {
         <section className="space-y-3 rounded-2xl border border-white/10 bg-black/25 p-4">
           <header className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-medium">Equipas existentes</h2>
-            <span className="text-xs text-white/60">
-              Total: {filteredTeams.length}/{teams.length}
-            </span>
+            <span className="text-xs text-white/60">Total: {totalLabel}</span>
           </header>
 
-          {/* Pesquisa */}
-          <div className="flex flex-wrap items-center gap-2 mb-2">
+          {/* Barra de pesquisa */}
+          <div className="flex flex-wrap gap-2">
             <input
-              className="w-full max-w-xs rounded border border-white/10 bg-black/20 px-3 py-2 text-sm"
+              className="w-full max-w-xl flex-1 rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm"
               placeholder="Pesquisar equipa / id / nome curto..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
             <button
-              className="rounded bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
-              onClick={() => setQuery('')}
+              type="button"
+              className="rounded-md bg-white/10 px-4 py-2 text-sm hover:bg-white/15"
+              onClick={() => setSearch('')}
             >
               Limpar
             </button>
@@ -324,7 +314,7 @@ export default function AdminTeamsPage() {
                 >
                   {/* Esquerda: crest + nome */}
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/5">
+                    <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-white/5">
                       {t._crest || t.crest_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -362,7 +352,7 @@ export default function AdminTeamsPage() {
                   </div>
 
                   {/* Direita: edição rápida */}
-                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,2.1fr)_auto]">
+                  <div className="grid flex-1 gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.7fr)_minmax(0,2fr)_minmax(0,0.5fr)] md:items-end">
                     <div className="space-y-1">
                       <label className="text-[11px] uppercase tracking-wide opacity-60">
                         Nome
@@ -397,7 +387,7 @@ export default function AdminTeamsPage() {
                       />
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1 min-w-0">
                       <label className="text-[11px] uppercase tracking-wide opacity-60">
                         Crest URL
                       </label>
@@ -415,14 +405,28 @@ export default function AdminTeamsPage() {
                     </div>
 
                     <div className="flex items-end justify-end gap-2">
-                      {/* Botão apagar no mesmo estilo dos fixtures */}
                       <button
                         type="button"
-                        title="Apagar"
-                        className="rounded-full px-2 py-1 text-xs hover:bg-white/10"
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-[11px] text-red-300 hover:bg-red-500/15"
                         onClick={() => deleteTeam(t.id)}
+                        aria-label={`Apagar equipa ${t.name}`}
                       >
-                        🗑
+                        {/* ícone trash minimalista (igual ao conceito dos fixtures) */}
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M4 7h16" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                          <path d="M6 7l1 12a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7" />
+                          <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" />
+                        </svg>
                       </button>
 
                       <button

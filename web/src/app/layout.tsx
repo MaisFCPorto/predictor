@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { supabasePKCE } from '@/utils/supabase/client';
+import { Analytics } from '@vercel/analytics/react';
 
 type UserInfo = {
   id: string;
@@ -488,30 +489,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="mt-1 w-full max-w-xs rounded-2xl border border-white/15 bg-black/70 px-3 py-2 text-left text-[11px] leading-relaxed shadow-lg">
                 <div className="font-medium text-white/90 mb-1">
                   Contactos para feedback/bugs
-                  </div>
-                  <div>
-                    Email:{' '}
-                    <a
-                      href="mailto:geral@maisfcporto.com"
-                      className="underline decoration-white/40 hover:decoration-white"
-                    >
-                      geral@maisfcporto.com
-                    </a>
-                  </div>
-                  <div className="mt-1">
-                    Instagram:{' '}
-                    <a
-                      href="https://www.instagram.com/maisfcporto"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline decoration-white/40 hover:decoration-white"
-                    >
-                      @maisfcporto
-                    </a>
-                  </div>
                 </div>
-              )}
-            </div>
+                <div>
+                  Email:{' '}
+                  <a
+                    href="mailto:geral@maisfcporto.com"
+                    className="underline decoration-white/40 hover:decoration-white"
+                  >
+                    geral@maisfcporto.com
+                  </a>
+                </div>
+                <div className="mt-1">
+                  Instagram:{' '}
+                  <a
+                    href="https://www.instagram.com/maisfcporto"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline decoration-white/40 hover:decoration-white"
+                  >
+                    @maisfcporto
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="mx-auto w-full max-w-6xl px-4 py-6 text-center text-xs leading-relaxed text-white/70">
             <div className="opacity-80">
               © {new Date().getFullYear()} +FCPorto Predictor. Todos os direitos
@@ -535,6 +536,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </footer>
+        <Analytics />
       </body>
     </html>
   );

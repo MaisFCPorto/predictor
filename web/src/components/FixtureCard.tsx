@@ -200,24 +200,41 @@ export default function FixtureCard({
     home_team_name.toLowerCase().includes('porto') ||
     away_team_name.toLowerCase().includes('porto');
 
-  // estado dos inputs de resultado
-  const [home, setHome] = useState<number | ''>('');
-  const [away, setAway] = useState<number | ''>('');
+  // ---------- ESTADO DOS INPUTS DE RESULTADO ----------
+  // *** novo: inicializar com os valores das predictions se existirem
+  const [home, setHome] = useState<number | ''>(() =>
+    typeof pred_home === 'number' ? pred_home : ''
+  );
+  const [away, setAway] = useState<number | ''>(() =>
+    typeof pred_away === 'number' ? pred_away : ''
+  );
 
-  // Prefill com prediction existente
+  // *** flag para saber se o user já mexeu nos resultados
+  const [scoresTouched, setScoresTouched] = useState(false);
+
+  // *** sempre que o fixture mudar, voltamos a considerar "não tocado"
+  useEffect(() => {
+    setScoresTouched(false);
+  }, [id]);
+
+  // *** sincronizar com props quando:
+  // - é jogo passado (força sempre o resultado guardado), OU
+  // - ainda não foi mexido nos inputs e chegam/alteram-se as predictions
   useEffect(() => {
     const ph = typeof pred_home === 'number' ? pred_home : null;
     const pa = typeof pred_away === 'number' ? pred_away : null;
 
     if (variant === 'past') {
-      if (ph !== null) setHome(ph);
-      if (pa !== null) setAway(pa);
-    } else {
-      if (home === '' && ph !== null) setHome(ph);
-      if (away === '' && pa !== null) setAway(pa);
+      setHome(ph ?? '');
+      setAway(pa ?? '');
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pred_home, pred_away, variant]);
+
+    if (!scoresTouched) {
+      setHome(ph ?? '');
+      setAway(pa ?? '');
+    }
+  }, [pred_home, pred_away, variant, scoresTouched]);
 
   // marcador escolhido (palpite)
   const [scorerId, setScorerId] = useState<string | null>(pred_scorer_id ?? null);
@@ -557,14 +574,20 @@ export default function FixtureCard({
             <ScoreBox
               disabled={nowLocked || !canEdit}
               value={home}
-              onChange={(v) => setHome(v)}
+              onChange={(v) => {
+                setScoresTouched(true); // ***
+                setHome(v);
+              }}
             />
             <span className="opacity-60 text-white text-xl sm:text-2xl">–</span>
             <div className="relative flex items-center">
               <ScoreBox
                 disabled={nowLocked || !canEdit}
                 value={away}
-                onChange={(v) => setAway(v)}
+                onChange={(v) => {
+                  setScoresTouched(true); // ***
+                  setAway(v);
+                }}
               />
               {variant !== 'past' && (
                 <button

@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 
 type Row = {
   user_id: string;
@@ -107,6 +107,20 @@ function gameHeaderLabel(g: GameLite) {
 // --- component -------------------------------------------------------------
 
 export default function RankingsPage() {
+  return (
+    <Suspense fallback={
+      <main className="mx-auto max-w-6xl p-6">
+        <title>+Predictor - Rankings</title>
+        <h1 className="text-3xl font-bold tracking-tight">Rankings</h1>
+        <div className="mt-4 text-sm text-white/70">A carregar…</div>
+      </main>
+    }>
+      <RankingsPageInner />
+    </Suspense>
+  );
+}
+
+function RankingsPageInner() {
   const searchParams = useSearchParams();
   const initialModeParam = searchParams.get('mode');
   const initialMode: 'general' | 'monthly' | 'bygame' =

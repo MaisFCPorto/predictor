@@ -92,7 +92,7 @@ app.route('/api/admin/fixtures', adminFixtureScorers);
 app.route('/api/auth', auth);
 app.route('/api/admin', admin);
 app.route('/api/admin/teams', adminTeams);
-app.route('api/admin/predictions', adminPredictions);
+app.route('/api/admin/predictions', adminPredictions);
 
 
 // ----------------------------------------------------

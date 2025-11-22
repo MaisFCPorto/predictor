@@ -1,6 +1,5 @@
 // predictor-porto/api/src/routes/admin/predictions.ts
 import { Hono } from 'hono';
-import type { Context } from 'hono';
 
 type Env = {
   DB: D1Database;
@@ -9,18 +8,26 @@ type Env = {
 
 export const adminPredictions = new Hono<{ Bindings: Env }>();
 
-// Middleware simples de auth por header (igual ao que já usas no resto do admin)
+// Middleware de auth simples (igual ao resto do admin)
 adminPredictions.use('*', async (c, next) => {
-  const key = c.req.header('x-admin-key');
-  if (!key || key !== c.env.ADMIN_KEY) {
-    return c.json({ error: 'Unauthorized' }, 401);
+  const need = c.env.ADMIN_KEY;
+  if (!need) {
+    // em dev sem chave, deixa passar
+    await next();
+    return;
   }
+
+  const got = c.req.header('x-admin-key');
+  if (!got || got !== need) {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+
   await next();
 });
 
 /**
- * GET /admin/predictions/fixtures
- * -> lista de jogos para o selector (id + label)
+ * GET /api/admin/predictions/fixtures
+ * Lista de jogos para usar no selector do admin
  */
 adminPredictions.get('/fixtures', async (c) => {
   const db = c.env.DB;
@@ -31,11 +38,13 @@ adminPredictions.get('/fixtures', async (c) => {
       SELECT
         f.id,
         f.kickoff_at,
-        f.home_team_name,
-        f.away_team_name
+        ht.name AS home_team_name,
+        at.name AS away_team_name
       FROM fixtures f
+      JOIN teams ht ON ht.id = f.home_team_id
+      JOIN teams at ON at.id = f.away_team_id
       ORDER BY f.kickoff_at DESC
-    `
+    `,
     )
     .all<{
       id: string;
@@ -46,14 +55,11 @@ adminPredictions.get('/fixtures', async (c) => {
 
   const fixtures = (results ?? []).map((row) => {
     const d = new Date(row.kickoff_at);
-    const dateLabel = d.toISOString().slice(0, 10); // 2025-11-20
+    const dateLabel = d.toISOString().slice(0, 10); // YYYY-MM-DD
     const label = `${dateLabel} – ${row.home_team_name} vs ${row.away_team_name}`;
     return {
       id: row.id,
       label,
-      kickoff_at: row.kickoff_at,
-      home_team_name: row.home_team_name,
-      away_team_name: row.away_team_name,
     };
   });
 
@@ -61,39 +67,38 @@ adminPredictions.get('/fixtures', async (c) => {
 });
 
 /**
- * GET /admin/predictions/fixture/:fixtureId
- * -> lista todas as predictions (resultado + marcador + user) para um jogo
+ * GET /api/admin/predictions/fixture/:fixtureId
+ * Lista todas as predictions (resultado + marcador + user) de um jogo
  */
 adminPredictions.get('/fixture/:fixtureId', async (c) => {
   const db = c.env.DB;
   const fixtureId = c.req.param('fixtureId');
 
   if (!fixtureId) {
-    return c.json({ error: 'Missing fixtureId' }, 400);
+    return c.json({ error: 'missing_fixture_id' }, 400);
   }
 
   const { results } = await db
     .prepare(
       `
       SELECT
-        fp.id,
-        fp.fixture_id,
-        fp.user_id,
-        fp.pred_home,
-        fp.pred_away,
-        fp.pred_scorer_id,
-        fp.created_at,
-        u.name       AS user_name,
-        u.username   AS username,
-        p.name       AS scorer_name
-      FROM predictions fp
-      INNER JOIN users u
-        ON u.id = fp.user_id
-      LEFT JOIN players p
-        ON p.id = fp.pred_scorer_id
-      WHERE fp.fixture_id = ?
-      ORDER BY fp.created_at ASC
-    `
+        p.id,
+        p.fixture_id,
+        p.user_id,
+        p.home_goals     AS pred_home,
+        p.away_goals     AS pred_away,
+        p.scorer_player_id,
+        p.created_at,
+        u.name           AS user_name,
+        pl.name          AS scorer_name
+      FROM predictions p
+      JOIN users u
+        ON u.id = p.user_id
+      LEFT JOIN players pl
+        ON pl.id = p.scorer_player_id
+      WHERE p.fixture_id = ?
+      ORDER BY p.created_at ASC
+    `,
     )
     .bind(fixtureId)
     .all<{
@@ -102,23 +107,18 @@ adminPredictions.get('/fixture/:fixtureId', async (c) => {
       user_id: string;
       pred_home: number | null;
       pred_away: number | null;
-      pred_scorer_id: string | null;
+      scorer_player_id: string | null;
       created_at: string;
       user_name: string | null;
-      username: string | null;
       scorer_name: string | null;
     }>();
 
   const predictions = (results ?? []).map((row) => ({
     id: row.id,
-    fixture_id: row.fixture_id,
-    user_id: row.user_id,
     user_name: row.user_name ?? '(sem nome)',
-    username: row.username ?? '',
     pred_home: row.pred_home,
     pred_away: row.pred_away,
-    pred_scorer_id: row.pred_scorer_id,
-    scorer_name: row.scorer_name,
+    pred_scorer_name: row.scorer_name, // <- nome do marcador para o front
     created_at: row.created_at,
   }));
 

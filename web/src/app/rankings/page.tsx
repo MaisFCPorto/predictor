@@ -2,6 +2,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 type Row = {
@@ -106,15 +107,27 @@ function gameHeaderLabel(g: GameLite) {
 // --- component -------------------------------------------------------------
 
 export default function RankingsPage() {
-  const [mode, setMode] = useState<'general' | 'monthly' | 'bygame'>('general');
+  const searchParams = useSearchParams();
+  const initialModeParam = searchParams.get('mode');
+  const initialMode: 'general' | 'monthly' | 'bygame' =
+    initialModeParam === 'monthly'
+      ? 'monthly'
+      : initialModeParam === 'bygame'
+        ? 'bygame'
+        : 'general';
+
+  const initialYm = searchParams.get('ym') || currentYM();
+  const initialFixtureId = searchParams.get('fixtureId') || '';
+
+  const [mode, setMode] = useState<'general' | 'monthly' | 'bygame'>(initialMode);
 
   // Mensal
   const [months, setMonths] = useState<string[]>([]);
-  const [ym, setYm] = useState<string>(currentYM());
+  const [ym, setYm] = useState<string>(initialYm);
 
   // Por jogo
   const [games, setGames] = useState<GameLite[]>([]);
-  const [fixtureId, setFixtureId] = useState<string>('');
+  const [fixtureId, setFixtureId] = useState<string>(initialFixtureId);
 
   // tabela
   const [rows, setRows] = useState<Row[]>([]);

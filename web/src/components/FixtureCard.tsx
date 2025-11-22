@@ -201,7 +201,7 @@ export default function FixtureCard({
     away_team_name.toLowerCase().includes('porto');
 
   // ---------- ESTADO DOS INPUTS DE RESULTADO ----------
-  // *** novo: inicializar com os valores das predictions se existirem
+  // inicializar com os valores das predictions se existirem
   const [home, setHome] = useState<number | ''>(() =>
     typeof pred_home === 'number' ? pred_home : ''
   );
@@ -209,15 +209,15 @@ export default function FixtureCard({
     typeof pred_away === 'number' ? pred_away : ''
   );
 
-  // *** flag para saber se o user já mexeu nos resultados
+  // flag para saber se o user já mexeu nos resultados
   const [scoresTouched, setScoresTouched] = useState(false);
 
-  // *** sempre que o fixture mudar, voltamos a considerar "não tocado"
+  // sempre que o fixture mudar, voltamos a considerar "não tocado"
   useEffect(() => {
     setScoresTouched(false);
   }, [id]);
 
-  // *** sincronizar com props quando:
+  // sincronizar com props quando:
   // - é jogo passado (força sempre o resultado guardado), OU
   // - ainda não foi mexido nos inputs e chegam/alteram-se as predictions
   useEffect(() => {
@@ -575,7 +575,7 @@ export default function FixtureCard({
               disabled={nowLocked || !canEdit}
               value={home}
               onChange={(v) => {
-                setScoresTouched(true); // ***
+                setScoresTouched(true);
                 setHome(v);
               }}
             />
@@ -585,7 +585,7 @@ export default function FixtureCard({
                 disabled={nowLocked || !canEdit}
                 value={away}
                 onChange={(v) => {
-                  setScoresTouched(true); // ***
+                  setScoresTouched(true);
                   setAway(v);
                 }}
               />
@@ -888,11 +888,11 @@ export default function FixtureCard({
 function Crest({ src, alt }: { src?: string | null; alt: string }) {
   return (
     <div className="flex-shrink-0">
-      <div className="relative h-12 sm:h-14 md:h-16 px-1.5 sm:px-2 flex items-center justify-center">
+      <div className="relative h-12 sm:h-14 md:h-16 px-1.5 sm:px-2 flex items.center justify-center">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-full opacity-0 scale-95
-                     bg-white/5 blur-md transition-all duration-300 ease-out
+                     bg.white/5 blur-md transition-all duration-300 ease-out
                      md:group-hover:opacity-100 md:group-hover:scale-105"
         />
         {src ? (
@@ -924,17 +924,33 @@ function ScoreBox({
   value: number | '';
   onChange: (v: number | '') => void;
 }) {
+  // garantir que o input recebe sempre uma string
+  const displayValue =
+    value === '' || value === null || value === undefined ? '' : String(value);
+
   return (
     <input
-      type="number"
+      type="tel"          // <- evitar bugs de iOS com type="number"
+      inputMode="numeric" // <- teclado numérico
       min={0}
-      step={1}
-      value={value}
+      max={99}
+      value={displayValue}
       onChange={(e) => {
-        const v = e.target.value;
-        if (v === '') return onChange('');
-        const n = Number(v);
-        if (Number.isFinite(n) && n >= 0 && n <= 99) onChange(n);
+        // só dígitos
+        const raw = e.target.value.replace(/\D/g, '');
+
+        if (!raw) {
+          onChange('');
+          return;
+        }
+
+        // limitar a 2 dígitos
+        const trimmed = raw.slice(0, 2);
+        const n = Number(trimmed);
+
+        if (Number.isFinite(n) && n >= 0 && n <= 99) {
+          onChange(n);
+        }
       }}
       className={clsx(
         'no-spinner text-center tabular-nums rounded-2xl border placeholder:text-white/70',
@@ -945,7 +961,6 @@ function ScoreBox({
       )}
       disabled={disabled}
       placeholder=""
-      inputMode="numeric"
     />
   );
 }

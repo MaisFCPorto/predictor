@@ -259,7 +259,7 @@ export default function AuthPage() {
             className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4"
           >
             <p className="text-xs text-white/70">
-              Introduz o teu email para enviares um link de recuperação.
+              Introduz o teu email para receberes um link de recuperação.
             </p>
 
             <input

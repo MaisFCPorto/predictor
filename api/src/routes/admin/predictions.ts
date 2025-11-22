@@ -8,7 +8,7 @@ type Env = {
 
 export const adminPredictions = new Hono<{ Bindings: Env }>();
 
-// Middleware de auth simples (igual ao resto do admin)
+// Middleware simples de admin (usa x-admin-key, igual ao resto do admin)
 adminPredictions.use('*', async (c, next) => {
   const need = c.env.ADMIN_KEY;
   if (!need) {
@@ -27,7 +27,7 @@ adminPredictions.use('*', async (c, next) => {
 
 /**
  * GET /api/admin/predictions/fixtures
- * Lista de jogos para usar no selector do admin
+ * Lista de jogos para o selector do admin
  */
 adminPredictions.get('/fixtures', async (c) => {
   const db = c.env.DB;
@@ -56,7 +56,7 @@ adminPredictions.get('/fixtures', async (c) => {
   const fixtures = (results ?? []).map((row) => {
     const d = new Date(row.kickoff_at);
     const dateLabel = d.toISOString().slice(0, 10); // YYYY-MM-DD
-    const label = `${dateLabel} – ${row.home_team_name} vs ${row.away_team_name}`;
+    const label = `${dateLabel} — ${row.home_team_name} vs ${row.away_team_name}`;
     return {
       id: row.id,
       label,
@@ -118,7 +118,7 @@ adminPredictions.get('/fixture/:fixtureId', async (c) => {
     user_name: row.user_name ?? '(sem nome)',
     pred_home: row.pred_home,
     pred_away: row.pred_away,
-    pred_scorer_name: row.scorer_name, // <- nome do marcador para o front
+    pred_scorer_name: row.scorer_name, // nome do marcador para o front
     created_at: row.created_at,
   }));
 

@@ -29,34 +29,52 @@ export async function recomputePointsForFixture(
   DB: D1Database,
   fixtureId: string,
 ) {
+  const db = DB;
+
   // 1) Obter o resultado oficial do jogo
-  const fx = await DB.prepare(
-    `
+  const fx = await db
+    .prepare(
+      `
       SELECT id, home_score, away_score
       FROM fixtures
       WHERE id = ?
       LIMIT 1
     `,
-  )
+    )
     .bind(fixtureId)
     .first<{ id: string; home_score: number | null; away_score: number | null }>();
 
+  // Se não houver resultado, limpamos os pontos (para não ficar lixo antigo)
   if (!fx || fx.home_score == null || fx.away_score == null) {
+    await db
+      .prepare(
+        `
+        UPDATE predictions
+        SET points = NULL
+        WHERE fixture_id = ?
+      `,
+      )
+      .bind(fixtureId)
+      .run();
     return;
   }
 
+  const { home_score, away_score } = fx;
+
   // 2) Buscar marcadores reais desse jogo + posição
-  const { results: scorerRows } = await DB.prepare(
-    `
+  const { results: scorerRows } = await db
+    .prepare(
+      `
       SELECT fs.player_id, p.position
       FROM fixture_scorers fs
       LEFT JOIN players p ON p.id = fs.player_id
       WHERE fs.fixture_id = ?
     `,
-  )
+    )
     .bind(fixtureId)
     .all<{ player_id: string; position: string | null }>();
 
+  // Mapa player_id -> bónus por posição
   const bonusByPlayer = new Map<string, number>();
   for (const r of scorerRows ?? []) {
     const bonus = scorerBonusForPosition(r.position);
@@ -66,55 +84,58 @@ export async function recomputePointsForFixture(
   }
 
   // 3) Ir buscar as predictions desse jogo (inclui scorer_player_id)
-  const { results } = await DB.prepare(
-    `
+  const { results: preds } = await db
+    .prepare(
+      `
       SELECT
+        id,
         user_id,
         fixture_id,
         home_goals,
         away_goals,
-        scorer_player_id,
-        points
+        scorer_player_id
       FROM predictions
       WHERE fixture_id = ?
     `,
-  )
+    )
     .bind(fixtureId)
     .all<{
+      id: string;
       user_id: string;
       fixture_id: string;
       home_goals: number | null;
       away_goals: number | null;
       scorer_player_id: string | number | null;
-      points: number | null;
     }>();
 
   // 4) Calcular pontos UEFA + bónus marcador e gravar em points
-  for (const p of results ?? []) {
+  for (const p of preds ?? []) {
+    // Pontos base (tendência + golos casa + golos fora + diferença)
     const s = scoreUEFA(
       p.home_goals,
       p.away_goals,
-      fx.home_score,
-      fx.away_score,
+      home_score,
+      away_score,
     );
 
     let pts = s.points;
 
+    // Bónus por marcador acertado (se o jogador previsto tiver marcado)
     if (p.scorer_player_id != null) {
       const key = String(p.scorer_player_id);
       const bonus = bonusByPlayer.get(key) ?? 0;
       pts += bonus;
     }
 
-    await DB.prepare(
-      `
+    await db
+      .prepare(
+        `
         UPDATE predictions
         SET points = ?
-        WHERE user_id = ?
-          AND fixture_id = ?
+        WHERE id = ?
       `,
-    )
-      .bind(pts, p.user_id, p.fixture_id)
+      )
+      .bind(pts, p.id)
       .run();
   }
 }

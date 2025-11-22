@@ -196,7 +196,7 @@ export default function RegrasPage() {
           />
           <CtaButton
             label="Criar conta Betano"
-            href="https://gml-grp.com/C.ashx?btag=a_15985b_289c_&affid=5177&siteid=15985&adid=289&c=&asclurl=https://promos.betano.pt/confia-fcporto/index.html?cod=MAISFCP"
+            href="https://clica.ai/1jvj8RZ"
           />
         </div>
       </section>

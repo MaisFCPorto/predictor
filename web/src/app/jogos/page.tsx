@@ -191,17 +191,13 @@ export default function JogosPage() {
     })();
   }, []);
 
-  // --- carregar predictions do utilizador ---
-// --- carregar predictions do utilizador ---
+ // --- carregar predictions do utilizador ---
 useEffect(() => {
   let abort = false;
 
   (async () => {
     try {
-      // ⏳ ainda a carregar sessão -> não faz nada
-      if (authLoading) return;
-
-      // sem user depois de carregar auth -> limpa predictions e sai
+      // ⚠️ sem user → limpa e sai
       if (!userId) {
         if (!abort) setPredictions({});
         return;
@@ -259,8 +255,7 @@ useEffect(() => {
         const fixtureKey = String((p as any).fixture_id);
         const h = (p as any).home_goals;
         const a = (p as any).away_goals;
-        const pts =
-          (p as any).points ?? (p as any).uefa_points ?? null;
+        const pts = (p as any).points ?? (p as any).uefa_points ?? null;
         const scorerRaw = (p as any).scorer_player_id;
 
         let scorerId: string | null = null;
@@ -297,7 +292,8 @@ useEffect(() => {
   return () => {
     abort = true;
   };
-}, [userId, authLoading]);
+}, [userId]);
+
 
 
   // --- carregar lista de jogadores (com fallback admin) ---

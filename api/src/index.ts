@@ -75,6 +75,9 @@ app.get('/routes', (c) =>
       '/api/admin/fixtures/porto',
       '/api/admin/competitions',
       '/api/admin/players',
+      '/api/admin/predictions',
+
+      
     ],
   }),
 );
@@ -89,7 +92,7 @@ app.route('/api/admin/fixtures', adminFixtureScorers);
 app.route('/api/auth', auth);
 app.route('/api/admin', admin);
 app.route('/api/admin/teams', adminTeams);
-app.route('/predictions', adminPredictions);
+app.route('api/admin/predictions', adminPredictions);
 
 
 // ----------------------------------------------------

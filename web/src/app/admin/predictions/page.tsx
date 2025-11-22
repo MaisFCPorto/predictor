@@ -268,7 +268,7 @@ function AdminPredictionsInner() {
                 let scorerLabel: string;
                 if (p.pred_scorer_name === null) {
                   // null == "ninguém" explicitamente escolhido
-                  scorerLabel = 'Ninguém';
+                  scorerLabel = '--';
                 } else if (!p.pred_scorer_name) {
                   scorerLabel = '-';
                 } else {

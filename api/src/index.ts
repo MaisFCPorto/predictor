@@ -76,6 +76,8 @@ app.get('/routes', (c) =>
       '/api/admin/competitions',
       '/api/admin/players',
       '/api/admin/predictions',
+      '/api/admin/users',
+
     ],
   }),
 );
@@ -561,6 +563,106 @@ app.get('/api/players', async (c) => {
 
   return c.json(results ?? []);
 });
+
+// ----------------------------------------------------
+// ADMIN: Users
+// ----------------------------------------------------
+app.get('/api/admin/users', async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+
+  const { results } = await all<{
+    id: string;
+    email: string | null;
+    name: string | null;
+    avatar_url: string | null;
+    role: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    last_login: string | null;
+  }>(
+    c.env.DB,
+    `
+    SELECT
+      id,
+      email,
+      name,
+      avatar_url,
+      role,
+      created_at,
+      updated_at,
+      last_login
+    FROM users
+    ORDER BY created_at DESC
+    `,
+  );
+
+  return c.json(results ?? []);
+});
+
+app.patch('/api/admin/users/:id', async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+
+  const id = c.req.param('id');
+  if (!id) return c.json({ error: 'missing_id' }, 400);
+
+  const body = (await c.req.json().catch(() => null)) as
+    | {
+        email?: string | null;
+        name?: string | null;
+        avatar_url?: string | null;
+        role?: string | null;
+      }
+    | null;
+
+  if (!body) return c.json({ error: 'invalid_json' }, 400);
+
+  await run(
+    c.env.DB,
+    `
+    UPDATE users
+    SET
+      email      = COALESCE(?, email),
+      name       = COALESCE(?, name),
+      avatar_url = COALESCE(?, avatar_url),
+      role       = COALESCE(?, role),
+      updated_at = DATETIME('now')
+    WHERE id = ?
+    `,
+    body.email ?? null,
+    body.name ?? null,
+    body.avatar_url ?? null,
+    body.role ?? null,
+    id,
+  );
+
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/users/:id', async (c) => {
+  const guard = requireAdmin(c);
+  if (guard) return guard;
+
+  const id = c.req.param('id');
+  if (!id) return c.json({ error: 'missing_id' }, 400);
+
+  // Opcional: apagar também as predictions desse user
+  await run(
+    c.env.DB,
+    `DELETE FROM predictions WHERE user_id = ?`,
+    id,
+  );
+
+  await run(
+    c.env.DB,
+    `DELETE FROM users WHERE id = ?`,
+    id,
+  );
+
+  return c.json({ ok: true });
+});
+
 
 // ----------------------------------------------------
 // ADMIN: Teams

@@ -9,6 +9,7 @@ import { adminTeams } from './routes/admin/teams';
 import { corsMiddleware } from './cors';
 import { auth } from './routes/auth';
 import { admin, recomputePointsForFixture } from './routes/admin';
+import { adminPredictions } from './routes/admin/predictions';
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -88,6 +89,8 @@ app.route('/api/admin/fixtures', adminFixtureScorers);
 app.route('/api/auth', auth);
 app.route('/api/admin', admin);
 app.route('/api/admin/teams', adminTeams);
+app.route('/predictions', adminPredictions);
+
 
 // ----------------------------------------------------
 // PUBLIC: Fixtures list

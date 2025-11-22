@@ -76,8 +76,6 @@ app.get('/routes', (c) =>
       '/api/admin/competitions',
       '/api/admin/players',
       '/api/admin/predictions',
-
-      
     ],
   }),
 );

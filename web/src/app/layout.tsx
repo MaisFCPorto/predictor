@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { supabasePKCE } from '@/utils/supabase/client';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 type UserInfo = {
   id: string;
@@ -537,6 +538,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </footer>
         <Analytics />
+        <SpeedInsights/> 
       </body>
     </html>
   );

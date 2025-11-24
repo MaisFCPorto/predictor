@@ -227,7 +227,6 @@ export default function JogosPage() {
         const res = await fetch(url, { cache: 'no-store' });
 
         const text = await res.text();
-        console.log('RAW /api/predictions text →', text);
 
         if (!res.ok) {
           throw new Error(
@@ -298,7 +297,6 @@ export default function JogosPage() {
         }
 
         if (!abort) {
-          console.log('PREDICTIONS MAP 👉', map);
           setPredictions(map);
         }
       } catch (err) {
@@ -382,7 +380,6 @@ export default function JogosPage() {
         position: String(p.position ?? ''),
       }));
 
-      console.log('PLAYERS NORMALIZED 👉', list);
       setPlayers(list);
     } catch (err) {
       console.error('Erro a carregar jogadores', err);

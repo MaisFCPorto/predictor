@@ -3843,13 +3843,6 @@ app.post("/api/predictions", async (c) => {
     } else if (typeof scorer_player_id === "number" && Number.isFinite(scorer_player_id)) {
       scorerId = String(scorer_player_id);
     }
-    console.log("POST /api/predictions payload", {
-      fixtureId,
-      home,
-      away,
-      userId,
-      scorerId
-    });
     const db = c.env.DB;
     const userExists = await db.prepare(`SELECT 1 FROM users WHERE id = ? LIMIT 1`).bind(userId).first();
     if (!userExists) return c.json({ error: "user_missing" }, 400);
@@ -3871,7 +3864,6 @@ app.post("/api/predictions", async (c) => {
         WHERE user_id = ? AND fixture_id = ?
       `
     ).bind(home, away, scorerId, userId, fixtureId).run();
-    console.log("POST /api/predictions UPDATE meta", updateRes.meta);
     let mode = "update";
     if (!updateRes.meta?.changes) {
       const insertRes = await db.prepare(
@@ -3891,7 +3883,6 @@ app.post("/api/predictions", async (c) => {
           )
         `
       ).bind(userId, fixtureId, home, away, scorerId).run();
-      console.log("POST /api/predictions INSERT meta", insertRes.meta);
       mode = "insert";
     }
     return c.json({ success: true, mode });
@@ -3926,10 +3917,6 @@ app.get("/api/predictions", async (c) => {
       scorer_player_id: r.scorer_player_id ?? null,
       scorerPlayerId: r.scorer_player_id ?? null
     }));
-    console.log(
-      "GET /api/predictions \u2192",
-      JSON.stringify(safe).slice(0, 200)
-    );
     return c.json(safe, 200);
   } catch (e) {
     console.error("GET /api/predictions error:", e);

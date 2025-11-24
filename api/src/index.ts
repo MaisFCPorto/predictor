@@ -368,14 +368,6 @@ app.post('/api/predictions', async (c) => {
       scorerId = String(scorer_player_id);
     }
 
-    console.log('POST /api/predictions payload', {
-      fixtureId,
-      home,
-      away,
-      userId,
-      scorerId,
-    });
-
     const db = c.env.DB;
 
     const userExists = await db
@@ -415,8 +407,6 @@ app.post('/api/predictions', async (c) => {
       .bind(home, away, scorerId, userId, fixtureId)
       .run();
 
-    console.log('POST /api/predictions UPDATE meta', updateRes.meta);
-
     let mode: 'update' | 'insert' = 'update';
 
     if (!updateRes.meta?.changes) {
@@ -441,7 +431,6 @@ app.post('/api/predictions', async (c) => {
         .bind(userId, fixtureId, home, away, scorerId)
         .run();
 
-      console.log('POST /api/predictions INSERT meta', insertRes.meta);
       mode = 'insert';
     }
 
@@ -489,11 +478,6 @@ app.get('/api/predictions', async (c) => {
       scorer_player_id: r.scorer_player_id ?? null,
       scorerPlayerId: r.scorer_player_id ?? null,
     }));
-
-    console.log(
-      'GET /api/predictions →',
-      JSON.stringify(safe).slice(0, 200),
-    );
 
     return c.json(safe, 200);
   } catch (e) {

@@ -187,6 +187,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
           const isAdmin = (user.user_metadata as any)?.role === 'admin';
 
+          console.log('[layout] getUser() → supabase user', {
+            id: user.id,
+            email: user.email,
+            metadata: user.user_metadata,
+            metadataRole: (user.user_metadata as any)?.role,
+            derivedIsAdmin: isAdmin,
+          });
+
           setUser({
             id: user.id,
             name: friendlyName,
@@ -213,6 +221,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           'Jogador';
 
         const isAdmin = (authUser.user_metadata as any)?.role === 'admin';
+
+        console.log('[layout] onAuthStateChange → supabase user', {
+          id: authUser.id,
+          email: authUser.email,
+          metadata: authUser.user_metadata,
+          metadataRole: (authUser.user_metadata as any)?.role,
+          derivedIsAdmin: isAdmin,
+        });
 
         setUser({
           id: authUser.id,

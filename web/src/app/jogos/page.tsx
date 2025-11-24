@@ -217,10 +217,14 @@ export default function JogosPage() {
           return;
         }
 
-        const res = await fetch(
-          `/api/predictions?userId=${encodeURIComponent(userId)}`,
-          { cache: 'no-store' },
-        );
+        const base = API_BASE && API_BASE.length > 0
+          ? API_BASE.replace(/\/+$/, '')
+          : '';
+        const url = base
+          ? `${base}/api/predictions?userId=${encodeURIComponent(userId)}`
+          : `/api/predictions?userId=${encodeURIComponent(userId)}`;
+
+        const res = await fetch(url, { cache: 'no-store' });
 
         const text = await res.text();
         console.log('RAW /api/predictions text →', text);

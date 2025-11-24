@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import { supabasePKCE } from '@/utils/supabase/client';
 
 type Row = {
   user_id: string;
@@ -147,6 +148,9 @@ function RankingsPageInner() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
 
   // Carrega meses (para o modo mensal)
   useEffect(() => {
@@ -160,6 +164,16 @@ function RankingsPageInner() {
         }
       })
       .catch(() => setMonths([]));
+  }, []);
+
+  // Obtém utilizador autenticado (para destacar a própria linha no ranking)
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await supabasePKCE.auth.getUser();
+      setUserId(user ? user.id : null);
+    })();
   }, []);
 
   // Carrega lista de jogos (para o modo por jogo)
@@ -190,10 +204,26 @@ function RankingsPageInner() {
     setLoading(true);
     setErr(null);
     fetchJson(url)
-      .then((data: Row[]) => setRows(Array.isArray(data) ? data : []))
+      .then((data: Row[]) => {
+        const arr = Array.isArray(data) ? data : [];
+        setRows(arr);
+
+        // Ajusta página inicial para a que contém o utilizador autenticado
+        if (userId && arr.length > 0) {
+          const idx = arr.findIndex((r) => r.user_id === userId);
+          if (idx >= 0) {
+            const newPage = Math.floor(idx / pageSize) + 1;
+            setPage(newPage);
+            return;
+          }
+        }
+
+        // fallback: primeira página
+        setPage(1);
+      })
       .catch((e: any) => setErr(e?.message ?? 'Erro a carregar ranking'))
       .finally(() => setLoading(false));
-  }, [mode, ym, fixtureId]);
+  }, [mode, ym, fixtureId, userId]);
 
   const pageTitle = 'Rankings';
   const cardTitle = useMemo(() => {
@@ -207,6 +237,14 @@ function RankingsPageInner() {
     () => games.find((x) => x.id === fixtureId) || null,
     [games, fixtureId]
   );
+
+  const paginatedRows = useMemo(() => {
+    if (!rows || rows.length === 0) return [];
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, page, pageSize]);
+
+  const totalPages = rows.length === 0 ? 1 : Math.ceil(rows.length / pageSize);
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -319,11 +357,21 @@ function RankingsPageInner() {
               </div>
             ) : (
               <ul className="divide-y divide-white/10">
-                {rows.map((r, i) => (
-                  <li key={`${r.user_id}-${i}`} className="px-5 py-4">
+                {paginatedRows.map((r, i) => {
+                  const pos = (page - 1) * pageSize + i + 1;
+                  return (
+                  <li
+                    key={`${r.user_id}-${i}`}
+                    className={
+                      'px-5 py-4 transition ' +
+                      (userId && r.user_id === userId
+                        ? 'border-l-4 border-amber-400 shadow-[0_0_0_1px_rgba(251,191,36,0.5)]'
+                        : '')
+                    }
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-6 shrink-0 text-right tabular-nums text-white/80">
-                        {i + 1}
+                        {pos}
                       </div>
                       <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 text-sm font-semibold text-white/90">
                         {r.avatar_url ? (
@@ -338,7 +386,14 @@ function RankingsPageInner() {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">
+                        <div
+                          className={
+                            'truncate ' +
+                            (userId && r.user_id === userId
+                              ? 'font-bold text-base text-amber-50'
+                              : 'font-medium')
+                          }
+                        >
                           {r.name ?? 'Jogador'}
                         </div>
                         <div className="mt-0.5 text-xs text-white/60">
@@ -346,13 +401,45 @@ function RankingsPageInner() {
                           {r.scorer_hits ?? 0}
                         </div>
                       </div>
-                      <div className="ml-auto rounded-full bg-white/10 px-3 py-1 text-sm font-semibold tabular-nums">
+                      <div
+                        className={
+                          'ml-auto rounded-full bg-white/10 px-3 py-1 tabular-nums ' +
+                          (userId && r.user_id === userId
+                            ? 'text-base font-bold text-amber-50'
+                            : 'text-sm font-semibold')
+                        }
+                      >
                         {r.points}
                       </div>
                     </div>
                   </li>
-                ))}
+                );
+                })}
               </ul>
+            )}
+
+            {rows.length > pageSize && (
+              <div className="flex items-center justify-between border-t border-white/10 px-5 py-3 text-xs text-white/70">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="rounded-full border border-white/15 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                <span>
+                  Página {page} de {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="rounded-full border border-white/15 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Seguinte
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -420,12 +507,19 @@ function RankingsPageInner() {
                       </td>
                     </tr>
                   ) : (
-                    rows.map((r, i) => (
-                      <tr
-                        key={`${r.user_id}-${i}`}
-                        className="border-t border-white/10 odd:bg-white/[0.02] hover:bg-white/[0.05]"
-                      >
-                        <td className="px-5 py-3 tabular-nums w-12">{i + 1}</td>
+                    paginatedRows.map((r, i) => {
+                      const pos = (page - 1) * pageSize + i + 1;
+                      return (
+                        <tr
+                          key={`${r.user_id}-${i}`}
+                          className={
+                            'border-t border-white/10 odd:bg-white/[0.02] hover:bg-white/[0.05] transition ' +
+                            (userId && r.user_id === userId
+                              ? 'ring-2 ring-amber-400/90'
+                              : '')
+                          }
+                        >
+                          <td className="px-5 py-3 tabular-nums w-12">{pos}</td>
                         <td className="px-5 py-3">
                           <div className="flex min-w-0 items-center gap-3">
                             <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-xs font-semibold text-white/90">
@@ -440,13 +534,27 @@ function RankingsPageInner() {
                                 <span>{initials(r.name)}</span>
                               )}
                             </div>
-                            <span className="font-medium truncate block max-w-[28ch]">
+                            <span
+                              className={
+                                'truncate block max-w-[28ch] ' +
+                                (userId && r.user_id === userId
+                                  ? 'font-bold text-[0.95rem] text-amber-50'
+                                  : 'font-medium')
+                              }
+                            >
                               {r.name ?? 'Jogador'}
                             </span>
                           </div>
                         </td>
                         <td className="px-5 py-3 text-right whitespace-nowrap">
-                          <span className="inline-block rounded-full bg-white/10 px-2.5 py-1 text-white font-semibold tabular-nums">
+                          <span
+                            className={
+                              'inline-block rounded-full bg-white/10 px-2.5 py-1 tabular-nums ' +
+                              (userId && r.user_id === userId
+                                ? 'text-base font-bold text-amber-50'
+                                : 'text-white font-semibold')
+                            }
+                          >
                             {r.points}
                           </span>
                         </td>
@@ -463,11 +571,35 @@ function RankingsPageInner() {
                           {r.winner}
                         </td>
                       </tr>
-                    ))
+                    );
+                    })
                   )}
                 </tbody>
               </table>
             </div>
+            {rows.length > pageSize && (
+              <div className="flex items-center justify-between border-t border-white/10 px-5 py-3 text-xs text-white/70">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="rounded-full border border-white/15 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                <span>
+                  Página {page} de {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="rounded-full border border-white/15 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Seguinte
+                </button>
+              </div>
+            )}
           </div>
         )}
 

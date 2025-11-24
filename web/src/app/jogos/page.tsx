@@ -55,15 +55,29 @@ type RankRow = {
   winner: number;
 };
 
+type GameLite = {
+  id: string;
+  kickoff_at: string;
+  home_team_name: string;
+  away_team_name: string;
+  competition_code?: string | null;
+  round_label?: string | null;
+};
+
 type LastPoints =
   | {
-      points: number;
-      exact: number;
-      diff: number;
-      winner: number;
-      position: number | null;
-      fixture?: { id: string; kickoff_at: string } | null;
-    }
+    points: number;
+    exact: number;
+    diff: number;
+    winner: number;
+    position: number | null;
+    fixture?: {
+      id: string;
+      kickoff_at: string;
+      home_team_name?: string | null;
+      away_team_name?: string | null;
+    } | null;
+  }
   | null;
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
@@ -74,8 +88,7 @@ async function fetchJson(url: string) {
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(
-      `${url} → (${res.status}) ${res.statusText}${
-        txt ? ` — ${txt.slice(0, 140)}…` : ''
+      `${url} → (${res.status}) ${res.statusText}${txt ? ` — ${txt.slice(0, 140)}…` : ''
       }`,
     );
   }
@@ -139,6 +152,7 @@ export default function JogosPage() {
 
   const [lastPoints, setLastPoints] = useState<LastPoints>(null);
   const [summaryErr, setSummaryErr] = useState<string | null>(null);
+  const [lastGameLabel, setLastGameLabel] = useState<string | null>(null);
 
   // --- predictions for current user (by fixture id) ---
   const [predictions, setPredictions] = useState<
@@ -181,7 +195,7 @@ export default function JogosPage() {
             name: friendly,
             avatar_url: (user.user_metadata as any)?.avatar_url ?? null,
           }),
-        }).catch(() => {});
+        }).catch(() => { });
       } else {
         setUserId(null);
         setUserName('Convidado');
@@ -191,110 +205,140 @@ export default function JogosPage() {
     })();
   }, []);
 
- // --- carregar predictions do utilizador ---
-useEffect(() => {
-  let abort = false;
+  // --- carregar predictions do utilizador ---
+  useEffect(() => {
+    let abort = false;
 
-  (async () => {
-    try {
-      // ⚠️ sem user → limpa e sai
-      if (!userId) {
-        if (!abort) setPredictions({});
-        return;
-      }
-
-      const res = await fetch(
-        `/api/predictions?userId=${encodeURIComponent(userId)}`,
-        { cache: 'no-store' },
-      );
-
-      const text = await res.text();
-      console.log('RAW /api/predictions text →', text);
-
-      if (!res.ok) {
-        throw new Error(
-          `HTTP ${res.status} ${res.statusText} em /api/predictions`,
-        );
-      }
-
-      let list: any;
+    (async () => {
       try {
-        const start = text.indexOf('[');
-        const end = text.lastIndexOf(']');
-        if (start === -1 || end === -1 || end <= start) {
-          throw new Error('Formato inesperado da resposta');
+        // ⚠️ sem user → limpa e sai
+        if (!userId) {
+          if (!abort) setPredictions({});
+          return;
         }
-        const jsonSlice = text.slice(start, end + 1);
-        list = JSON.parse(jsonSlice);
-      } catch (e) {
-        console.error('Falha a extrair JSON de /api/predictions', e);
-        throw new Error(
-          'Resposta não-JSON de /api/predictions (ver RAW no console)',
+
+        const res = await fetch(
+          `/api/predictions?userId=${encodeURIComponent(userId)}`,
+          { cache: 'no-store' },
         );
-      }
 
-      const arr: PredictionDTO[] = Array.isArray(list)
-        ? list
-        : Array.isArray(list?.items)
-        ? list.items
-        : [];
+        const text = await res.text();
+        console.log('RAW /api/predictions text →', text);
 
-      const map: Record<
-        string,
-        {
-          home: number;
-          away: number;
-          points: number | null;
-          scorer_player_id: string | null;
-        }
-      > = {};
-
-      for (const p of arr) {
-        if (!p || typeof (p as any).fixture_id === 'undefined') continue;
-
-        const fixtureKey = String((p as any).fixture_id);
-        const h = (p as any).home_goals;
-        const a = (p as any).away_goals;
-        const pts = (p as any).points ?? (p as any).uefa_points ?? null;
-        const scorerRaw = (p as any).scorer_player_id;
-
-        let scorerId: string | null = null;
-        if (typeof scorerRaw === 'string') {
-          const t = scorerRaw.trim();
-          scorerId = t || null;
-        } else if (
-          typeof scorerRaw === 'number' &&
-          Number.isFinite(scorerRaw)
-        ) {
-          scorerId = String(scorerRaw);
+        if (!res.ok) {
+          throw new Error(
+            `HTTP ${res.status} ${res.statusText} em /api/predictions`,
+          );
         }
 
-        if (typeof h === 'number' && typeof a === 'number') {
-          map[fixtureKey] = {
-            home: h,
-            away: a,
-            points: typeof pts === 'number' ? pts : null,
-            scorer_player_id: scorerId,
-          };
+        let list: any;
+        try {
+          const start = text.indexOf('[');
+          const end = text.lastIndexOf(']');
+          if (start === -1 || end === -1 || end <= start) {
+            throw new Error('Formato inesperado da resposta');
+          }
+          const jsonSlice = text.slice(start, end + 1);
+          list = JSON.parse(jsonSlice);
+        } catch (e) {
+          console.error('Falha a extrair JSON de /api/predictions', e);
+          throw new Error(
+            'Resposta não-JSON de /api/predictions (ver RAW no console)',
+          );
         }
+
+        const arr: PredictionDTO[] = Array.isArray(list)
+          ? list
+          : Array.isArray(list?.items)
+            ? list.items
+            : [];
+
+        const map: Record<
+          string,
+          {
+            home: number;
+            away: number;
+            points: number | null;
+            scorer_player_id: string | null;
+          }
+        > = {};
+
+        for (const p of arr) {
+          if (!p || typeof (p as any).fixture_id === 'undefined') continue;
+
+          const fixtureKey = String((p as any).fixture_id);
+          const h = (p as any).home_goals;
+          const a = (p as any).away_goals;
+          const pts = (p as any).points ?? (p as any).uefa_points ?? null;
+          const scorerRaw = (p as any).scorer_player_id;
+
+          let scorerId: string | null = null;
+          if (typeof scorerRaw === 'string') {
+            const t = scorerRaw.trim();
+            scorerId = t || null;
+          } else if (
+            typeof scorerRaw === 'number' &&
+            Number.isFinite(scorerRaw)
+          ) {
+            scorerId = String(scorerRaw);
+          }
+
+          if (typeof h === 'number' && typeof a === 'number') {
+            map[fixtureKey] = {
+              home: h,
+              away: a,
+              points: typeof pts === 'number' ? pts : null,
+              scorer_player_id: scorerId,
+            };
+          }
+        }
+
+        if (!abort) {
+          console.log('PREDICTIONS MAP 👉', map);
+          setPredictions(map);
+        }
+      } catch (err) {
+        console.error('Erro a carregar predictions', err);
+        if (!abort) setPredictions({});
       }
+    })();
 
-      if (!abort) {
-        console.log('PREDICTIONS MAP 👉', map);
-        setPredictions(map);
+    return () => {
+      abort = true;
+    };
+  }, [userId]);
+
+  // --- carregar info do último jogo para label (Home x Away) ---
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      try {
+        const fixtureId = lastPoints?.fixture?.id;
+        if (!fixtureId) {
+          if (!abort) setLastGameLabel(null);
+          return;
+        }
+
+        const list = (await fetchJson('/api/rankings/games')) as GameLite[];
+        if (abort) return;
+
+        const arr = Array.isArray(list) ? list : [];
+        const g = arr.find((x) => x.id === fixtureId) || null;
+
+        if (!abort) {
+          setLastGameLabel(
+            g ? `${g.home_team_name} x ${g.away_team_name}` : null,
+          );
+        }
+      } catch {
+        if (!abort) setLastGameLabel(null);
       }
-    } catch (err) {
-      console.error('Erro a carregar predictions', err);
-      if (!abort) setPredictions({});
-    }
-  })();
+    })();
 
-  return () => {
-    abort = true;
-  };
-}, [userId]);
-
-
+    return () => {
+      abort = true;
+    };
+  }, [lastPoints?.fixture?.id]);
 
   // --- carregar lista de jogadores (com fallback admin) ---
   async function loadPlayers() {
@@ -609,8 +653,8 @@ useEffect(() => {
   const linkMonthly = `/rankings?mode=monthly&ym=${encodeURIComponent(ym)}`;
   const linkByGame = lastPoints?.fixture?.id
     ? `/rankings?mode=bygame&fixtureId=${encodeURIComponent(
-        lastPoints.fixture.id,
-      )}`
+      lastPoints.fixture.id,
+    )}`
     : null;
 
   const CardLink = ({ href, children, aria }: CardLinkProps) => {
@@ -643,7 +687,7 @@ useEffect(() => {
             </div>
           ) : userId ? (
             <>
-              <div className="text-sm opacity-80">Bem-vindo,</div>
+              <div className="text-sm opacity-80">Bem-vind@,</div>
               <h1 className="text-3xl font-bold tracking-tight text-gradient">
                 {userName}
               </h1>
@@ -656,11 +700,15 @@ useEffect(() => {
                   <div className="text-xs opacity-75">
                     Classificação Geral
                   </div>
+                  {/* linha extra invisível para alinhar cards em mobile */}
+                  <div className="mt-1 text-xs opacity-0 select-none md:hidden">
+                    placeholder
+                  </div>
                   <div className="mt-1 text-2xl sm:text-3xl font-bold">
                     {genPos == null ? '—' : `#${genPos}`}
                   </div>
                   <div className="mt-1 text-xs opacity-75">
-                    Pontos: {genPoints == null ? '—' : genPoints}
+                    {genPoints == null ? '—' : genPoints} Pontos
                   </div>
                 </CardLink>
 
@@ -669,13 +717,13 @@ useEffect(() => {
                   aria="Ir para o ranking mensal"
                 >
                   <div className="text-xs opacity-75">
-                    Classificação Mensal - {formatYmLabel(ym)}
+                    Classificação Mensal: {formatYmLabel(ym)}
                   </div>
                   <div className="mt-1 text-2xl sm:text-3xl font-bold">
                     {monPos == null ? '—' : `#${monPos}`}
                   </div>
                   <div className="mt-1 text-xs opacity-75">
-                    Pontos: {monPoints == null ? '—' : monPoints}
+                    {monPoints == null ? '—' : monPoints} Pontos
                   </div>
                 </CardLink>
 
@@ -684,23 +732,20 @@ useEffect(() => {
                   aria="Ir para o ranking do último jogo"
                 >
                   <div className="text-xs opacity-75">
-                    Último Jogo
+                     {lastGameLabel
+                      ? `Último Jogo: ${lastGameLabel}`
+                      : 'Último Jogo'}
                   </div>
                   <div className="mt-1 text-2xl sm:text-3xl font-bold">
-                    {lastPoints == null
+                    {lastPoints == null || lastPoints.position == null
                       ? '—'
-                      : `${lastPoints.points ?? 0} pts`}
+                      : `#${lastPoints.position}`}
                   </div>
                   <div className="mt-1 text-xs opacity-75">
-                    {lastPoints?.position
-                      ? `Posição: #${lastPoints.position}`
-                      : 'Sem palpite'}
+                    {lastPoints == null
+                      ? 'Sem palpite'
+                      : `${lastPoints.points ?? 0} Pontos`}
                   </div>
-                  {!!lastPoints?.fixture && (
-                    <div className="mt-1 text-[11px] opacity-60">
-                      Jogo: {lastPoints.fixture.id}
-                    </div>
-                  )}
                 </CardLink>
               </div>
 

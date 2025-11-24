@@ -9,6 +9,8 @@ import { supabasePKCE } from '@/utils/supabase/client';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from "@vercel/speed-insights/next"
 
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
+
 type UserInfo = {
   id: string;
   name: string | null;
@@ -185,13 +187,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             user.email?.split('@')[0] ??
             'Jogador';
 
-          const isAdmin = (user.user_metadata as any)?.role === 'admin';
+          const base = API_BASE ? API_BASE.replace(/\/+$/, '') : '';
+          const url = base
+            ? `${base}/api/users/${encodeURIComponent(user.id)}/role`
+            : `/api/users/${encodeURIComponent(user.id)}/role`;
+
+          let roleFromApi: string | null = null;
+          try {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (res.ok) {
+              const json = await res.json().catch(() => ({} as any));
+              roleFromApi = typeof json.role === 'string' ? json.role : null;
+            }
+          } catch {
+          }
+
+          const metaIsAdmin = (user.user_metadata as any)?.role === 'admin';
+          const isAdmin = metaIsAdmin || roleFromApi === 'admin';
 
           console.log('[layout] getUser() → supabase user', {
             id: user.id,
             email: user.email,
             metadata: user.user_metadata,
             metadataRole: (user.user_metadata as any)?.role,
+            roleFromApi,
             derivedIsAdmin: isAdmin,
           });
 
@@ -210,7 +229,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       }
     })();
 
-    const { data } = supabasePKCE.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabasePKCE.auth.onAuthStateChange(async (_event, session) => {
       if (ignore) return;
 
       const authUser = session?.user ?? null;
@@ -220,13 +239,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           authUser.email?.split('@')[0] ??
           'Jogador';
 
-        const isAdmin = (authUser.user_metadata as any)?.role === 'admin';
+        const base = API_BASE ? API_BASE.replace(/\/+$/, '') : '';
+        const url = base
+          ? `${base}/api/users/${encodeURIComponent(authUser.id)}/role`
+          : `/api/users/${encodeURIComponent(authUser.id)}/role`;
+
+        let roleFromApi: string | null = null;
+        try {
+          const res = await fetch(url, { cache: 'no-store' });
+          if (res.ok) {
+            const json = await res.json().catch(() => ({} as any));
+            roleFromApi = typeof json.role === 'string' ? json.role : null;
+          }
+        } catch {
+        }
+
+        const metaIsAdmin = (authUser.user_metadata as any)?.role === 'admin';
+        const isAdmin = metaIsAdmin || roleFromApi === 'admin';
 
         console.log('[layout] onAuthStateChange → supabase user', {
           id: authUser.id,
           email: authUser.email,
           metadata: authUser.user_metadata,
           metadataRole: (authUser.user_metadata as any)?.role,
+          roleFromApi,
           derivedIsAdmin: isAdmin,
         });
 

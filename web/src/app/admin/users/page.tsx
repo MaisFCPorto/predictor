@@ -84,6 +84,10 @@ function AdminUsersInner() {
   const [roleFilter, setRoleFilter] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<EditableUser | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const [sortKey, setSortKey] = useState<'name' | 'email' | 'last_login' | 'created_at'>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const notify = (m: string) => {
     setMsg(m);
@@ -191,7 +195,7 @@ function AdminUsersInner() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return users.filter((u) => {
+    const base = users.filter((u) => {
       const inRole = !roleFilter || (u.role ?? 'user') === roleFilter;
       const inQuery =
         !q ||
@@ -200,7 +204,36 @@ function AdminUsersInner() {
         u.id.toLowerCase().includes(q);
       return inRole && inQuery;
     });
-  }, [users, query, roleFilter]);
+
+    const sorted = [...base].sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+
+      if (sortKey === 'name') {
+        const av = (a.name ?? '').toLowerCase();
+        const bv = (b.name ?? '').toLowerCase();
+        return av.localeCompare(bv) * dir;
+      }
+
+      if (sortKey === 'email') {
+        const av = (a.email ?? '').toLowerCase();
+        const bv = (b.email ?? '').toLowerCase();
+        return av.localeCompare(bv) * dir;
+      }
+
+      if (sortKey === 'last_login') {
+        const at = a.last_login ? new Date(a.last_login).getTime() : 0;
+        const bt = b.last_login ? new Date(b.last_login).getTime() : 0;
+        return (at - bt) * dir;
+      }
+
+      // created_at
+      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return (at - bt) * dir;
+    });
+
+    return sorted;
+  }, [users, query, roleFilter, sortKey, sortDir]);
 
   const totalAdmins = useMemo(
     () => users.filter((u) => (u.role ?? 'user') === 'admin').length,
@@ -208,6 +241,19 @@ function AdminUsersInner() {
   );
 
   const totalUsers = users.length;
+
+  // reset página quando mudam filtros ou dados
+  useEffect(() => {
+    setPage(1);
+  }, [query, roleFilter, users.length, sortKey, sortDir]);
+
+  const paginated = useMemo(() => {
+    if (!filtered || filtered.length === 0) return [];
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  const totalPages = filtered.length === 0 ? 1 : Math.ceil(filtered.length / pageSize);
 
   /* -------------------- Render -------------------- */
 
@@ -303,20 +349,68 @@ function AdminUsersInner() {
           <table className="min-w-full text-sm">
             <thead className="border-b border-white/10 bg-black/40">
               <tr>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/50">
-                  Nome
+                <th
+                  className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/50 cursor-pointer select-none"
+                  onClick={() => {
+                    setSortKey('name');
+                    setSortDir((prev) => (sortKey === 'name' && prev === 'asc' ? 'desc' : 'asc'));
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Nome
+                    {sortKey === 'name' && (
+                      <span>{sortDir === 'asc' ? '▲' : '▼'}</span>
+                    )}
+                  </span>
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/50">
-                  Email
+                <th
+                  className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/50 cursor-pointer select-none"
+                  onClick={() => {
+                    setSortKey('email');
+                    setSortDir((prev) => (sortKey === 'email' && prev === 'asc' ? 'desc' : 'asc'));
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Email
+                    {sortKey === 'email' && (
+                      <span>{sortDir === 'asc' ? '▲' : '▼'}</span>
+                    )}
+                  </span>
                 </th>
                 <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/50">
                   Role
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/50">
-                  Último login
+                <th
+                  className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/50 cursor-pointer select-none"
+                  onClick={() => {
+                    setSortKey('last_login');
+                    setSortDir((prev) =>
+                      sortKey === 'last_login' && prev === 'asc' ? 'desc' : 'asc',
+                    );
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Último login
+                    {sortKey === 'last_login' && (
+                      <span>{sortDir === 'asc' ? '▲' : '▼'}</span>
+                    )}
+                  </span>
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/50">
-                  Criado em
+                <th
+                  className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/50 cursor-pointer select-none"
+                  onClick={() => {
+                    setSortKey('created_at');
+                    setSortDir((prev) =>
+                      sortKey === 'created_at' && prev === 'asc' ? 'desc' : 'asc',
+                    );
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    Criado em
+                    {sortKey === 'created_at' && (
+                      <span>{sortDir === 'asc' ? '▲' : '▼'}</span>
+                    )}
+                  </span>
                 </th>
                 <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-white/50">
                   Ações
@@ -335,7 +429,7 @@ function AdminUsersInner() {
                 </tr>
               )}
 
-              {filtered.map((u, idx) => {
+              {paginated.map((u, idx) => {
                 const isEditing = editingId === u.id;
                 const draft = editDraft || {
                   name: u.name ?? '',
@@ -474,6 +568,30 @@ function AdminUsersInner() {
           </table>
         </div>
       </div>
+
+      {filtered.length > pageSize && (
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-white/70">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="rounded-full border border-white/15 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Anterior
+          </button>
+          <span>
+            Página {page} de {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="rounded-full border border-white/15 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Seguinte
+          </button>
+        </div>
+      )}
 
       {/* Toast simples */}
       {msg && (

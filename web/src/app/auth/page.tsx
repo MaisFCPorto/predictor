@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabasePKCE } from '@/utils/supabase/client';
 import clsx from 'clsx';
@@ -27,14 +27,60 @@ export default function AuthPage() {
   const [forgotMsg, setForgotMsg] = useState<string | null>(null);
   const [forgotErr, setForgotErr] = useState<string | null>(null);
 
+  // Estado de sessão (para blindar a página)
+  const [user, setUser] = useState<any | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  // Carregar sessão atual ao entrar na página
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSession() {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (!cancelled) {
+          setUser(data.user ?? null);
+        }
+      } catch {
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setCheckingSession(false);
+      }
+    }
+
+    void loadSession();
+
+    // Listener para mudanças de auth (login/logout noutra aba, etc.)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null); setOk(null);
+    setErr(null);
+    setOk(null);
     setLoading(true);
     try {
       if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
         if (error) throw error;
+
+        // marca sessão para o redirect da home
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('session', '1');
+        }
+
         router.push('/jogos');
       } else {
         if (!agree) throw new Error('Tens de aceitar as regras do passatempo.');
@@ -49,7 +95,9 @@ export default function AuthPage() {
           },
         });
         if (error) throw error;
-        setOk('Conta criada! Verifica o teu email se for necessário confirmar.');
+        setOk(
+          'Conta criada! Verifica o teu email se for necessário confirmar.'
+        );
         setMode('login');
         setAgree(false);
       }
@@ -64,13 +112,18 @@ export default function AuthPage() {
     try {
       setErr(null);
       if (mode === 'signup' && !agree) {
-        throw new Error('Para continuares com Google no registo, tens de aceitar as regras.');
+        throw new Error(
+          'Para continuares com Google no registo, tens de aceitar as regras.'
+        );
       }
 
       setLoading(true);
 
       if (mode === 'signup') {
-        sessionStorage.setItem('accepted_rules_at', new Date().toISOString());
+        sessionStorage.setItem(
+          'accepted_rules_at',
+          new Date().toISOString()
+        );
       }
 
       const redirectTo = `${window.location.origin}/auth/callback`;
@@ -99,8 +152,7 @@ export default function AuthPage() {
 
     setForgotLoading(true);
     try {
-      const redirectTo =
-        `${window.location.origin}/reset-password`;
+      const redirectTo = `${window.location.origin}/reset-password`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo,
@@ -109,7 +161,9 @@ export default function AuthPage() {
       if (error) {
         setForgotErr(error.message || 'Não foi possível enviar o email.');
       } else {
-        setForgotMsg('Se existir uma conta com esse email, enviámos um link de recuperação.');
+        setForgotMsg(
+          'Se existir uma conta com esse email, enviámos um link de recuperação.'
+        );
       }
     } catch (e: any) {
       setForgotErr(e?.message || 'Erro ao enviar email.');
@@ -118,13 +172,90 @@ export default function AuthPage() {
     }
   }
 
-  const submitDisabled =
-    loading || (mode === 'signup' && (!agree || !email || !password || !name));
+  async function handleLogout() {
+    try {
+      await supabase.auth.signOut();
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('session');
+      }
+      setUser(null);
+      router.replace('/auth');
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
+  const submitDisabled =
+    loading ||
+    (mode === 'signup' && (!agree || !email || !password || !name));
+
+  // Enquanto verifica sessão, mostra só o card "carregar"
+  if (checkingSession) {
+    return (
+      <main className="mx-auto max-w-lg px-6 py-10 md:py-16">
+        <div className="relative rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8 shadow-[0_8px_40px_rgba(0,0,0,0.35)]">
+          <div className="mb-6 text-center">
+            <img src="/logobranco.png" className="h-14 mx-auto mb-2" />
+            <p className="mt-1 text-sm text-white/70">
+              A carregar sessão...
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // ------- Se JÁ estiver autenticado: bloquear form e mostrar ações -------
+  if (user) {
+    const displayName =
+      (user.user_metadata && user.user_metadata.name) ||
+      user.email ||
+      'Jogador';
+
+    return (
+      <main className="mx-auto max-w-lg px-6 py-10 md:py-16">
+        <div className="relative rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8 shadow-[0_8px_40px_rgba(0,0,0,0.35)]">
+          <div className="mb-6 text-center">
+            <img src="/logobranco.png" className="h-14 mx-auto mb-2" />
+            <p className="mt-1 text-sm text-white/70">
+              Já estás autenticado como{' '}
+              <span className="font-semibold text-white">{displayName}</span>.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={() => router.push('/jogos')}
+              className="w-full rounded-xl bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/20"
+            >
+              Ir para jogos
+            </button>
+            <button
+              onClick={handleLogout}
+              className="w-full rounded-xl bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+            >
+              Terminar sessão
+            </button>
+          </div>
+
+          <div className="mt-6 flex flex-col items-center gap-1 pb-2">
+            <span className="text-[11px] italic text-white/60">
+              Powered by
+            </span>
+            <img
+              src="https://www.betano.pt/assets/images/header-logos/logo__betano.svg"
+              className="h-7 opacity-95"
+            />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // ------- NÃO autenticado: formulário normal -------
   return (
     <main className="mx-auto max-w-lg px-6 py-10 md:py-16">
       <div className="relative rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8 shadow-[0_8px_40px_rgba(0,0,0,0.35)]">
-
         {/* Logo e descrição */}
         <div className="mb-6 text-center">
           <img src="/logobranco.png" className="h-14 mx-auto mb-2" />
@@ -138,7 +269,7 @@ export default function AuthPage() {
           <button
             className={clsx(
               'rounded-full px-4 py-2 text-sm',
-              mode === 'login' ? 'bg-white/15' : 'bg-white/8 hover:bg-white/15',
+              mode === 'login' ? 'bg-white/15' : 'bg-white/8 hover:bg-white/15'
             )}
             onClick={() => setMode('login')}
             disabled={loading}
@@ -148,7 +279,7 @@ export default function AuthPage() {
           <button
             className={clsx(
               'rounded-full px-4 py-2 text-sm',
-              mode === 'signup' ? 'bg-white/15' : 'bg-white/8 hover:bg-white/15',
+              mode === 'signup' ? 'bg-white/15' : 'bg-white/8 hover:bg-white/15'
             )}
             onClick={() => setMode('signup')}
             disabled={loading}
@@ -196,7 +327,9 @@ export default function AuthPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-white/70">Password</label>
+            <label className="mb-1 block text-xs text-white/70">
+              Password
+            </label>
             <input
               type="password"
               required
@@ -219,9 +352,15 @@ export default function AuthPage() {
               />
               <label htmlFor="agree" className="text-sm leading-5">
                 Declaro que aceito as{' '}
-                <a href="/regras" target="_blank" className="underline">
+                <a
+                  href="/regras"
+                  target="_blank"
+                  className="underline"
+                  rel="noreferrer"
+                >
                   regras do passatempo
-                </a>.
+                </a>
+                .
               </label>
             </div>
           )}
@@ -233,7 +372,7 @@ export default function AuthPage() {
               'mt-2 w-full rounded-xl px-4 py-2 font-medium',
               submitDisabled
                 ? 'cursor-not-allowed bg-white/10 text-white/60'
-                : 'bg-white/15 hover:bg-white/20',
+                : 'bg-white/15 hover:bg-white/20'
             )}
           >
             {mode === 'login' ? 'Entrar' : 'Criar conta'}
@@ -300,7 +439,8 @@ export default function AuthPage() {
           disabled={loading || (mode === 'signup' && !agree)}
           className={clsx(
             'flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm hover:bg-white/10',
-            (loading || (mode === 'signup' && !agree)) && 'opacity-60 cursor-not-allowed',
+            (loading || (mode === 'signup' && !agree)) &&
+              'opacity-60 cursor-not-allowed'
           )}
         >
           <GoogleIcon />

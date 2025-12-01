@@ -3,21 +3,41 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabasePKCE } from '@/utils/supabase/client';
 
 export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    // ajusta o nome da key se for diferente
-    const token = window.localStorage.getItem('session');
+    let cancelled = false;
 
-    if (token) {
-      router.replace('/jogos');
-    } else {
-      router.replace('/auth');
-    }
+    const checkSession = async () => {
+      try {
+        const { data } = await supabasePKCE.auth.getSession();
+        const hasSession = !!data.session;
+
+        if (cancelled) return;
+
+        if (hasSession) {
+          router.replace('/jogos');    // 👉 landing para utilizadores logados
+        } else {
+          router.replace('/auth');     // 👉 convidados vão para login/registo
+        }
+      } catch (err) {
+        console.error('Erro a verificar sessão Supabase:', err);
+        if (!cancelled) {
+          router.replace('/auth');
+        }
+      }
+    };
+
+    void checkSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  // não precisa renderizar nada, só redireciona
+  // não precisa renderizar nada
   return null;
 }

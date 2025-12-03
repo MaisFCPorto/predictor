@@ -60,7 +60,7 @@ type Props = {
   variant?: 'default' | 'past';
   canEdit?: boolean;
 
-  // mostrar tendências da comunidade (resultado + marcador mais comum)
+  // (neste branch vamos ignorar este flag, mas deixo aqui para futuro)
   showTrends?: boolean;
 };
 
@@ -112,7 +112,7 @@ export default function FixtureCard({
   variant = 'default',
   scorersNames = [],
   canEdit = true,
-  showTrends = false,
+  showTrends = true, // <- default true para este branch
 }: Props) {
   // usado só para formatação de datas (mantive caso uses noutro lado)
   const dateTxt = useMemo(() => formatLocalDate(kickoff_at), [kickoff_at]);
@@ -429,7 +429,9 @@ export default function FixtureCard({
   const [trends, setTrends] = useState<Trends | null>(null);
 
   useEffect(() => {
-    if (!showTrends || variant === 'past') {
+    // neste branch: queremos trends em todos os jogos não-past,
+    // independentemente de estarem bloqueados ou não
+    if (variant === 'past') {
       setTrends(null);
       return;
     }
@@ -457,7 +459,7 @@ export default function FixtureCard({
     return () => {
       aborted = true;
     };
-  }, [id, showTrends, variant]);
+  }, [id, variant]);
 
   // handler comum para guardar
   const handleSave = () => {
@@ -786,7 +788,6 @@ export default function FixtureCard({
 
       {/* Tendência da comunidade (resultado + marcador mais comum) */}
       {variant !== 'past' &&
-        showTrends &&
         trends &&
         trends.total_predictions > 0 && (
           <div className="flex justify-center mt-1">

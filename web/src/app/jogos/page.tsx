@@ -66,18 +66,18 @@ type GameLite = {
 
 type LastPoints =
   | {
-    points: number;
-    exact: number;
-    diff: number;
-    winner: number;
-    position: number | null;
-    fixture?: {
-      id: string;
-      kickoff_at: string;
-      home_team_name?: string | null;
-      away_team_name?: string | null;
-    } | null;
-  }
+      points: number;
+      exact: number;
+      diff: number;
+      winner: number;
+      position: number | null;
+      fixture?: {
+        id: string;
+        kickoff_at: string;
+        home_team_name?: string | null;
+        away_team_name?: string | null;
+      } | null;
+    }
   | null;
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
@@ -88,7 +88,8 @@ async function fetchJson(url: string) {
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(
-      `${url} → (${res.status}) ${res.statusText}${txt ? ` — ${txt.slice(0, 140)}…` : ''
+      `${url} → (${res.status}) ${res.statusText}${
+        txt ? ` — ${txt.slice(0, 140)}…` : ''
       }`,
     );
   }
@@ -195,7 +196,7 @@ export default function JogosPage() {
             name: friendly,
             avatar_url: (user.user_metadata as any)?.avatar_url ?? null,
           }),
-        }).catch(() => { });
+        }).catch(() => {});
       } else {
         setUserId(null);
         setUserName('Convidado');
@@ -217,9 +218,10 @@ export default function JogosPage() {
           return;
         }
 
-        const base = API_BASE && API_BASE.length > 0
-          ? API_BASE.replace(/\/+$/, '')
-          : '';
+        const base =
+          API_BASE && API_BASE.length > 0
+            ? API_BASE.replace(/\/+$/, '')
+            : '';
         const url = base
           ? `${base}/api/predictions?userId=${encodeURIComponent(userId)}`
           : `/api/predictions?userId=${encodeURIComponent(userId)}`;
@@ -253,8 +255,8 @@ export default function JogosPage() {
         const arr: PredictionDTO[] = Array.isArray(list)
           ? list
           : Array.isArray(list?.items)
-            ? list.items
-            : [];
+          ? list.items
+          : [];
 
         const map: Record<
           string,
@@ -654,8 +656,8 @@ export default function JogosPage() {
   const linkMonthly = `/rankings?mode=monthly&ym=${encodeURIComponent(ym)}`;
   const linkByGame = lastPoints?.fixture?.id
     ? `/rankings?mode=bygame&fixtureId=${encodeURIComponent(
-      lastPoints.fixture.id,
-    )}`
+        lastPoints.fixture.id,
+      )}`
     : null;
 
   const CardLink = ({ href, children, aria }: CardLinkProps) => {
@@ -733,7 +735,7 @@ export default function JogosPage() {
                   aria="Ir para o ranking do último jogo"
                 >
                   <div className="text-xs opacity-75">
-                     {lastGameLabel
+                    {lastGameLabel
                       ? `Último Jogo: ${lastGameLabel}`
                       : 'Último Jogo'}
                   </div>
@@ -829,6 +831,8 @@ export default function JogosPage() {
                     saving={savingId === f.id}
                     canEdit={!!userId}
                     variant="default"
+                    // 👇 NOVO: mostrar tendências para todos os jogos em aberto
+                    showTrends
                   />
                 ))}
               </div>
@@ -875,7 +879,7 @@ export default function JogosPage() {
                     onSave={onSave}
                     saving={false}
                     variant="past"
-                    // 👇 NOVO: passa lista de marcadores reais para o card
+                    // 👇 marcadores reais
                     scorersNames={f.scorers_names ?? []}
                   />
                 ))}

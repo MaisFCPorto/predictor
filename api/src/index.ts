@@ -10,6 +10,8 @@ import { corsMiddleware } from './cors';
 import { auth } from './routes/auth';
 import { admin, recomputePointsForFixture } from './routes/admin';
 import { adminPredictions } from './routes/admin/predictions';
+import { fixtureTrends } from './routes/fixtures-trends';
+
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -93,6 +95,8 @@ app.route('/api/auth', auth);
 app.route('/api/admin', admin);
 app.route('/api/admin/teams', adminTeams);
 app.route('/api/admin/predictions', adminPredictions);
+app.route('/api', fixtureTrends);
+
 
 
 // ----------------------------------------------------
@@ -485,6 +489,106 @@ app.get('/api/predictions', async (c) => {
     return c.json({ error: 'internal_error' }, 500);
   }
 });
+
+// ----------------------------------------------------
+// PUBLIC: Tendências de predictions por jogo
+//  - resultado mais comum
+//  - marcador mais escolhido
+// ----------------------------------------------------
+app.get('/api/fixtures/:id/trends', async (c) => {
+  const fixtureId = c.req.param('id');
+  if (!fixtureId) {
+    return c.json({ error: 'missing_fixture_id' }, 400);
+  }
+
+  const db = c.env.DB;
+
+  // Total de predictions
+  const totalRow = await db
+    .prepare(
+      `
+      SELECT COUNT(*) AS total
+      FROM predictions
+      WHERE fixture_id = ?
+    `,
+    )
+    .bind(fixtureId)
+    .first<{ total: number }>();
+
+  const total_predictions = totalRow?.total ?? 0;
+
+  // Resultado (home-away) mais comum
+  const scoreRow = await db
+    .prepare(
+      `
+      SELECT 
+        home_goals,
+        away_goals,
+        COUNT(*) AS count
+      FROM predictions
+      WHERE fixture_id = ?
+      GROUP BY home_goals, away_goals
+      ORDER BY count DESC
+      LIMIT 1
+    `,
+    )
+    .bind(fixtureId)
+    .first<{
+      home_goals: number | null;
+      away_goals: number | null;
+      count: number;
+    }>();
+
+  const most_common_score =
+    scoreRow && scoreRow.home_goals != null && scoreRow.away_goals != null
+      ? {
+          home: Number(scoreRow.home_goals),
+          away: Number(scoreRow.away_goals),
+          count: Number(scoreRow.count),
+        }
+      : null;
+
+  // Marcador mais escolhido (entre quem escolheu marcador)
+  const scorerRow = await db
+    .prepare(
+      `
+      SELECT
+        p.id   AS player_id,
+        p.name AS name,
+        COUNT(*) AS count
+      FROM predictions pr
+      JOIN players p ON p.id = pr.scorer_player_id
+      WHERE pr.fixture_id = ?
+      GROUP BY p.id, p.name
+      ORDER BY count DESC
+      LIMIT 1
+    `,
+    )
+    .bind(fixtureId)
+    .first<{
+      player_id: string;
+      name: string | null;
+      count: number;
+    }>();
+
+  const most_common_scorer = scorerRow
+    ? {
+        player_id: String(scorerRow.player_id),
+        name: scorerRow.name ?? 'Jogador',
+        count: Number(scorerRow.count),
+      }
+    : null;
+
+  return c.json(
+    {
+      total_predictions,
+      most_common_score,
+      most_common_scorer,
+    },
+    200,
+  );
+});
+
 
 // ----------------------------------------------------
 // PUBLIC: Sync Users

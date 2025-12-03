@@ -10,6 +10,20 @@ type PlayerOption = {
   position: string; // 'GR' | 'D' | 'M' | 'A'
 };
 
+type Trends = {
+  total_predictions: number;
+  most_common_score: {
+    home: number;
+    away: number;
+    count: number;
+  } | null;
+  most_common_scorer: {
+    player_id: string;
+    name: string;
+    count: number;
+  } | null;
+};
+
 type Props = {
   id: string;
   kickoff_at: string;
@@ -45,6 +59,9 @@ type Props = {
   saving?: boolean;
   variant?: 'default' | 'past';
   canEdit?: boolean;
+
+  // mostrar tendências da comunidade (resultado + marcador mais comum)
+  showTrends?: boolean;
 };
 
 function formatLocalDate(isoUTC: string) {
@@ -95,6 +112,7 @@ export default function FixtureCard({
   variant = 'default',
   scorersNames = [],
   canEdit = true,
+  showTrends = false,
 }: Props) {
   // usado só para formatação de datas (mantive caso uses noutro lado)
   const dateTxt = useMemo(() => formatLocalDate(kickoff_at), [kickoff_at]);
@@ -406,6 +424,40 @@ export default function FixtureCard({
         return null;
     }
   }, [competition_code]);
+
+  // -------- Tendências (resultado + marcador mais comum) --------
+  const [trends, setTrends] = useState<Trends | null>(null);
+
+  useEffect(() => {
+    if (!showTrends || variant === 'past') {
+      setTrends(null);
+      return;
+    }
+
+    let aborted = false;
+
+    async function loadTrends() {
+      try {
+        const res = await fetch(`/api/fixtures/${id}/trends`, {
+          headers: { 'cache-control': 'no-store' },
+        });
+        if (!res.ok) {
+          console.warn('Falha a carregar trends', res.status);
+          return;
+        }
+        const data = (await res.json()) as Trends;
+        if (!aborted) setTrends(data);
+      } catch (e) {
+        console.warn('Erro trends:', e);
+        if (!aborted) setTrends(null);
+      }
+    }
+
+    void loadTrends();
+    return () => {
+      aborted = true;
+    };
+  }, [id, showTrends, variant]);
 
   // handler comum para guardar
   const handleSave = () => {
@@ -732,6 +784,49 @@ export default function FixtureCard({
         </div>
       )}
 
+      {/* Tendência da comunidade (resultado + marcador mais comum) */}
+      {variant !== 'past' &&
+        showTrends &&
+        trends &&
+        trends.total_predictions > 0 && (
+          <div className="flex justify-center mt-1">
+            <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] sm:text-[12px] font-medium leading-none bg-white/5 text-white/80">
+              Tendência da comunidade:{' '}
+              {trends.most_common_score ? (
+                <>
+                  {' '}
+                  <span className="font-semibold">
+                    {trends.most_common_score.home}–
+                    {trends.most_common_score.away}
+                  </span>{' '}
+                  (
+                  {trends.most_common_score.count}{' '}
+                  {trends.most_common_score.count === 1
+                    ? 'palpite'
+                    : 'palpites'}
+                  )
+                </>
+              ) : (
+                ' sem tendência de resultado'
+              )}
+              {trends.most_common_scorer && (
+                <>
+                  {' · Marcador mais escolhido: '}
+                  <span className="font-semibold">
+                    {trends.most_common_scorer.name}
+                  </span>{' '}
+                  (
+                  {trends.most_common_scorer.count}{' '}
+                  {trends.most_common_scorer.count === 1
+                    ? 'escolha'
+                    : 'escolhas'}
+                  )
+                </>
+              )}
+            </span>
+          </div>
+        )}
+
       {/* Botão mobile Guardar */}
       {variant !== 'past' && (
         <div className="md:hidden flex justify-center mt-2">
@@ -888,11 +983,11 @@ export default function FixtureCard({
 function Crest({ src, alt }: { src?: string | null; alt: string }) {
   return (
     <div className="flex-shrink-0">
-      <div className="relative h-12 sm:h-14 md:h-16 px-1.5 sm:px-2 flex items.center justify-center">
+      <div className="relative h-12 sm:h-14 md:h-16 px-1.5 sm:px-2 flex items-center justify-center">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-full opacity-0 scale-95
-                     bg.white/5 blur-md transition-all duration-300 ease-out
+                     bg-white/5 blur-md transition-all duration-300 ease-out
                      md:group-hover:opacity-100 md:group-hover:scale-105"
         />
         {src ? (

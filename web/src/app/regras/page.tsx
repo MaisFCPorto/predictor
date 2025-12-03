@@ -92,6 +92,9 @@ export default function RegrasPage() {
           <p className="mt-3 text-sm text-white/60">
             Esta atualização poderá não ocorrer imediatamente após o jogo terminar.
           </p>
+                    <p className="mt-3 text-sm text-white/60">
+            O resultado a ter em conta é apenas o tempo regular. Prolongamento e decisão por grande penalidade não contam.
+          </p>
         </ol>
       </RuleCard>
 

@@ -1,12 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+// web/src/app/api/fixtures/[fixtureId]/trends/route.ts
+import { NextResponse } from 'next/server';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
-export async function GET(
-  req: NextRequest,
-  ctx: { params: { fixtureId: string } },
-) {
-  const fixtureId = ctx.params.fixtureId;
+export async function GET(_req: Request, context: any) {
+  const fixtureId = context?.params?.fixtureId as string | undefined;
 
   if (!fixtureId) {
     return NextResponse.json(
@@ -40,7 +38,7 @@ export async function GET(
       status: upstream.status,
       headers: {
         'content-type':
-          upstream.headers.get('content-type') ||
+          upstream.headers.get('content-type') ??
           'application/json; charset=utf-8',
       },
     });
@@ -50,7 +48,7 @@ export async function GET(
     status: 200,
     headers: {
       'content-type':
-        upstream.headers.get('content-type') ||
+        upstream.headers.get('content-type') ??
         'application/json; charset=utf-8',
     },
   });

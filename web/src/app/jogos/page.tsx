@@ -832,7 +832,7 @@ export default function JogosPage() {
                     canEdit={!!userId}
                     variant="default"
                     // 👇 NOVO: mostrar tendências para todos os jogos em aberto
-                    showTrends
+                    showTrends={true}
                   />
                 ))}
               </div>

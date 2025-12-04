@@ -1,12 +1,16 @@
+// web/src/app/api/fixtures/[fixtureId]/trends/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
-export async function GET(
-  req: NextRequest,
-  ctx: { params: { fixtureId: string } },
-) {
-  const fixtureId = ctx.params.fixtureId;
+type RouteContext = {
+  params: {
+    fixtureId: string;
+  };
+};
+
+export async function GET(req: NextRequest, { params }: RouteContext) {
+  const fixtureId = params.fixtureId;
 
   if (!fixtureId) {
     return NextResponse.json(

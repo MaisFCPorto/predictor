@@ -13,15 +13,18 @@ export const fixtureTrends = new Hono<{ Bindings: Env }>();
  * Responde:
  * {
  *   total_predictions: number,
- *   most_common_score: { home, away, count } | null,
- *   most_common_scorer: { player_id, name, count } | null
+ *   scores: { home, away, count, pct }[],
+ *   scorers: { player_id, name, count, pct }[],
+ *   // campos "legados" para compat (opcional usar no front)
+ *   most_common_score?: { home, away, count, pct } | null,
+ *   most_common_scorer?: { player_id, name, count, pct } | null
  * }
  */
 fixtureTrends.get('/fixtures/:fixtureId/trends', async (c) => {
   const fixtureId = c.req.param('fixtureId');
   const db = c.env.DB;
 
-  // total de palpites para o jogo
+  // 1) Total de palpites
   const totalRow = await db
     .prepare(
       `SELECT COUNT(*) AS total
@@ -33,8 +36,8 @@ fixtureTrends.get('/fixtures/:fixtureId/trends', async (c) => {
 
   const total_predictions = totalRow?.total ?? 0;
 
-  // resultado mais comum (home_goals-away_goals)
-  const bestScore = await db
+  // 2) Top 3 resultados mais comuns
+  const { results: scoreRows } = await db
     .prepare(
       `SELECT home_goals, away_goals, COUNT(*) AS cnt
        FROM predictions
@@ -43,13 +46,28 @@ fixtureTrends.get('/fixtures/:fixtureId/trends', async (c) => {
          AND away_goals IS NOT NULL
        GROUP BY home_goals, away_goals
        ORDER BY cnt DESC, home_goals DESC, away_goals DESC
-       LIMIT 1`,
+       LIMIT 3`,
     )
     .bind(fixtureId)
-    .first<{ home_goals: number; away_goals: number; cnt: number }>();
+    .all<{ home_goals: number; away_goals: number; cnt: number }>();
 
-  // marcador mais escolhido
-  const bestScorer = await db
+  const scores =
+    (scoreRows ?? []).map((row) => {
+      const count = row.cnt ?? 0;
+      const pct =
+        total_predictions > 0
+          ? Math.round((count * 100) / total_predictions)
+          : 0;
+      return {
+        home: row.home_goals,
+        away: row.away_goals,
+        count,
+        pct,
+      };
+    }) ?? [];
+
+  // 3) Top 3 marcadores mais escolhidos
+  const { results: scorerRows } = await db
     .prepare(
       `SELECT p.scorer_player_id AS player_id,
               pl.name AS player_name,
@@ -60,26 +78,33 @@ fixtureTrends.get('/fixtures/:fixtureId/trends', async (c) => {
          AND p.scorer_player_id IS NOT NULL
        GROUP BY p.scorer_player_id, pl.name
        ORDER BY cnt DESC, player_name ASC
-       LIMIT 1`,
+       LIMIT 3`,
     )
     .bind(fixtureId)
-    .first<{ player_id: string | number; player_name: string | null; cnt: number }>();
+    .all<{ player_id: string | number; player_name: string | null; cnt: number }>();
 
+  const scorers =
+    (scorerRows ?? []).map((row) => {
+      const count = row.cnt ?? 0;
+      const pct =
+        total_predictions > 0
+          ? Math.round((count * 100) / total_predictions)
+          : 0;
+      return {
+        player_id: String(row.player_id),
+        name: row.player_name ?? 'Desconhecido',
+        count,
+        pct,
+      };
+    }) ?? [];
+
+  // 4) Resposta
   return c.json({
     total_predictions,
-    most_common_score: bestScore
-      ? {
-          home: bestScore.home_goals,
-          away: bestScore.away_goals,
-          count: bestScore.cnt,
-        }
-      : null,
-    most_common_scorer: bestScorer
-      ? {
-          player_id: String(bestScorer.player_id),
-          name: bestScorer.player_name ?? 'Desconhecido',
-          count: bestScorer.cnt,
-        }
-      : null,
+    scores,
+    scorers,
+    // campos "single" só por conveniência / retrocompat
+    most_common_score: scores[0] ?? null,
+    most_common_scorer: scorers[0] ?? null,
   });
 });

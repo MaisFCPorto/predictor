@@ -10,18 +10,27 @@ type PlayerOption = {
   position: string; // 'GR' | 'D' | 'M' | 'A'
 };
 
+type ScoreTrend = {
+  home: number;
+  away: number;
+  count: number;
+  pct: number;
+};
+
+type ScorerTrend = {
+  player_id: string;
+  name: string;
+  count: number;
+  pct: number;
+};
+
 type Trends = {
   total_predictions: number;
-  most_common_score: {
-    home: number;
-    away: number;
-    count: number;
-  } | null;
-  most_common_scorer: {
-    player_id: string;
-    name: string;
-    count: number;
-  } | null;
+  scores: ScoreTrend[];
+  scorers: ScorerTrend[];
+  // opcional (vem da API mas não precisamos diretamente)
+  most_common_score?: ScoreTrend | null;
+  most_common_scorer?: ScorerTrend | null;
 };
 
 type Props = {
@@ -778,52 +787,63 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Tendência da comunidade — agora aparece SEMPRE em jogos não-past */}
-      {variant !== 'past' && showTrends && (
-        <div className="flex justify-center mt-1">
-          <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] sm:text-[12px] font-medium leading-none bg-white/5 text-white/80">
-            {hasRealTrends ? (
-              <>
-                Tendência da comunidade:{' '}
-                {trends!.most_common_score ? (
-                  <>
-                    {' '}
-                    <span className="font-semibold">
-                      {trends!.most_common_score.home}–
-                      {trends!.most_common_score.away}
-                    </span>{' '}
-                    (
-                    {trends!.most_common_score.count}{' '}
-                    {trends!.most_common_score.count === 1
-                      ? 'palpite'
-                      : 'palpites'}
-                    )
-                  </>
-                ) : (
-                  ' sem tendência de resultado'
-                )}
-                {trends!.most_common_scorer && (
-                  <>
-                    {' · Marcador mais escolhido: '}
-                    <span className="font-semibold">
-                      {trends!.most_common_scorer.name}
-                    </span>{' '}
-                    (
-                    {trends!.most_common_scorer.count}{' '}
-                    {trends!.most_common_scorer.count === 1
-                      ? 'escolha'
-                      : 'escolhas'}
-                    )
-                  </>
-                )}
-              </>
-            ) : (
-              // placeholder quando a rota 404 / ainda sem dados
-              <>Tendência da comunidade: ainda sem dados suficientes</>
-            )}
-          </span>
-        </div>
-      )}
+      {/* Tendência da comunidade (resultado + marcador mais comuns) */}
+{variant !== 'past' && showTrends && trends && (
+  <div className="mt-2 flex flex-col items-center gap-1">
+    {trends.total_predictions === 0 ? (
+      <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] sm:text-[12px] leading-none bg-white/5 text-white/70">
+        Tendência da comunidade: ainda sem dados suficientes
+      </span>
+    ) : (
+      <>
+        <span className="text-[11px] sm:text-[12px] text-white/70">
+          Tendência da comunidade
+          {' · '}
+          baseado em {trends.total_predictions}{' '}
+          {trends.total_predictions === 1 ? 'palpite' : 'palpites'}
+        </span>
+
+        {/* Resultados mais comuns */}
+        {trends.scores && trends.scores.length > 0 ? (
+          <div className="flex flex-wrap justify-center gap-1">
+            {trends.scores.slice(0, 3).map((s) => (
+              <span
+                key={`${s.home}-${s.away}`}
+                className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90"
+              >
+                {s.home}–{s.away}{' '}
+                <span className="opacity-75">
+                  ({s.pct}%)
+                </span>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="text-[11px] text-white/60">
+            Sem tendência de resultado ainda.
+          </div>
+        )}
+
+        {/* Marcadores mais escolhidos */}
+        {trends.scorers && trends.scorers.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-1 mt-1">
+            {trends.scorers.slice(0, 3).map((sc) => (
+              <span
+                key={sc.player_id}
+                className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90"
+              >
+                {sc.name}{' '}
+                <span className="opacity-75">
+                  ({sc.pct}%)
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+      </>
+    )}
+  </div>
+)}
 
       {/* Botão mobile Guardar */}
       {variant !== 'past' && (

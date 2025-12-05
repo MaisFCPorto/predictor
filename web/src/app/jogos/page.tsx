@@ -831,7 +831,6 @@ export default function JogosPage() {
                     saving={savingId === f.id}
                     canEdit={!!userId}
                     variant="default"
-                    // 👇 NOVO: mostrar tendências para todos os jogos em aberto
                     showTrends={true}
                   />
                 ))}

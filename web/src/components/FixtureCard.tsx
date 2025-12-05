@@ -798,9 +798,6 @@ export default function FixtureCard({
       <>
         <span className="text-[11px] sm:text-[12px] text-white/70">
           Tendência da comunidade
-          {' · '}
-          baseado em {trends.total_predictions}{' '}
-          {trends.total_predictions === 1 ? 'palpite' : 'palpites'}
         </span>
 
         {/* Resultados mais comuns */}

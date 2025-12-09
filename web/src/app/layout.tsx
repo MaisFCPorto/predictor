@@ -278,12 +278,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     }
   }
 
-  const navLinks = [
+  const baseNavLinks = [
     { href: '/jogos', label: 'Jogos' },
     { href: '/rankings', label: 'Rankings' },
     { href: '/premios', label: 'Prémios' },
     { href: '/regras', label: 'Regras' },
   ];
+
+  // Só admin vê a tab Ligas (beta)
+  const navLinks = user?.isAdmin
+    ? [{ href: '/ligas', label: 'Ligas (beta)' }, ...baseNavLinks]
+    : baseNavLinks;
 
   const fullNavLinks = user?.isAdmin
     ? [{ href: '/admin', label: 'Backoffice' }, ...navLinks]

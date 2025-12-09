@@ -11,6 +11,10 @@ import { auth } from './routes/auth';
 import { admin, recomputePointsForFixture } from './routes/admin';
 import { adminPredictions } from './routes/admin/predictions';
 import { fixtureTrends } from './routes/fixtures-trends';
+import { adminLeagues } from './routes/admin/leagues';
+import { leagues } from './routes/leagues';
+
+
 
 
 // ----------------------------------------------------
@@ -96,6 +100,10 @@ app.route('/api/admin', admin);
 app.route('/api/admin/teams', adminTeams);
 app.route('/api/admin/predictions', adminPredictions);
 app.route('/api', fixtureTrends);
+app.route('/api/admin', adminLeagues);
+app.route('/api', leagues);
+
+
 
 
 

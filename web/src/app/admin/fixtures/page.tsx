@@ -3,31 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios, { AxiosError } from 'axios';
 import AdminGate from '../_components/AdminGate';
+import { adm } from '../_utils/adminClients';
 import Link from 'next/link';
 
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || '';
-
-const adm = axios.create({
-  baseURL: '',
-});
-
-adm.interceptors.request.use((config) => {
-  if (ADMIN_KEY) {
-    config.headers = config.headers ?? {};
-    (config.headers as any)['x-admin-key'] = ADMIN_KEY;
-  }
-  return config;
-});
-
-adm.interceptors.response.use(
-  (res) => res,
-  (error) => {
-    const status = error?.response?.status;
-    if (status === 401) alert('Sessão expirada ou em falta. Faz login novamente.');
-    if (status === 403) alert('Acesso negado (precisas de ser admin).');
-    return Promise.reject(error);
-  }
-);
 
 /* -------------------- Tipos -------------------- */
 type Team = { id: string; name: string };

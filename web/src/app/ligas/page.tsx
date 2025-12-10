@@ -15,6 +15,24 @@ type LeagueRow = {
   role: 'owner' | 'member' | string;
 };
 
+type LeagueRankingRow = {
+  user_id: string;
+  name: string;
+  avatar_url: string | null;
+  total_points: number;
+  position: number;
+};
+
+type LeagueRankingResponse = {
+  league: {
+    id: string;
+    name: string;
+    code: string;
+    visibility: string;
+  };
+  ranking: LeagueRankingRow[];
+};
+
 function apiUrl(path: string) {
   const base = API_BASE ? API_BASE.replace(/\/+$/, '') : '';
   return base ? `${base}${path}` : path;
@@ -36,6 +54,15 @@ function LeaguesInner() {
   const [joinCode, setJoinCode] = useState('');
   const [busyCreate, setBusyCreate] = useState(false);
   const [busyJoin, setBusyJoin] = useState(false);
+
+  const [joinMessage, setJoinMessage] = useState<string | null>(null);
+
+  // ranking de liga seleccionada
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
+  const [ranking, setRanking] = useState<LeagueRankingRow[] | null>(null);
+  const [rankingLeagueName, setRankingLeagueName] = useState<string | null>(null);
+  const [loadingRanking, setLoadingRanking] = useState(false);
+  const [rankingErr, setRankingErr] = useState<string | null>(null);
 
   // carregar utilizador
   useEffect(() => {
@@ -73,6 +100,7 @@ function LeaguesInner() {
       setLeagues(Array.isArray(json) ? json : []);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro a carregar ligas');
+      setLeagues([]);
     } finally {
       setLoadingLeagues(false);
     }
@@ -125,24 +153,67 @@ function LeaguesInner() {
 
     setBusyJoin(true);
     setErr(null);
+    setJoinMessage(null);
     try {
       const res = await fetch(apiUrl('/api/leagues/join'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userId, code }),
+        body: JSON.stringify({ user_id: userId, code }), // <-- garante user_id
       });
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
+        let friendly = 'Erro ao entrar na liga';
+        if (res.status === 404) friendly = 'Liga não encontrada';
+        if (res.status === 409) friendly = 'Já fazes parte desta liga';
         throw new Error(
-          `Falha a entrar na liga (${res.status}) ${res.statusText} ${txt}`,
+          `${friendly} (${res.status}) ${res.statusText} ${txt}`,
         );
       }
       setJoinCode('');
+      setJoinMessage('Entraste na liga com sucesso ✅');
       await loadLeagues(userId);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro ao entrar na liga');
     } finally {
       setBusyJoin(false);
+    }
+  }
+
+  // carregar ranking de uma liga
+  async function handleToggleRanking(league: LeagueRow) {
+    // se clicarmos novamente na mesma liga, escondemos
+    if (selectedLeagueId === league.id) {
+      setSelectedLeagueId(null);
+      setRanking(null);
+      setRankingLeagueName(null);
+      setRankingErr(null);
+      return;
+    }
+
+    setSelectedLeagueId(league.id);
+    setRanking(null);
+    setRankingLeagueName(league.name);
+    setRankingErr(null);
+    setLoadingRanking(true);
+
+    try {
+      const res = await fetch(apiUrl(`/api/leagues/${league.id}/ranking`), {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(
+          `Falha a carregar ranking da liga (${res.status}) ${res.statusText} ${txt}`,
+        );
+      }
+      const json = (await res.json()) as LeagueRankingResponse;
+      setRanking(json.ranking ?? []);
+      setRankingLeagueName(json.league?.name ?? league.name);
+    } catch (e: any) {
+      setRankingErr(e?.message ?? 'Erro a carregar ranking da liga');
+      setRanking(null);
+    } finally {
+      setLoadingRanking(false);
     }
   }
 
@@ -160,7 +231,7 @@ function LeaguesInner() {
 
   return (
     <div className="py-6 space-y-6">
-      <h1 className="text-3xl font-bold text-gradient mb-2">Ligas (beta)</h1>
+      <h1 className="mb-2 text-3xl font-bold text-gradient">Ligas (beta)</h1>
       <p className="text-sm opacity-80">
         Aqui vais poder criar ligas privadas com amigos e ver um ranking só da
         tua liga. Por agora esta área está em testes e apenas disponível para
@@ -174,7 +245,7 @@ function LeaguesInner() {
       )}
 
       {/* Criar liga */}
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+      <section className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
         <h2 className="text-lg font-semibold">Criar nova liga</h2>
         <form onSubmit={handleCreate} className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -209,7 +280,7 @@ function LeaguesInner() {
       </section>
 
       {/* Entrar por código */}
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+      <section className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
         <h2 className="text-lg font-semibold">Entrar numa liga</h2>
         <form onSubmit={handleJoin} className="flex flex-col gap-2 sm:flex-row">
           <input
@@ -217,7 +288,7 @@ function LeaguesInner() {
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
             placeholder="Código da liga (ex: ABC123)"
-            className="flex-1 rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm tracking-[0.25em] uppercase"
+            className="flex-1 rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm uppercase tracking-[0.25em]"
           />
           <button
             type="submit"
@@ -227,42 +298,104 @@ function LeaguesInner() {
             {busyJoin ? 'A entrar…' : 'Entrar'}
           </button>
         </form>
+        {joinMessage && (
+          <div className="text-xs text-emerald-200">{joinMessage}</div>
+        )}
       </section>
 
       {/* Lista de ligas */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">As tuas ligas</h2>
         {loadingLeagues ? (
-          <div className="opacity-80 text-sm">A carregar ligas…</div>
+          <div className="text-sm opacity-80">A carregar ligas…</div>
         ) : leagues.length === 0 ? (
-          <div className="opacity-70 text-sm">
+          <div className="text-sm opacity-70">
             Ainda não estás em nenhuma liga.
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {leagues.map((lg) => (
-              <div
-                key={lg.id}
-                className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{lg.name}</div>
-                  <span className="text-[11px] uppercase opacity-70">
-                    {lg.role === 'owner' ? 'Owner' : 'Membro'}
-                  </span>
+            {leagues.map((lg) => {
+              const isSelected = selectedLeagueId === lg.id;
+              return (
+                <div
+                  key={lg.id}
+                  className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">{lg.name}</div>
+                      <div className="mt-1 text-[12px] opacity-80">
+                        Código:{' '}
+                        <span className="font-mono uppercase tracking-[0.2em]">
+                          {lg.code}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[12px] opacity-70">
+                        Visibilidade:{' '}
+                        {lg.visibility === 'public' ? 'Pública' : 'Privada'}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 text-[11px] uppercase">
+                      <span className="rounded-full bg-white/10 px-2 py-0.5">
+                        {lg.role === 'owner' ? 'Owner' : 'Membro'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleRanking(lg)}
+                        className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium hover:bg-white/15"
+                      >
+                        {isSelected ? 'Esconder ranking' : 'Ver ranking'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Ranking desta liga (se seleccionada) */}
+                  {isSelected && (
+                    <div className="mt-2 rounded-xl border border-white/10 bg-black/30 p-2 text-xs">
+                      {loadingRanking ? (
+                        <div className="opacity-80">A carregar ranking…</div>
+                      ) : rankingErr ? (
+                        <div className="text-red-200">{rankingErr}</div>
+                      ) : !ranking || ranking.length === 0 ? (
+                        <div className="opacity-70">
+                          Ainda não há pontos atribuídos nesta liga.
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="mb-1 text-[11px] font-semibold">
+                            Ranking – {rankingLeagueName}
+                          </div>
+                          <table className="w-full text-[11px]">
+                            <thead className="border-b border-white/10 text-[10px] uppercase text-white/60">
+                              <tr>
+                                <th className="pb-1 text-left">Pos</th>
+                                <th className="pb-1 text-left">Jogador</th>
+                                <th className="pb-1 text-right">Pontos</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {ranking.map((r) => (
+                                <tr key={r.user_id}>
+                                  <td className="py-0.5 pr-2 align-middle">
+                                    {r.position}
+                                  </td>
+                                  <td className="py-0.5 align-middle">
+                                    {r.name}
+                                  </td>
+                                  <td className="py-0.5 text-right align-middle font-mono">
+                                    {r.total_points}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="mt-1 text-[12px] opacity-80">
-                  Código:{' '}
-                  <span className="font-mono tracking-[0.2em] uppercase">
-                    {lg.code}
-                  </span>
-                </div>
-                <div className="mt-1 text-[12px] opacity-70">
-                  Visibilidade:{' '}
-                  {lg.visibility === 'public' ? 'Pública' : 'Privada'}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

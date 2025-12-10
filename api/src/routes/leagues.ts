@@ -163,4 +163,71 @@ leagues.post('/leagues/join', async (c) => {
   });
 });
 
+leagues.get('/leagues/:leagueId/ranking', async (c) => {
+    const db = c.env.DB;
+    const leagueId = c.req.param('leagueId');
+  
+    // 1) info da liga
+    const league = await db
+      .prepare(
+        `SELECT id, name, code, visibility
+         FROM leagues
+         WHERE id = ?`,
+      )
+      .bind(leagueId)
+      .first<{
+        id: string;
+        name: string;
+        code: string;
+        visibility: string;
+      }>();
+  
+    if (!league) {
+      return c.json({ error: 'league_not_found' }, 404);
+    }
+  
+    // 2) ranking da liga: pontos totais de todos os jogos
+    const rows = await db
+      .prepare(
+        `
+        SELECT
+          u.id AS user_id,
+          COALESCE(u.name,
+                   CASE
+                     WHEN u.email IS NULL THEN 'Jogador'
+                     ELSE substr(u.email, 1, instr(u.email, '@') - 1)
+                   END
+          ) AS name,
+          u.avatar_url,
+          COALESCE(SUM(p.points), 0) AS total_points
+        FROM league_members lm
+        JOIN users u
+          ON u.id = lm.user_id
+        LEFT JOIN predictions p
+          ON p.user_id = u.id
+        WHERE lm.league_id = ?
+        GROUP BY u.id, name, u.avatar_url
+        ORDER BY total_points DESC, u.created_at ASC
+        `,
+      )
+      .bind(leagueId)
+      .all<{
+        user_id: string;
+        name: string;
+        avatar_url: string | null;
+        total_points: number;
+      }>();
+  
+    // 3) aplicar posição (1, 2, 3, …)
+    const ranking = rows.results.map((row, idx) => ({
+      ...row,
+      position: idx + 1,
+    }));
+  
+    return c.json({
+      league,
+      ranking,
+    });
+  });
+
 export default leagues;

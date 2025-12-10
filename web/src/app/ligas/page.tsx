@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabasePKCE } from '@/utils/supabase/client';
 import AdminGate from '../admin/_components/AdminGate';
+import Link from 'next/link';
+
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
@@ -339,60 +341,16 @@ function LeaguesInner() {
                       <span className="rounded-full bg-white/10 px-2 py-0.5">
                         {lg.role === 'owner' ? 'Owner' : 'Membro'}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => void handleToggleRanking(lg)}
-                        className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium hover:bg-white/15"
-                      >
-                        {isSelected ? 'Esconder ranking' : 'Ver ranking'}
-                      </button>
+                      <Link
+  href={`/ligas/${lg.id}`}
+  className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/15"
+>
+  Ver ranking
+</Link>
                     </div>
                   </div>
 
-                  {/* Ranking desta liga (se seleccionada) */}
-                  {isSelected && (
-                    <div className="mt-2 rounded-xl border border-white/10 bg-black/30 p-2 text-xs">
-                      {loadingRanking ? (
-                        <div className="opacity-80">A carregar ranking…</div>
-                      ) : rankingErr ? (
-                        <div className="text-red-200">{rankingErr}</div>
-                      ) : !ranking || ranking.length === 0 ? (
-                        <div className="opacity-70">
-                          Ainda não há pontos atribuídos nesta liga.
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="mb-1 text-[11px] font-semibold">
-                            Ranking – {rankingLeagueName}
-                          </div>
-                          <table className="w-full text-[11px]">
-                            <thead className="border-b border-white/10 text-[10px] uppercase text-white/60">
-                              <tr>
-                                <th className="pb-1 text-left">Pos</th>
-                                <th className="pb-1 text-left">Jogador</th>
-                                <th className="pb-1 text-right">Pontos</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {ranking.map((r) => (
-                                <tr key={r.user_id}>
-                                  <td className="py-0.5 pr-2 align-middle">
-                                    {r.position}
-                                  </td>
-                                  <td className="py-0.5 align-middle">
-                                    {r.name}
-                                  </td>
-                                  <td className="py-0.5 text-right align-middle font-mono">
-                                    {r.total_points}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  
                 </div>
               );
             })}

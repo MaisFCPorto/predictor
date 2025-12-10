@@ -11,7 +11,7 @@ export async function GET(
   _req: NextRequest,
   context: { params: { leagueId: string } },
 ) {
-  const { leagueId } = context.params;
+  const leagueId = context.params.leagueId;
 
   if (!leagueId) {
     return NextResponse.json({ error: 'missing_league_id' }, { status: 400 });

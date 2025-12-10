@@ -1,19 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 import { supabasePKCE } from '@/utils/supabase/client';
 import AdminGate from '../../admin/_components/AdminGate';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
-function apiUrl(path: string) {
-  const base = API_BASE ? API_BASE.replace(/\/+$/, '') : '';
-  return base ? `${base}${path}` : path;
-}
-
-type League = {
+type LeagueInfo = {
   id: string;
   name: string;
   code: string;
@@ -23,170 +17,166 @@ type League = {
 
 type MemberRow = {
   user_id: string;
-  name: string | null;
   role: 'owner' | 'member' | string;
+  name: string | null;
 };
 
 type LeagueDetailResponse = {
-  league: League;
+  league: LeagueInfo;
   members: MemberRow[];
   currentUserRole: 'owner' | 'member' | null;
 };
 
 type RankingRow = {
   user_id: string;
-  name: string | null;
-  total_points: number | null;
+  name: string;
+  avatar_url: string | null;
+  total_points: number;
+  position: number;
 };
 
-function LeagueRankingInner({ leagueId }: { leagueId: string }) {
+function apiUrl(path: string) {
+  const base = API_BASE ? API_BASE.replace(/\/+$/, '') : '';
+  return base ? `${base}${path}` : path;
+}
+
+function LeagueDetailInner() {
+  const params = useParams() as { leagueId?: string };
   const router = useRouter();
+  const leagueId = params?.leagueId ?? '';
 
   const [userId, setUserId] = useState<string | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
   const [detail, setDetail] = useState<LeagueDetailResponse | null>(null);
   const [ranking, setRanking] = useState<RankingRow[]>([]);
-  const [loadingDetail, setLoadingDetail] = useState(false);
-  const [loadingRanking, setLoadingRanking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const [nameDraft, setNameDraft] = useState('');
-  const [savingName, setSavingName] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [kickingUserId, setKickingUserId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editVisibility, setEditVisibility] = useState<'public' | 'private'>(
+    'private',
+  );
+  const [busySave, setBusySave] = useState(false);
+  const [busyDelete, setBusyDelete] = useState(false);
+  const [busyMember, setBusyMember] = useState<string | null>(null);
 
-  // 1) obter utilizador
+  // carregar utilizador
   useEffect(() => {
     (async () => {
       try {
         const {
           data: { user },
         } = await supabasePKCE.auth.getUser();
-        setUserId(user?.id ?? null);
+        if (user) {
+          setUserId(user.id);
+        } else {
+          setUserId(null);
+        }
       } finally {
         setLoadingUser(false);
       }
     })();
   }, []);
 
-  // 2) carregar detalhe da liga
-  async function loadDetail(currentUserId: string) {
-    setLoadingDetail(true);
-    setError(null);
+  async function loadAll(currentUserId: string, id: string) {
+    if (!id) return;
+    setLoading(true);
+    setErr(null);
+    try {
+      // detalhe + membros
+      const detailRes = await fetch(
+        apiUrl(
+          `/api/leagues/${encodeURIComponent(
+            id,
+          )}?userId=${encodeURIComponent(currentUserId)}`,
+        ),
+        { cache: 'no-store' },
+      );
+      if (!detailRes.ok) {
+        const txt = await detailRes.text().catch(() => '');
+        throw new Error(
+          `Falha a carregar liga (${detailRes.status}) ${detailRes.statusText} ${txt}`,
+        );
+      }
+      const detailJson = (await detailRes.json()) as LeagueDetailResponse;
+      setDetail(detailJson);
+      setEditName(detailJson.league.name);
+      setEditVisibility(
+        detailJson.league.visibility === 'public' ? 'public' : 'private',
+      );
+
+      // ranking
+      const rankingRes = await fetch(
+        apiUrl(`/api/leagues/${encodeURIComponent(id)}/ranking`),
+        { cache: 'no-store' },
+      );
+      if (!rankingRes.ok) {
+        const txt = await rankingRes.text().catch(() => '');
+        throw new Error(
+          `Falha a carregar ranking (${rankingRes.status}) ${rankingRes.statusText} ${txt}`,
+        );
+      }
+      const rankingJson = (await rankingRes.json()) as {
+        ranking: RankingRow[];
+      };
+      setRanking(Array.isArray(rankingJson.ranking) ? rankingJson.ranking : []);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Erro a carregar detalhes da liga');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (userId && leagueId) {
+      void loadAll(userId, leagueId);
+    }
+  }, [userId, leagueId]);
+
+  async function handleSave() {
+    if (!userId || !detail) return;
+    setBusySave(true);
+    setErr(null);
     try {
       const res = await fetch(
-        apiUrl(`/api/leagues/${leagueId}?userId=${encodeURIComponent(currentUserId)}`),
-        { cache: 'no-store' },
+        apiUrl(`/api/leagues/${encodeURIComponent(detail.league.id)}`),
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            name: editName.trim(),
+            visibility: editVisibility,
+          }),
+        },
       );
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
-        throw new Error(`Falha a carregar liga (${res.status}) ${txt}`);
+        throw new Error(
+          `Falha a guardar liga (${res.status}) ${res.statusText} ${txt}`,
+        );
       }
-      const json = (await res.json()) as LeagueDetailResponse;
-      setDetail(json);
-      setNameDraft(json.league.name);
+      await loadAll(userId, detail.league.id);
     } catch (e: any) {
-      setError(e?.message ?? 'Erro a carregar liga');
+      setErr(e?.message ?? 'Erro a guardar alterações');
     } finally {
-      setLoadingDetail(false);
+      setBusySave(false);
     }
   }
 
-  // 3) carregar ranking da liga
-  async function loadRanking() {
-    setLoadingRanking(true);
-    try {
-      const res = await fetch(apiUrl(`/api/leagues/${leagueId}/ranking`), {
-        cache: 'no-store',
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`Falha a carregar ranking (${res.status}) ${txt}`);
-      }
-      const json = await res.json();
-      const list = Array.isArray(json.ranking) ? json.ranking : [];
-      setRanking(list);
-    } catch (e: any) {
-      setError(e?.message ?? 'Erro a carregar ranking');
-    } finally {
-      setLoadingRanking(false);
-    }
-  }
-
-  // 4) disparar carregamentos
-  useEffect(() => {
-    if (!userId) return;
-    void loadDetail(userId);
-    void loadRanking();
-  }, [userId, leagueId]);
-
-  const isOwner =
-    !!detail && !!userId && detail.league.owner_id === userId;
-
-  async function handleSaveName() {
+  async function handleDelete() {
     if (!userId || !detail) return;
-    const newName = nameDraft.trim();
-    if (!newName || newName === detail.league.name) return;
-
-    setSavingName(true);
-    setError(null);
-    try {
-      const res = await fetch(apiUrl(`/api/leagues/${leagueId}`), {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userId, name: newName }),
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`Falha a atualizar nome (${res.status}) ${txt}`);
-      }
-      await loadDetail(userId);
-    } catch (e: any) {
-      setError(e?.message ?? 'Erro ao guardar alterações');
-    } finally {
-      setSavingName(false);
-    }
-  }
-
-  async function handleDeleteLeague() {
-    if (!userId || !detail) return;
-    const confirm = window.prompt(
-      `Para apagar a liga "${detail.league.name}", escreve: APAGAR`,
+    const confirmText = prompt(
+      `Para apagar a liga "${detail.league.name}" escreve: APAGAR`,
     );
-    if (confirm !== 'APAGAR') return;
+    if (confirmText !== 'APAGAR') return;
 
-    setDeleting(true);
-    setError(null);
-    try {
-      const res = await fetch(apiUrl(`/api/leagues/${leagueId}`), {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`Falha a apagar liga (${res.status}) ${txt}`);
-      }
-      router.push('/ligas');
-    } catch (e: any) {
-      setError(e?.message ?? 'Erro ao apagar liga');
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  async function handleKickMember(memberId: string) {
-    if (!userId || !detail) return;
-    if (memberId === detail.league.owner_id) {
-      alert('Não podes remover o owner da liga.');
-      return;
-    }
-    setKickingUserId(memberId);
-    setError(null);
+    setBusyDelete(true);
+    setErr(null);
     try {
       const res = await fetch(
-        apiUrl(`/api/leagues/${leagueId}/members/${memberId}`),
+        apiUrl(`/api/leagues/${encodeURIComponent(detail.league.id)}`),
         {
           method: 'DELETE',
           headers: { 'content-type': 'application/json' },
@@ -195,229 +185,281 @@ function LeagueRankingInner({ leagueId }: { leagueId: string }) {
       );
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
-        throw new Error(`Falha a remover membro (${res.status}) ${txt}`);
+        throw new Error(
+          `Falha a apagar liga (${res.status}) ${res.statusText} ${txt}`,
+        );
       }
-      await loadDetail(userId);
-      await loadRanking();
+      router.push('/ligas');
     } catch (e: any) {
-      setError(e?.message ?? 'Erro ao remover membro');
+      setErr(e?.message ?? 'Erro ao apagar liga');
     } finally {
-      setKickingUserId(null);
+      setBusyDelete(false);
     }
   }
 
-  if (loadingUser || loadingDetail) {
-    return <div className="py-6 opacity-80">A carregar liga…</div>;
+  async function handleRemoveMember(memberUserId: string) {
+    if (!userId || !detail) return;
+    setBusyMember(memberUserId);
+    setErr(null);
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/api/leagues/${encodeURIComponent(
+            detail.league.id,
+          )}/members/${encodeURIComponent(memberUserId)}`,
+        ),
+        {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        },
+      );
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(
+          `Falha a remover membro (${res.status}) ${res.statusText} ${txt}`,
+        );
+      }
+      await loadAll(userId, detail.league.id);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Erro ao remover membro');
+    } finally {
+      setBusyMember(null);
+    }
   }
 
-  if (!detail) {
+  if (!leagueId) {
     return (
-      <div className="py-6 space-y-3">
-        {error && (
-          <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm">
-            {error}
-          </div>
-        )}
-        <p className="opacity-80">Liga não encontrada.</p>
-        <Link
-          href="/ligas"
-          className="inline-flex rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/15"
+      <div className="py-6 opacity-80">
+        ID de liga em falta na rota. Volta às{' '}
+        <button
+          type="button"
+          className="underline"
+          onClick={() => router.push('/ligas')}
         >
-          ← Voltar às ligas
-        </Link>
+          ligas
+        </button>
+        .
       </div>
     );
   }
 
-  const { league, members, currentUserRole } = detail;
+  if (loadingUser) {
+    return <div className="py-6 opacity-80">A identificar utilizador…</div>;
+  }
+
+  if (!userId) {
+    return (
+      <div className="py-6 opacity-80">
+        Faz login para veres o detalhe da liga.
+      </div>
+    );
+  }
 
   return (
     <div className="py-6 space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">Liga: {league.name}</h1>
-          <p className="text-sm opacity-70">
-            Código:{' '}
-            <span className="font-mono tracking-[0.2em] uppercase">
-              {league.code}
-            </span>{' '}
-            • Visibilidade:{' '}
-            {league.visibility === 'public' ? 'Pública' : 'Privada'} • Tu és:{' '}
-            {currentUserRole ?? '—'}
-          </p>
-        </div>
-        <Link
-          href="/ligas"
-          className="rounded-full bg-white/10 px-3 py-1 text-sm hover:bg-white/15"
-        >
-          ← Voltar
-        </Link>
-      </div>
+      <button
+        type="button"
+        onClick={() => router.push('/ligas')}
+        className="text-xs rounded-full border border-white/20 px-3 py-1 hover:bg-white/10"
+      >
+        ← Voltar às ligas
+      </button>
 
-      {error && (
+      {err && (
         <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm">
-          {error}
+          {err}
         </div>
       )}
 
-      {/* Gestão de liga (apenas owner) */}
-      {isOwner && (
+      {/* Cabeçalho liga + edição (owner) */}
+      {detail ? (
         <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-          <h2 className="text-lg font-semibold">Gerir liga</h2>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex-1">
-              <label className="block text-xs uppercase opacity-60 mb-1">
-                Nome da liga
-              </label>
-              <input
-                type="text"
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm"
-              />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold">
+                Liga: {detail.league.name}
+              </h1>
+              <p className="text-sm opacity-80">
+                Código:{' '}
+                <span className="font-mono tracking-[0.25em] uppercase">
+                  {detail.league.code}
+                </span>
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={() => void handleSaveName()}
-              disabled={savingName || !nameDraft.trim()}
-              className="rounded-full bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/15 disabled:opacity-50"
-            >
-              {savingName ? 'A guardar…' : 'Guardar alterações'}
-            </button>
+            <div className="text-right text-xs opacity-80">
+              <div>
+                Visibilidade:{' '}
+                {detail.league.visibility === 'public'
+                  ? 'Pública'
+                  : 'Privada'}
+              </div>
+              <div>
+                O teu papel:{' '}
+                {detail.currentUserRole === 'owner' ? 'Owner' : 'Membro'}
+              </div>
+            </div>
           </div>
 
-          <div className="pt-3 border-t border-white/10 mt-3">
-            <button
-              type="button"
-              onClick={() => void handleDeleteLeague()}
-              disabled={deleting}
-              className="rounded-full bg-red-500/80 px-4 py-2 text-sm font-medium hover:bg-red-500 disabled:opacity-60"
-            >
-              {deleting ? 'A apagar…' : 'Apagar liga'}
-            </button>
-          </div>
+          {detail.currentUserRole === 'owner' && (
+            <>
+              <hr className="border-white/10" />
+              <div className="space-y-2">
+                <h2 className="text-sm font-semibold">
+                  Gestão da liga (apenas owner)
+                </h2>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="flex-1 rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm"
+                    placeholder="Nome da liga"
+                  />
+                  <select
+                    value={editVisibility}
+                    onChange={(e) =>
+                      setEditVisibility(
+                        e.target.value === 'public' ? 'public' : 'private',
+                      )
+                    }
+                    className="rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm"
+                  >
+                    <option value="private">Privada</option>
+                    <option value="public">Pública (beta)</option>
+                  </select>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={busySave || !editName.trim()}
+                    className="rounded-full bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/15 disabled:opacity-50"
+                  >
+                    {busySave ? 'A guardar…' : 'Guardar alterações'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={busyDelete}
+                    className="rounded-full bg-red-500/80 px-4 py-2 text-sm font-medium hover:bg-red-500 disabled:opacity-50"
+                  >
+                    {busyDelete ? 'A apagar…' : 'Apagar liga'}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+      ) : (
+        <div className="opacity-80 text-sm">
+          {loading ? 'A carregar liga…' : 'Liga não encontrada.'}
+        </div>
+      )}
+
+      {/* Membros */}
+      {detail && (
+        <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+          <h2 className="text-lg font-semibold">Membros da liga</h2>
+          {detail.members.length === 0 ? (
+            <div className="opacity-70 text-sm">Ainda não há membros.</div>
+          ) : (
+            <div className="space-y-1 text-sm">
+              {detail.members.map((m) => {
+                const isOwner = m.role === 'owner';
+                const isSelf = m.user_id === userId;
+                const canKick =
+                  detail.currentUserRole === 'owner' && !isOwner && !isSelf;
+
+                return (
+                  <div
+                    key={m.user_id}
+                    className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2"
+                  >
+                    <div>
+                      <div className="font-medium">
+                        {m.name || 'Jogador sem nome'}
+                      </div>
+                      <div className="text-[11px] opacity-70">
+                        {isOwner ? 'Owner' : 'Membro'}
+                        {isSelf ? ' • Tu' : ''}
+                      </div>
+                    </div>
+                    {canKick && (
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveMember(m.user_id)}
+                        disabled={busyMember === m.user_id}
+                        className="rounded-full bg-red-500/80 px-3 py-1 text-xs hover:bg-red-500 disabled:opacity-50"
+                      >
+                        {busyMember === m.user_id ? 'A remover…' : 'Remover'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
-      {/* Ranking da liga */}
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Ranking da liga</h2>
-          {loadingRanking && (
-            <span className="text-xs text-white/60">A carregar…</span>
+      {/* Ranking */}
+      {detail && (
+        <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+          <h2 className="text-lg font-semibold">
+            Ranking da liga &quot;{detail.league.name}&quot;
+          </h2>
+          {ranking.length === 0 ? (
+            <div className="opacity-70 text-sm">
+              Ainda não há pontos registados nesta liga.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="border-b border-white/10 bg-black/40">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/60">
+                      Pos
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/60">
+                      Jogador
+                    </th>
+                    <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-white/60">
+                      Pontos
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ranking.map((r) => (
+                    <tr
+                      key={r.user_id}
+                      className="border-b border-white/5 last:border-b-0"
+                    >
+                      <td className="px-3 py-2 whitespace-nowrap font-mono">
+                        {r.position}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {r.name}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right font-semibold">
+                        {r.total_points}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-        </div>
-        {ranking.length === 0 && !loadingRanking ? (
-          <p className="text-sm opacity-70">
-            Ainda não há pontos nesta liga.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="border-b border-white/10 bg-black/30">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/60">
-                    Pos
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/60">
-                    Jogador
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-white/60">
-                    Pontos
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {ranking.map((row, idx) => (
-                  <tr
-                    key={row.user_id}
-                    className={idx % 2 === 0 ? 'bg-black/20' : 'bg-black/10'}
-                  >
-                    <td className="px-3 py-2 whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {row.name ?? 'Sem nome'}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">
-                      {row.total_points ?? 0}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* Membros da liga */}
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Membros da liga</h2>
-          <span className="text-xs opacity-70">
-            Total: {members.length}
-          </span>
-        </div>
-        {members.length === 0 ? (
-          <p className="text-sm opacity-70">Ainda não há membros.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="border-b border-white/10 bg-black/30">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/60">
-                    Jogador
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-white/60">
-                    Role
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-white/60">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((m) => (
-                  <tr key={m.user_id} className="border-b border-white/5">
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {m.name ?? 'Sem nome'}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {m.role === 'owner' ? 'Owner' : 'Membro'}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">
-                      {isOwner && m.user_id !== league.owner_id ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleKickMember(m.user_id)}
-                          disabled={kickingUserId === m.user_id}
-                          className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/15 disabled:opacity-50"
-                        >
-                          {kickingUserId === m.user_id
-                            ? 'A remover…'
-                            : 'Remover'}
-                        </button>
-                      ) : (
-                        <span className="text-[11px] opacity-50">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
 
-export default function LeagueRankingPage({
-  params,
-}: {
-  params: { leagueId: string };
-}) {
+export default function LeagueDetailPage() {
   return (
     <AdminGate>
-      <LeagueRankingInner leagueId={params.leagueId} />
+      <LeagueDetailInner />
     </AdminGate>
   );
 }

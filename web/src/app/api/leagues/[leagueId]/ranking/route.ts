@@ -1,19 +1,17 @@
-// src/app/api/leagues/[leagueId]/ranking/route.ts
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
 function workerUrl(leagueId: string) {
   const base = API_BASE ? API_BASE.replace(/\/+$/, '') : '';
-  // rota do worker que criámos acima
   return `${base}/api/leagues/${encodeURIComponent(leagueId)}/ranking`;
 }
 
 export async function GET(
-  _req: Request,
-  { params }: { params: { leagueId: string } },
+  _req: NextRequest,
+  context: { params: { leagueId: string } },
 ) {
-  const { leagueId } = params;
+  const { leagueId } = context.params;
 
   if (!leagueId) {
     return NextResponse.json({ error: 'missing_league_id' }, { status: 400 });
@@ -22,7 +20,6 @@ export async function GET(
   try {
     const url = workerUrl(leagueId);
     const res = await fetch(url, {
-      // ranking de liga é público – não precisamos de headers especiais aqui
       headers: { 'cache-control': 'no-store' },
     });
 

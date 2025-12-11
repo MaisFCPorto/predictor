@@ -5,7 +5,6 @@ import { supabasePKCE } from '@/utils/supabase/client';
 import AdminGate from '../admin/_components/AdminGate';
 import Link from 'next/link';
 
-
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
 type LeagueRow = {
@@ -15,24 +14,6 @@ type LeagueRow = {
   visibility: 'public' | 'private' | string;
   owner_id: string;
   role: 'owner' | 'member' | string;
-};
-
-type LeagueRankingRow = {
-  user_id: string;
-  name: string;
-  avatar_url: string | null;
-  total_points: number;
-  position: number;
-};
-
-type LeagueRankingResponse = {
-  league: {
-    id: string;
-    name: string;
-    code: string;
-    visibility: string;
-  };
-  ranking: LeagueRankingRow[];
 };
 
 function apiUrl(path: string) {
@@ -58,13 +39,6 @@ function LeaguesInner() {
   const [busyJoin, setBusyJoin] = useState(false);
 
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
-
-  // ranking de liga seleccionada
-  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
-  const [ranking, setRanking] = useState<LeagueRankingRow[] | null>(null);
-  const [rankingLeagueName, setRankingLeagueName] = useState<string | null>(null);
-  const [loadingRanking, setLoadingRanking] = useState(false);
-  const [rankingErr, setRankingErr] = useState<string | null>(null);
 
   // carregar utilizador
   useEffect(() => {
@@ -159,9 +133,9 @@ function LeaguesInner() {
 
     setBusyJoin(true);
     setErr(null);
+    setJoinMessage(null);
     try {
       const res = await fetch(
-        // enviamos também o userId na query, além do body
         apiUrl(
           `/api/leagues/join?userId=${encodeURIComponent(
             userId,
@@ -182,50 +156,12 @@ function LeaguesInner() {
       }
 
       setJoinCode('');
+      setJoinMessage('Entrei na liga com sucesso ✅');
       await loadLeagues(userId);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro ao entrar na liga');
     } finally {
       setBusyJoin(false);
-    }
-  }
-
-
-  // carregar ranking de uma liga
-  async function handleToggleRanking(league: LeagueRow) {
-    // se clicarmos novamente na mesma liga, escondemos
-    if (selectedLeagueId === league.id) {
-      setSelectedLeagueId(null);
-      setRanking(null);
-      setRankingLeagueName(null);
-      setRankingErr(null);
-      return;
-    }
-
-    setSelectedLeagueId(league.id);
-    setRanking(null);
-    setRankingLeagueName(league.name);
-    setRankingErr(null);
-    setLoadingRanking(true);
-
-    try {
-      const res = await fetch(apiUrl(`/api/leagues/${league.id}/ranking`), {
-        cache: 'no-store',
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(
-          `Falha a carregar ranking da liga (${res.status}) ${res.statusText} ${txt}`,
-        );
-      }
-      const json = (await res.json()) as LeagueRankingResponse;
-      setRanking(json.ranking ?? []);
-      setRankingLeagueName(json.league?.name ?? league.name);
-    } catch (e: any) {
-      setRankingErr(e?.message ?? 'Erro a carregar ranking da liga');
-      setRanking(null);
-    } finally {
-      setLoadingRanking(false);
     }
   }
 
@@ -326,44 +262,34 @@ function LeaguesInner() {
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {leagues.map((lg) => {
-              const isSelected = selectedLeagueId === lg.id;
-              return (
-                <div
-                  key={lg.id}
-                  className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="font-medium">{lg.name}</div>
-                      <div className="mt-1 text-[12px] opacity-80">
-                        Código:{' '}
-                        <span className="font-mono uppercase tracking-[0.2em]">
-                          {lg.code}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-[12px] opacity-70">
-                        Visibilidade:{' '}
-                        {lg.visibility === 'public' ? 'Pública' : 'Privada'}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 text-[11px] uppercase">
-                      <span className="rounded-full bg-white/10 px-2 py-0.5">
-                        {lg.role === 'owner' ? 'Owner' : 'Membro'}
+            {leagues.map((lg) => (
+              <Link
+                key={lg.id}
+                href={`/ligas/${lg.id}`}
+                className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm transition-colors hover:border-white/30 hover:bg-white/10"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-medium">{lg.name}</div>
+                    <div className="mt-1 text-[12px] opacity-80">
+                      Código:{' '}
+                      <span className="font-mono uppercase tracking-[0.2em]">
+                        {lg.code}
                       </span>
-                      <Link
-  href={`/ligas/${lg.id}`}
-  className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/15"
->
-  Ver ranking
-</Link>
+                    </div>
+                    <div className="mt-1 text-[12px] opacity-70">
+                      Visibilidade:{' '}
+                      {lg.visibility === 'public' ? 'Pública' : 'Privada'}
                     </div>
                   </div>
-
-                  
+                  <div className="flex flex-col items-end gap-1 text-[11px] uppercase">
+                    <span className="rounded-full bg-white/10 px-2 py-0.5">
+                      {lg.role === 'owner' ? 'Owner' : 'Membro'}
+                    </span>
+                  </div>
                 </div>
-              );
-            })}
+              </Link>
+            ))}
           </div>
         )}
       </section>

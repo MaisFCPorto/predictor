@@ -487,7 +487,7 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
               WHEN u.email IS NULL THEN 'Jogador'
               ELSE substr(u.email, 1, instr(u.email, '@') - 1)
             END
-          ) AS name,
+          ) AS display_name,
           u.avatar_url,
           COALESCE(SUM(p.points), 0) AS total_points
         FROM league_members lm
@@ -505,14 +505,14 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
             OR l.ranking_from IS NULL
             OR f.kickoff_at >= l.ranking_from
           )
-        GROUP BY u.id, name, u.avatar_url
-        ORDER BY total_points DESC, name ASC
+        GROUP BY u.id, display_name, u.avatar_url
+        ORDER BY total_points DESC, display_name ASC
         `,
       )
       .bind(leagueId)
       .all<{
         user_id: string;
-        name: string;
+        display_name: string | null;
         avatar_url: string | null;
         total_points: number;
       }>();
@@ -520,7 +520,10 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
     const rows = rowsRes.results ?? [];
 
     const ranking = rows.map((row, idx) => ({
-      ...row,
+      user_id: row.user_id,
+      name: row.display_name,
+      avatar_url: row.avatar_url,
+      total_points: row.total_points,
       position: idx + 1,
     }));
 

@@ -452,75 +452,90 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
   const db = c.env.DB;
   const leagueId = c.req.param('leagueId');
 
-  const league = await db
-    .prepare(
-      `SELECT id, name, code, visibility, ranking_from
-       FROM leagues
-       WHERE id = ?`,
-    )
-    .bind(leagueId)
-    .first<{
-      id: string;
-      name: string;
-      code: string;
-      visibility: string;
-      ranking_from: string | null;
-    }>();
-
-  if (!league) {
-    return c.json({ error: 'league_not_found' }, 404);
+  if (!leagueId) {
+    return jsonError(c, 400, 'Missing leagueId');
   }
 
-  const rows = await db
-    .prepare(
-      `
-      SELECT
-        u.id AS user_id,
-        COALESCE(u.name,
-                 CASE
-                   WHEN u.email IS NULL THEN 'Jogador'
-                   ELSE substr(u.email, 1, instr(u.email, '@') - 1)
-                 END
-        ) AS name,
-        u.avatar_url,
-        COALESCE(SUM(p.points), 0) AS total_points
-      FROM league_members lm
-      JOIN users u
-        ON u.id = lm.user_id
-      LEFT JOIN predictions p
-        ON p.user_id = u.id
-      LEFT JOIN fixtures f
-        ON f.id = p.fixture_id
-      JOIN leagues l
-        ON l.id = lm.league_id
-      WHERE lm.league_id = ?
-        AND (
-          p.id IS NULL
-          OR l.ranking_from IS NULL
-          OR f.kickoff_at >= l.ranking_from
-        )
-      GROUP BY u.id, name, u.avatar_url
-      ORDER BY total_points DESC, u.created_at ASC
-      `,
-    )
-    .bind(leagueId)
-    .all<{
-      user_id: string;
-      name: string;
-      avatar_url: string | null;
-      total_points: number;
-    }>();
+  try {
+    const league = await db
+      .prepare(
+        `SELECT id, name, code, visibility, ranking_from
+         FROM leagues
+         WHERE id = ?`,
+      )
+      .bind(leagueId)
+      .first<{
+        id: string;
+        name: string;
+        code: string;
+        visibility: string;
+        ranking_from: string | null;
+      }>();
 
-  const ranking =
-    rows.results.map((row, idx) => ({
+    if (!league) {
+      return jsonError(c, 404, 'league_not_found');
+    }
+
+    const rowsRes = await db
+      .prepare(
+        `
+        SELECT
+          u.id AS user_id,
+          COALESCE(
+            u.name,
+            CASE
+              WHEN u.email IS NULL THEN 'Jogador'
+              ELSE substr(u.email, 1, instr(u.email, '@') - 1)
+            END
+          ) AS name,
+          u.avatar_url,
+          COALESCE(SUM(p.points), 0) AS total_points
+        FROM league_members lm
+        JOIN users u
+          ON u.id = lm.user_id
+        LEFT JOIN predictions p
+          ON p.user_id = u.id
+        LEFT JOIN fixtures f
+          ON f.id = p.fixture_id
+        JOIN leagues l
+          ON l.id = lm.league_id
+        WHERE lm.league_id = ?
+          AND (
+            p.id IS NULL
+            OR l.ranking_from IS NULL
+            OR f.kickoff_at >= l.ranking_from
+          )
+        GROUP BY u.id, name, u.avatar_url
+        ORDER BY total_points DESC, name ASC
+        `,
+      )
+      .bind(leagueId)
+      .all<{
+        user_id: string;
+        name: string;
+        avatar_url: string | null;
+        total_points: number;
+      }>();
+
+    const rows = rowsRes.results ?? [];
+
+    const ranking = rows.map((row, idx) => ({
       ...row,
       position: idx + 1,
-    })) ?? [];
+    }));
 
-  return c.json({
-    league,
-    ranking,
-  });
+    return c.json({
+      league,
+      ranking,
+    });
+  } catch (err: any) {
+    console.error('Error loading league ranking', err);
+    return jsonError(
+      c,
+      500,
+      err?.message || 'Failed to load league ranking',
+    );
+  }
 });
 
 export default leagues;

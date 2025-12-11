@@ -217,7 +217,7 @@ leagues.get('/leagues/:leagueId', async (c) => {
 
   const league = await db
     .prepare(
-      `SELECT id, name, code, visibility, owner_id
+      `SELECT id, name, code, visibility, owner_id, ranking_from
        FROM leagues
        WHERE id = ?`,
     )
@@ -228,6 +228,7 @@ leagues.get('/leagues/:leagueId', async (c) => {
       code: string;
       visibility: string;
       owner_id: string;
+      ranking_from: string | null;
     }>();
 
   if (!league) return jsonError(c, 404, 'league_not_found');
@@ -272,7 +273,7 @@ leagues.get('/leagues/:leagueId', async (c) => {
 
 /* ---------------------------------------------------
  * PATCH /api/leagues/:leagueId  (apenas owner)
- * Body: { userId, name?, visibility? }
+ * Body: { userId, name?, visibility?, ranking_from? }
  * --------------------------------------------------- */
 leagues.patch('/leagues/:leagueId', async (c) => {
   const db = c.env.DB;
@@ -317,6 +318,21 @@ leagues.patch('/leagues/:leagueId', async (c) => {
       visibilityRaw === 'public' ? 'public' : 'private';
     updates.push('visibility = ?');
     params.push(vis);
+  }
+
+  // ranking_from pode vir como string, null, '' ou não vir
+  const hasRankingFromField = Object.prototype.hasOwnProperty.call(
+    body,
+    'ranking_from',
+  );
+  if (hasRankingFromField) {
+    const raw = body.ranking_from;
+    let rankingFrom: string | null = null;
+    if (raw != null && String(raw).trim() !== '') {
+      rankingFrom = String(raw).trim(); // ex: '2025-02-01'
+    }
+    updates.push('ranking_from = ?');
+    params.push(rankingFrom);
   }
 
   if (updates.length === 0) {
@@ -430,7 +446,7 @@ leagues.delete('/leagues/:leagueId/members/:memberUserId', async (c) => {
 
 /* ---------------------------------------------------
  * GET /api/leagues/:leagueId/ranking
- * Ranking de pontos da liga
+ * Ranking de pontos da liga (respeita ranking_from)
  * --------------------------------------------------- */
 leagues.get('/leagues/:leagueId/ranking', async (c) => {
   const db = c.env.DB;
@@ -438,7 +454,7 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
 
   const league = await db
     .prepare(
-      `SELECT id, name, code, visibility
+      `SELECT id, name, code, visibility, ranking_from
        FROM leagues
        WHERE id = ?`,
     )
@@ -448,6 +464,7 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
       name: string;
       code: string;
       visibility: string;
+      ranking_from: string | null;
     }>();
 
   if (!league) {
@@ -472,7 +489,16 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
         ON u.id = lm.user_id
       LEFT JOIN predictions p
         ON p.user_id = u.id
+      LEFT JOIN fixtures f
+        ON f.id = p.fixture_id
+      JOIN leagues l
+        ON l.id = lm.league_id
       WHERE lm.league_id = ?
+        AND (
+          p.id IS NULL
+          OR l.ranking_from IS NULL
+          OR f.kickoff_at >= l.ranking_from
+        )
       GROUP BY u.id, name, u.avatar_url
       ORDER BY total_points DESC, u.created_at ASC
       `,

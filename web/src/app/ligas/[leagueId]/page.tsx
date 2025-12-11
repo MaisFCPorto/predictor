@@ -13,6 +13,7 @@ type LeagueInfo = {
   code: string;
   visibility: 'public' | 'private' | string;
   owner_id: string;
+  ranking_from?: string | null;
 };
 
 type MemberRow = {
@@ -47,6 +48,7 @@ function LeagueDetailInner() {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [rankingFrom, setRankingFrom] = useState('');
 
   const [detail, setDetail] = useState<LeagueDetailResponse | null>(null);
   const [ranking, setRanking] = useState<RankingRow[]>([]);
@@ -105,6 +107,7 @@ function LeagueDetailInner() {
       setEditVisibility(
         detailJson.league.visibility === 'public' ? 'public' : 'private',
       );
+      setRankingFrom(detailJson.league.ranking_from ?? '');
 
       // ranking
       const rankingRes = await fetch(
@@ -148,6 +151,7 @@ function LeagueDetailInner() {
             userId,
             name: editName.trim(),
             visibility: editVisibility,
+            ranking_from: rankingFrom.trim() || null,
           }),
         },
       );
@@ -351,6 +355,29 @@ function LeagueDetailInner() {
                     <option value="public">Pública (beta)</option>
                   </select>
                 </div>
+
+                {/* Data de início do ranking */}
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
+                  <label className="text-xs text-white/70 sm:w-60">
+                    Ranking desta liga conta jogos desde:
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={rankingFrom}
+                      onChange={(e) => setRankingFrom(e.target.value)}
+                      className="rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setRankingFrom('')}
+                      className="text-xs rounded-full border border-white/25 px-3 py-1 hover:bg-white/10"
+                    >
+                      Contar todos os jogos
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -385,6 +412,21 @@ function LeagueDetailInner() {
           <h2 className="text-lg font-semibold">
             Ranking da liga &quot;{detail.league.name}&quot;
           </h2>
+
+          {detail.league.ranking_from ? (
+            <p className="text-xs text-white/60">
+              A contar jogos desde{' '}
+              <span className="font-mono">
+                {detail.league.ranking_from}
+              </span>
+              .
+            </p>
+          ) : (
+            <p className="text-xs text-white/60">
+              A contar <strong>todos</strong> os jogos em que há previsões.
+            </p>
+          )}
+
           {ranking.length === 0 ? (
             <div className="opacity-70 text-sm">
               Ainda não há pontos registados nesta liga.

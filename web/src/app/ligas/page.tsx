@@ -16,6 +16,15 @@ type LeagueRow = {
   role: 'owner' | 'member' | string;
 };
 
+type PublicLeagueRow = {
+  id: string;
+  name: string;
+  code: string;
+  visibility: 'public' | 'private' | string;
+  owner_id: string;
+  is_member: boolean;
+};
+
 function apiUrl(path: string) {
   const base = API_BASE ? API_BASE.replace(/\/+$/, '') : '';
   return base ? `${base}${path}` : path;
@@ -27,6 +36,10 @@ function LeaguesInner() {
 
   const [leagues, setLeagues] = useState<LeagueRow[]>([]);
   const [loadingLeagues, setLoadingLeagues] = useState(false);
+
+  const [publicLeagues, setPublicLeagues] = useState<PublicLeagueRow[]>([]);
+  const [loadingPublic, setLoadingPublic] = useState(false);
+
   const [err, setErr] = useState<string | null>(null);
 
   const [newName, setNewName] = useState('');
@@ -37,6 +50,7 @@ function LeaguesInner() {
   const [joinCode, setJoinCode] = useState('');
   const [busyCreate, setBusyCreate] = useState(false);
   const [busyJoin, setBusyJoin] = useState(false);
+  const [busyJoinPublicId, setBusyJoinPublicId] = useState<string | null>(null);
 
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
 
@@ -82,9 +96,33 @@ function LeaguesInner() {
     }
   }
 
+  async function loadPublicLeagues(currentUserId: string) {
+    setLoadingPublic(true);
+    try {
+      const res = await fetch(
+        apiUrl(`/api/leagues/public?userId=${encodeURIComponent(currentUserId)}`),
+        { cache: 'no-store' },
+      );
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(
+          `Falha a carregar ligas públicas (${res.status}) ${res.statusText} ${txt}`,
+        );
+      }
+      const json = (await res.json()) as PublicLeagueRow[];
+      setPublicLeagues(Array.isArray(json) ? json : []);
+    } catch (e: any) {
+      setErr((prev) => prev ?? e?.message ?? 'Erro a carregar ligas públicas');
+      setPublicLeagues([]);
+    } finally {
+      setLoadingPublic(false);
+    }
+  }
+
   useEffect(() => {
     if (userId) {
       void loadLeagues(userId);
+      void loadPublicLeagues(userId);
     }
   }, [userId]);
 
@@ -114,6 +152,7 @@ function LeaguesInner() {
       }
       setNewName('');
       await loadLeagues(userId);
+      await loadPublicLeagues(userId);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro a criar liga');
     } finally {
@@ -158,10 +197,48 @@ function LeaguesInner() {
       setJoinCode('');
       setJoinMessage('Entrei na liga com sucesso ✅');
       await loadLeagues(userId);
+      await loadPublicLeagues(userId);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro ao entrar na liga');
     } finally {
       setBusyJoin(false);
+    }
+  }
+
+  async function handleJoinPublic(league: PublicLeagueRow) {
+    if (!userId) return;
+    if (league.is_member) return;
+
+    setBusyJoinPublicId(league.id);
+    setErr(null);
+
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/api/leagues/join?userId=${encodeURIComponent(
+            userId,
+          )}&code=${encodeURIComponent(league.code)}`,
+        ),
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ userId, code: league.code }),
+        },
+      );
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(
+          `Falha a entrar na liga (${res.status}) ${txt || res.statusText}`,
+        );
+      }
+
+      await loadLeagues(userId);
+      await loadPublicLeagues(userId);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Erro ao entrar na liga pública');
+    } finally {
+      setBusyJoinPublicId(null);
     }
   }
 
@@ -251,7 +328,7 @@ function LeaguesInner() {
         )}
       </section>
 
-      {/* Lista de ligas */}
+      {/* As tuas ligas */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">As tuas ligas</h2>
         {loadingLeagues ? (
@@ -290,6 +367,63 @@ function LeaguesInner() {
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+      </section>
+
+      {/* Ligas públicas */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Ligas públicas</h2>
+        {loadingPublic ? (
+          <div className="text-sm opacity-80">A carregar ligas públicas…</div>
+        ) : publicLeagues.length === 0 ? (
+          <div className="text-sm opacity-70">
+            Ainda não há ligas públicas disponíveis.
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {publicLeagues.map((lg) => {
+              const isMember = lg.is_member;
+              const busy = busyJoinPublicId === lg.id;
+
+              return (
+                <div
+                  key={lg.id}
+                  className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">{lg.name}</div>
+                      <div className="mt-1 text-[12px] opacity-80">
+                        Código:{' '}
+                        <span className="font-mono uppercase tracking-[0.2em]">
+                          {lg.code}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 text-[11px] uppercase">
+                      {isMember ? (
+                        <Link
+                          href={`/ligas/${lg.id}`}
+                          className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/15"
+                        >
+                          Abrir
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleJoinPublic(lg)}
+                          disabled={busy}
+                          className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/15 disabled:opacity-50"
+                        >
+                          {busy ? 'A entrar…' : 'Entrar'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

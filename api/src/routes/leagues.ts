@@ -7,18 +7,14 @@ type Env = {
 
 export const leagues = new Hono<{ Bindings: Env }>();
 
-/**
- * Helper: constrói erro JSON simples
- */
 function jsonError(c: any, status: number, message: string) {
   return c.json({ error: message }, status);
 }
 
-/* ======================================================================
-   1) LISTAR LIGAS DO UTILIZADOR
-   GET /api/leagues?userId=...
-====================================================================== */
-
+/* ---------------------------------------------------
+ * GET /api/leagues?userId=...
+ * Ligas em que o utilizador participa
+ * --------------------------------------------------- */
 leagues.get('/leagues', async (c) => {
   const db = c.env.DB;
   const userId = c.req.query('userId');
@@ -45,12 +41,59 @@ leagues.get('/leagues', async (c) => {
   return c.json(result.results ?? []);
 });
 
-/* ======================================================================
-   2) CRIAR LIGA
-   POST /api/leagues
-   Body: { userId: string, name: string, visibility?: 'public' | 'private' }
-====================================================================== */
+/* ---------------------------------------------------
+ * GET /api/leagues/public?userId=...
+ * Lista ligas públicas + se o user já é membro
+ * --------------------------------------------------- */
+leagues.get('/leagues/public', async (c) => {
+  const db = c.env.DB;
+  const userId = c.req.query('userId');
 
+  if (!userId) return jsonError(c, 400, 'Missing userId');
+
+  const result = await db
+    .prepare(
+      `
+      SELECT
+        l.id,
+        l.name,
+        l.code,
+        l.visibility,
+        l.owner_id,
+        EXISTS (
+          SELECT 1
+          FROM league_members lm
+          WHERE lm.league_id = l.id
+            AND lm.user_id = ?
+        ) AS is_member
+      FROM leagues l
+      WHERE l.visibility = 'public'
+      ORDER BY l.name
+      `,
+    )
+    .bind(userId)
+    .all<{
+      id: string;
+      name: string;
+      code: string;
+      visibility: string;
+      owner_id: string;
+      is_member: number;
+    }>();
+
+  const rows =
+    result.results?.map((r) => ({
+      ...r,
+      is_member: !!r.is_member,
+    })) ?? [];
+
+  return c.json(rows);
+});
+
+/* ---------------------------------------------------
+ * POST /api/leagues
+ * Body: { userId, name, visibility? }
+ * --------------------------------------------------- */
 leagues.post('/leagues', async (c) => {
   const db = c.env.DB;
 
@@ -63,7 +106,8 @@ leagues.post('/leagues', async (c) => {
 
   const userId = String(body.userId ?? '').trim();
   const name = String(body.name ?? '').trim();
-  const visibility = (String(body.visibility ?? 'private').toLowerCase() === 'public'
+  const visibility = (String(body.visibility ?? 'private').toLowerCase() ===
+  'public'
     ? 'public'
     : 'private') as 'public' | 'private';
 
@@ -72,12 +116,10 @@ leagues.post('/leagues', async (c) => {
 
   const id = crypto.randomUUID();
 
-  // código curto para partilhar com amigos (6 chars)
   const code =
     (body.code as string | undefined)?.trim().toUpperCase() ||
     id.replace(/-/g, '').toUpperCase().slice(0, 6);
 
-  // inserir liga + membership numa batch
   await db.batch([
     db
       .prepare(
@@ -106,82 +148,66 @@ leagues.post('/leagues', async (c) => {
   );
 });
 
-/* ======================================================================
-   3) ENTRAR POR CÓDIGO
-   POST /api/leagues/join
-   Body: { userId: string, code: string }
-====================================================================== */
-
+/* ---------------------------------------------------
+ * POST /api/leagues/join
+ * Body: { userId, code }
+ * OU query: ?userId=...&code=...
+ * --------------------------------------------------- */
 leagues.post('/leagues/join', async (c) => {
-    const db = c.env.DB;
-  
-    let body: any = {};
-    try {
-      // Se o body não for JSON válido, tratamos como objeto vazio
-      body = (await c.req.json()) ?? {};
-    } catch {
-      body = {};
-    }
-  
-    const rawUserId = body.userId ?? c.req.query('userId');
-    const rawCode = body.code ?? c.req.query('code');
-  
-    const userId =
-      typeof rawUserId === 'string'
-        ? rawUserId.trim()
-        : String(rawUserId ?? '').trim();
-  
-    const codeInput =
-      typeof rawCode === 'string'
-        ? rawCode.trim()
-        : String(rawCode ?? '').trim();
-  
-    // proteger contra "", "undefined", "null"
-    if (!userId || userId === 'undefined' || userId === 'null') {
-      return jsonError(c, 400, 'Missing userId');
-    }
-    if (!codeInput) return jsonError(c, 400, 'Missing code');
-  
-    const code = codeInput.toUpperCase();
-  
-    const league = await db
-      .prepare(
-        `SELECT id, name, code, visibility, owner_id
-         FROM leagues
-         WHERE UPPER(code) = ?`,
-      )
-      .bind(code)
-      .first<{
-        id: string;
-        name: string;
-        code: string;
-        visibility: string;
-        owner_id: string;
-      }>();
-  
-    if (!league) return jsonError(c, 404, 'Liga não encontrada');
-  
-    // inserir membership se ainda não existir
-    await db
-      .prepare(
-        `INSERT OR IGNORE INTO league_members (league_id, user_id, role)
-         VALUES (?, ?, ?)`,
-      )
-      .bind(league.id, userId, 'member')
-      .run();
-  
-    return c.json({
-      ...league,
-      role: userId === league.owner_id ? 'owner' : 'member',
-    });
+  const db = c.env.DB;
+
+  let body: any = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    // ok, pode vir tudo por query
+  }
+
+  const userId =
+    String(body.userId ?? c.req.query('userId') ?? '').trim();
+  const rawCode =
+    String(body.code ?? c.req.query('code') ?? '').trim();
+
+  if (!userId) return jsonError(c, 400, 'Missing userId');
+  if (!rawCode) return jsonError(c, 400, 'Missing code');
+
+  const code = rawCode.toUpperCase();
+
+  const league = await db
+    .prepare(
+      `SELECT id, name, code, visibility, owner_id
+       FROM leagues
+       WHERE UPPER(code) = ?`,
+    )
+    .bind(code)
+    .first<{
+      id: string;
+      name: string;
+      code: string;
+      visibility: string;
+      owner_id: string;
+    }>();
+
+  if (!league) return jsonError(c, 404, 'Liga não encontrada');
+
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO league_members (league_id, user_id, role)
+       VALUES (?, ?, ?)`,
+    )
+    .bind(league.id, userId, 'member')
+    .run();
+
+  return c.json({
+    ...league,
+    role: userId === league.owner_id ? 'owner' : 'member',
   });
+});
 
-/* ======================================================================
-   4) DETALHE DA LIGA
-   GET /api/leagues/:leagueId?userId=...
-   Devolve info da liga + membros + role do utilizador.
-====================================================================== */
-
+/* ---------------------------------------------------
+ * GET /api/leagues/:leagueId
+ * Detalhe + membros + role actual
+ * --------------------------------------------------- */
 leagues.get('/leagues/:leagueId', async (c) => {
   const db = c.env.DB;
   const leagueId = c.req.param('leagueId');
@@ -206,49 +232,48 @@ leagues.get('/leagues/:leagueId', async (c) => {
 
   if (!league) return jsonError(c, 404, 'league_not_found');
 
-  const membersResult = await db
+  const membersRes = await db
     .prepare(
-      `SELECT
-         lm.user_id,
-         lm.role,
-         COALESCE(u.name,
-           CASE
-             WHEN u.email IS NULL THEN 'Jogador'
-             ELSE substr(u.email, 1, instr(u.email, '@') - 1)
-           END
-         ) AS name
-       FROM league_members lm
-       JOIN users u ON u.id = lm.user_id
-       WHERE lm.league_id = ?
-       ORDER BY
-         CASE WHEN lm.role = 'owner' THEN 0 ELSE 1 END,
-         name`,
+      `
+      SELECT
+        lm.user_id,
+        lm.role,
+        COALESCE(u.name,
+          CASE
+            WHEN u.email IS NULL THEN 'Jogador'
+            ELSE substr(u.email, 1, instr(u.email, '@') - 1)
+          END
+        ) AS name
+      FROM league_members lm
+      JOIN users u ON u.id = lm.user_id
+      WHERE lm.league_id = ?
+      ORDER BY (lm.user_id = ?) DESC, lm.role DESC, name ASC
+      `,
     )
-    .bind(leagueId)
+    .bind(leagueId, userId)
     .all<{
       user_id: string;
       role: string;
       name: string | null;
     }>();
 
-  const members = membersResult.results ?? [];
-
-  const myMembership = members.find((m) => m.user_id === userId) || null;
-  const currentUserRole = (myMembership?.role as 'owner' | 'member' | undefined) ?? null;
+  const currentMembership = membersRes.results.find(
+    (m) => m.user_id === userId,
+  );
+  const currentUserRole =
+    (currentMembership?.role as 'owner' | 'member' | undefined) ?? null;
 
   return c.json({
     league,
-    members,
+    members: membersRes.results,
     currentUserRole,
   });
 });
 
-/* ======================================================================
-   5) EDITAR LIGA (owner)
-   PATCH /api/leagues/:leagueId
-   Body: { userId, name?, visibility? }
-====================================================================== */
-
+/* ---------------------------------------------------
+ * PATCH /api/leagues/:leagueId  (apenas owner)
+ * Body: { userId, name?, visibility? }
+ * --------------------------------------------------- */
 leagues.patch('/leagues/:leagueId', async (c) => {
   const db = c.env.DB;
   const leagueId = c.req.param('leagueId');
@@ -261,39 +286,41 @@ leagues.patch('/leagues/:leagueId', async (c) => {
   }
 
   const userId = String(body.userId ?? '').trim();
-  const name = (body.name ?? '').toString().trim();
-  const rawVisibility = (body.visibility ?? '').toString().toLowerCase();
-  const visibility =
-    rawVisibility === 'public' ? 'public' : rawVisibility === 'private' ? 'private' : null;
+  const name = body.name != null ? String(body.name).trim() : undefined;
+  const visibilityRaw =
+    body.visibility != null ? String(body.visibility).toLowerCase() : undefined;
 
   if (!userId) return jsonError(c, 400, 'Missing userId');
 
-  const membership = await db
+  const league = await db
     .prepare(
-      `SELECT role FROM league_members
-       WHERE league_id = ? AND user_id = ?`,
+      `SELECT id, owner_id
+       FROM leagues
+       WHERE id = ?`,
     )
-    .bind(leagueId, userId)
-    .first<{ role: string }>();
+    .bind(leagueId)
+    .first<{ id: string; owner_id: string }>();
 
-  if (!membership || membership.role !== 'owner') {
-    return jsonError(c, 403, 'only_owner_can_edit');
-  }
+  if (!league) return jsonError(c, 404, 'league_not_found');
+  if (league.owner_id !== userId)
+    return jsonError(c, 403, 'not_owner');
 
-  if (!name && !visibility) {
-    return jsonError(c, 400, 'Nothing to update');
-  }
-
-  const fields: string[] = [];
+  const updates: string[] = [];
   const params: any[] = [];
 
-  if (name) {
-    fields.push('name = ?');
+  if (name !== undefined) {
+    updates.push('name = ?');
     params.push(name);
   }
-  if (visibility) {
-    fields.push('visibility = ?');
-    params.push(visibility);
+  if (visibilityRaw !== undefined) {
+    const vis =
+      visibilityRaw === 'public' ? 'public' : 'private';
+    updates.push('visibility = ?');
+    params.push(vis);
+  }
+
+  if (updates.length === 0) {
+    return jsonError(c, 400, 'Nothing to update');
   }
 
   params.push(leagueId);
@@ -301,139 +328,110 @@ leagues.patch('/leagues/:leagueId', async (c) => {
   await db
     .prepare(
       `UPDATE leagues
-       SET ${fields.join(', ')}
+       SET ${updates.join(', ')}
        WHERE id = ?`,
     )
     .bind(...params)
     .run();
 
-  const updated = await db
-    .prepare(
-      `SELECT id, name, code, visibility, owner_id
-       FROM leagues
-       WHERE id = ?`,
-    )
-    .bind(leagueId)
-    .first();
-
-  return c.json(updated);
+  return c.json({ ok: true });
 });
 
-/* ======================================================================
-   6) APAGAR LIGA (owner)
-   DELETE /api/leagues/:leagueId
-   Body: { userId }
-====================================================================== */
-
+/* ---------------------------------------------------
+ * DELETE /api/leagues/:leagueId  (apenas owner)
+ * --------------------------------------------------- */
 leagues.delete('/leagues/:leagueId', async (c) => {
   const db = c.env.DB;
   const leagueId = c.req.param('leagueId');
 
-  let body: any;
+  let body: any = {};
   try {
     body = await c.req.json();
   } catch {
-    return jsonError(c, 400, 'Invalid JSON');
+    // ok
   }
 
   const userId = String(body.userId ?? '').trim();
   if (!userId) return jsonError(c, 400, 'Missing userId');
 
-  const membership = await db
+  const league = await db
     .prepare(
-      `SELECT role FROM league_members
-       WHERE league_id = ? AND user_id = ?`,
+      `SELECT id, owner_id FROM leagues WHERE id = ?`,
     )
-    .bind(leagueId, userId)
-    .first<{ role: string }>();
+    .bind(leagueId)
+    .first<{ id: string; owner_id: string }>();
 
-  if (!membership || membership.role !== 'owner') {
-    return jsonError(c, 403, 'only_owner_can_delete');
-  }
+  if (!league) return jsonError(c, 404, 'league_not_found');
+  if (league.owner_id !== userId)
+    return jsonError(c, 403, 'not_owner');
 
   await db.batch([
-    db.prepare(`DELETE FROM league_members WHERE league_id = ?`).bind(leagueId),
-    db.prepare(`DELETE FROM leagues WHERE id = ?`).bind(leagueId),
+    db
+      .prepare(
+        `DELETE FROM league_members WHERE league_id = ?`,
+      )
+      .bind(leagueId),
+    db
+      .prepare(`DELETE FROM leagues WHERE id = ?`)
+      .bind(leagueId),
   ]);
 
   return c.json({ ok: true });
 });
 
-/* ======================================================================
-   7) REMOVER MEMBRO / SAIR DA LIGA
-   DELETE /api/leagues/:leagueId/members/:memberUserId
-   Body: { userId }
-   - owner pode remover qualquer membro
-   - qualquer utilizador pode remover-se a si próprio (sair da liga)
-====================================================================== */
-
+/* ---------------------------------------------------
+ * DELETE /api/leagues/:leagueId/members/:memberUserId
+ * - Se userId === memberUserId → pode sair da liga.
+ * - Caso contrário, só o owner pode remover.
+ * Body: { userId }
+ * --------------------------------------------------- */
 leagues.delete('/leagues/:leagueId/members/:memberUserId', async (c) => {
   const db = c.env.DB;
   const leagueId = c.req.param('leagueId');
   const memberUserId = c.req.param('memberUserId');
 
-  let body: any;
+  let body: any = {};
   try {
     body = await c.req.json();
   } catch {
-    return jsonError(c, 400, 'Invalid JSON');
+    // ok
   }
 
   const userId = String(body.userId ?? '').trim();
   if (!userId) return jsonError(c, 400, 'Missing userId');
 
-  // membership de quem está a fazer a operação
-  const membership = await db
+  const league = await db
     .prepare(
-      `SELECT role
-       FROM league_members
-       WHERE league_id = ? AND user_id = ?`,
+      `SELECT id, owner_id FROM leagues WHERE id = ?`,
     )
-    .bind(leagueId, userId)
-    .first<{ role: string }>();
+    .bind(leagueId)
+    .first<{ id: string; owner_id: string }>();
 
-  if (!membership) {
-    return jsonError(c, 403, 'not_member');
-  }
+  if (!league) return jsonError(c, 404, 'league_not_found');
 
-  const isOwner = membership.role === 'owner';
   const isSelf = userId === memberUserId;
+  const isOwner = league.owner_id === userId;
 
-  // se não é owner, só pode remover-se a si próprio
-  if (!isOwner && !isSelf) {
+  if (!isSelf && !isOwner) {
     return jsonError(c, 403, 'forbidden');
   }
 
   await db
     .prepare(
       `DELETE FROM league_members
-       WHERE league_id = ? AND user_id = ?`,
+       WHERE league_id = ?
+         AND user_id = ?`,
     )
     .bind(leagueId, memberUserId)
     .run();
 
-  // se a liga ficou sem membros, apaga-a automaticamente
-  const remaining = await db
-    .prepare(
-      `SELECT COUNT(*) as cnt
-       FROM league_members
-       WHERE league_id = ?`,
-    )
-    .bind(leagueId)
-    .first<{ cnt: number }>();
-
-  if (!remaining || remaining.cnt === 0) {
-    await db.prepare(`DELETE FROM leagues WHERE id = ?`).bind(leagueId).run();
-  }
-
   return c.json({ ok: true });
 });
 
-/* ======================================================================
-   8) RANKING DA LIGA
-   GET /api/leagues/:leagueId/ranking
-====================================================================== */
-
+/* ---------------------------------------------------
+ * GET /api/leagues/:leagueId/ranking
+ * Ranking de pontos da liga
+ * --------------------------------------------------- */
 leagues.get('/leagues/:leagueId/ranking', async (c) => {
   const db = c.env.DB;
   const leagueId = c.req.param('leagueId');
@@ -453,7 +451,7 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
     }>();
 
   if (!league) {
-    return jsonError(c, 404, 'league_not_found');
+    return c.json({ error: 'league_not_found' }, 404);
   }
 
   const rows = await db
@@ -461,12 +459,11 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
       `
       SELECT
         u.id AS user_id,
-        COALESCE(
-          u.name,
-          CASE
-            WHEN u.email IS NULL THEN 'Jogador'
-            ELSE substr(u.email, 1, instr(u.email, '@') - 1)
-          END
+        COALESCE(u.name,
+                 CASE
+                   WHEN u.email IS NULL THEN 'Jogador'
+                   ELSE substr(u.email, 1, instr(u.email, '@') - 1)
+                 END
         ) AS name,
         u.avatar_url,
         COALESCE(SUM(p.points), 0) AS total_points
@@ -488,10 +485,11 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
       total_points: number;
     }>();
 
-  const ranking = (rows.results ?? []).map((row, idx) => ({
-    ...row,
-    position: idx + 1,
-  }));
+  const ranking =
+    rows.results.map((row, idx) => ({
+      ...row,
+      position: idx + 1,
+    })) ?? [];
 
   return c.json({
     league,

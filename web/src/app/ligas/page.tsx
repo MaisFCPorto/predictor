@@ -149,30 +149,39 @@ function LeaguesInner() {
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
-    if (!userId) return;
+    if (!userId) {
+      setErr('Não foi possível identificar o utilizador (userId em falta).');
+      return;
+    }
+
     const code = joinCode.trim();
     if (!code) return;
 
     setBusyJoin(true);
     setErr(null);
-    setJoinMessage(null);
     try {
-      const res = await fetch(apiUrl('/api/leagues/join'), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, code }), // <-- garante user_id
-      });
+      const res = await fetch(
+        // enviamos também o userId na query, além do body
+        apiUrl(
+          `/api/leagues/join?userId=${encodeURIComponent(
+            userId,
+          )}&code=${encodeURIComponent(code)}`,
+        ),
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ userId, code }),
+        },
+      );
+
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
-        let friendly = 'Erro ao entrar na liga';
-        if (res.status === 404) friendly = 'Liga não encontrada';
-        if (res.status === 409) friendly = 'Já fazes parte desta liga';
         throw new Error(
-          `${friendly} (${res.status}) ${res.statusText} ${txt}`,
+          `Falha a entrar na liga (${res.status}) ${txt || res.statusText}`,
         );
       }
+
       setJoinCode('');
-      setJoinMessage('Entraste na liga com sucesso ✅');
       await loadLeagues(userId);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro ao entrar na liga');
@@ -180,6 +189,7 @@ function LeaguesInner() {
       setBusyJoin(false);
     }
   }
+
 
   // carregar ranking de uma liga
   async function handleToggleRanking(league: LeagueRow) {

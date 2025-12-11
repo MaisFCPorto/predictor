@@ -113,54 +113,68 @@ leagues.post('/leagues', async (c) => {
 ====================================================================== */
 
 leagues.post('/leagues/join', async (c) => {
-  const db = c.env.DB;
-
-  let body: any;
-  try {
-    body = await c.req.json();
-  } catch {
-    return jsonError(c, 400, 'Invalid JSON');
-  }
-
-  const userId = String(body.userId ?? '').trim();
-  const rawCode = String(body.code ?? '').trim();
-
-  if (!userId) return jsonError(c, 400, 'Missing userId');
-  if (!rawCode) return jsonError(c, 400, 'Missing code');
-
-  const code = rawCode.toUpperCase();
-
-  const league = await db
-    .prepare(
-      `SELECT id, name, code, visibility, owner_id
-       FROM leagues
-       WHERE UPPER(code) = ?`,
-    )
-    .bind(code)
-    .first<{
-      id: string;
-      name: string;
-      code: string;
-      visibility: string;
-      owner_id: string;
-    }>();
-
-  if (!league) return jsonError(c, 404, 'Liga não encontrada');
-
-  // inserir membership se ainda não existir
-  await db
-    .prepare(
-      `INSERT OR IGNORE INTO league_members (league_id, user_id, role)
-       VALUES (?, ?, ?)`,
-    )
-    .bind(league.id, userId, 'member')
-    .run();
-
-  return c.json({
-    ...league,
-    role: userId === league.owner_id ? 'owner' : 'member',
+    const db = c.env.DB;
+  
+    let body: any = {};
+    try {
+      // Se o body não for JSON válido, tratamos como objeto vazio
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
+  
+    const rawUserId = body.userId ?? c.req.query('userId');
+    const rawCode = body.code ?? c.req.query('code');
+  
+    const userId =
+      typeof rawUserId === 'string'
+        ? rawUserId.trim()
+        : String(rawUserId ?? '').trim();
+  
+    const codeInput =
+      typeof rawCode === 'string'
+        ? rawCode.trim()
+        : String(rawCode ?? '').trim();
+  
+    // proteger contra "", "undefined", "null"
+    if (!userId || userId === 'undefined' || userId === 'null') {
+      return jsonError(c, 400, 'Missing userId');
+    }
+    if (!codeInput) return jsonError(c, 400, 'Missing code');
+  
+    const code = codeInput.toUpperCase();
+  
+    const league = await db
+      .prepare(
+        `SELECT id, name, code, visibility, owner_id
+         FROM leagues
+         WHERE UPPER(code) = ?`,
+      )
+      .bind(code)
+      .first<{
+        id: string;
+        name: string;
+        code: string;
+        visibility: string;
+        owner_id: string;
+      }>();
+  
+    if (!league) return jsonError(c, 404, 'Liga não encontrada');
+  
+    // inserir membership se ainda não existir
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO league_members (league_id, user_id, role)
+         VALUES (?, ?, ?)`,
+      )
+      .bind(league.id, userId, 'member')
+      .run();
+  
+    return c.json({
+      ...league,
+      role: userId === league.owner_id ? 'owner' : 'member',
+    });
   });
-});
 
 /* ======================================================================
    4) DETALHE DA LIGA

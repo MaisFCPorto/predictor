@@ -220,6 +220,13 @@ function LeagueDetailInner() {
           `Falha a remover membro (${res.status}) ${res.statusText} ${txt}`,
         );
       }
+
+      // se o utilizador removeu-se a si próprio, volta à lista
+      if (memberUserId === userId) {
+        router.push('/ligas');
+        return;
+      }
+
       await loadAll(userId, detail.league.id);
     } catch (e: any) {
       setErr(e?.message ?? 'Erro ao remover membro');
@@ -256,6 +263,9 @@ function LeagueDetailInner() {
     );
   }
 
+  const canLeave =
+    detail && detail.currentUserRole === 'member' && !!userId;
+
   return (
     <div className="py-6 space-y-6">
       <button
@@ -272,7 +282,7 @@ function LeagueDetailInner() {
         </div>
       )}
 
-      {/* Cabeçalho liga + edição (owner) */}
+      {/* Cabeçalho liga + gestão / sair */}
       {detail ? (
         <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -287,7 +297,7 @@ function LeagueDetailInner() {
                 </span>
               </p>
             </div>
-            <div className="text-right text-xs opacity-80">
+            <div className="flex flex-col items-end gap-2 text-xs opacity-80">
               <div>
                 Visibilidade:{' '}
                 {detail.league.visibility === 'public'
@@ -298,9 +308,21 @@ function LeagueDetailInner() {
                 O teu papel:{' '}
                 {detail.currentUserRole === 'owner' ? 'Owner' : 'Membro'}
               </div>
+
+              {canLeave && (
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveMember(userId!)}
+                  disabled={busyMember === userId}
+                  className="mt-1 rounded-full bg-red-500/80 px-4 py-1 text-xs font-medium hover:bg-red-500 disabled:opacity-50"
+                >
+                  {busyMember === userId ? 'A sair…' : 'Sair desta liga'}
+                </button>
+              )}
             </div>
           </div>
 
+          {/* Gestão da liga só para owner */}
           {detail.currentUserRole === 'owner' && (
             <>
               <hr className="border-white/10" />
@@ -336,7 +358,7 @@ function LeagueDetailInner() {
                     disabled={busySave || !editName.trim()}
                     className="rounded-full bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/15 disabled:opacity-50"
                   >
-                    {busySave ? 'A guardar…' : 'Guardar'}
+                    {busySave ? 'A guardar…' : 'Guardar alterações'}
                   </button>
                   <button
                     type="button"
@@ -357,7 +379,7 @@ function LeagueDetailInner() {
         </div>
       )}
 
-      {/* Ranking + gestão de membros integrada */}
+      {/* Ranking (também serve como lista de membros) */}
       {detail && (
         <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
           <h2 className="text-lg font-semibold">
@@ -381,24 +403,20 @@ function LeagueDetailInner() {
                     <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-white/60">
                       Pontos
                     </th>
-                    {detail.currentUserRole === 'owner' && (
-                      <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-white/60">
-                        Ações
-                      </th>
-                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {ranking.map((r) => {
-                    const member = detail.members.find(
+                    const memberMeta = detail.members.find(
                       (m) => m.user_id === r.user_id,
                     );
-                    const isOwner = member?.role === 'owner';
+                    const roleLabel =
+                      memberMeta?.role === 'owner' ? 'Owner' : 'Membro';
                     const isSelf = r.user_id === userId;
                     const canKick =
                       detail.currentUserRole === 'owner' &&
-                      !isOwner &&
-                      !isSelf;
+                      !isSelf &&
+                      memberMeta?.role !== 'owner';
 
                     return (
                       <tr
@@ -411,29 +429,29 @@ function LeagueDetailInner() {
                         <td className="px-3 py-2 whitespace-nowrap">
                           <div className="font-medium">{r.name}</div>
                           <div className="text-[11px] opacity-70">
-                            {isOwner ? 'Owner' : 'Membro'}
-                            {isSelf ? ' • Tu' : ''}
+                            {roleLabel}
+                            {isSelf ? ' · Tu' : ''}
                           </div>
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-right font-semibold">
-                          {r.total_points}
+                        <td className="px-3 py-2 whitespace-nowrap text-right">
+                          <div className="font-semibold">
+                            {r.total_points}
+                          </div>
+                          {canKick && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleRemoveMember(r.user_id)
+                              }
+                              disabled={busyMember === r.user_id}
+                              className="mt-1 rounded-full bg-red-500/80 px-3 py-1 text-[11px] hover:bg-red-500 disabled:opacity-50"
+                            >
+                              {busyMember === r.user_id
+                                ? 'A remover…'
+                                : 'Remover'}
+                            </button>
+                          )}
                         </td>
-                        {detail.currentUserRole === 'owner' && (
-                          <td className="px-3 py-2 whitespace-nowrap text-right">
-                            {canKick && (
-                              <button
-                                type="button"
-                                onClick={() => void handleRemoveMember(r.user_id)}
-                                disabled={busyMember === r.user_id}
-                                className="rounded-full bg-red-500/80 px-3 py-1 text-xs hover:bg-red-500 disabled:opacity-50"
-                              >
-                                {busyMember === r.user_id
-                                  ? 'A remover…'
-                                  : 'Remover'}
-                              </button>
-                            )}
-                          </td>
-                        )}
                       </tr>
                     );
                   })}

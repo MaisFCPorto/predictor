@@ -420,25 +420,59 @@ function RankingsPageInner() {
 
             {rows.length > pageSize && (
               <div className="flex items-center justify-between border-t border-white/10 px-5 py-3 text-xs text-white/70">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="rounded-full border border-white/15 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Anterior
-                </button>
-                <span>
-                  Página {page} de {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="rounded-full border border-white/15 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Seguinte
-                </button>
+                <div className="flex w-full items-center justify-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPage(1)}
+                    disabled={page === 1}
+                    className="rounded-full border border-white/15 px-2.5 py-1 tabular-nums disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    1
+                  </button>
+
+                  {totalPages > 3 && page > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="rounded-full border border-white/15 px-2.5 py-1 tabular-nums disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      &lt;
+                    </button>
+                  )}
+
+                  {totalPages > 1 && page !== 1 && page !== totalPages && (
+                    <button
+                      type="button"
+                      disabled
+                      className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 tabular-nums"
+                    >
+                      {page}
+                    </button>
+                  )}
+
+                  {totalPages > 3 && page < totalPages - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                      className="rounded-full border border-white/15 px-2.5 py-1 tabular-nums disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      &gt;
+                    </button>
+                  )}
+
+                  {totalPages > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setPage(totalPages)}
+                      disabled={page === totalPages}
+                      className="rounded-full border border-white/15 px-2.5 py-1 tabular-nums disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {totalPages}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -587,16 +621,52 @@ function RankingsPageInner() {
                 >
                   Anterior
                 </button>
-                <span>
-                  Página {page} de {totalPages}
-                </span>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPage(1)}
+                    disabled={page === 1}
+                    className="rounded-full border border-white/15 px-2.5 py-1 tabular-nums disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    1
+                  </button>
+
+                  {totalPages > 2 && page > 2 && <span className="px-1 opacity-70">..</span>}
+
+                  {totalPages > 1 && page !== 1 && page !== totalPages && (
+                    <button
+                      type="button"
+                      disabled
+                      className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 tabular-nums"
+                    >
+                      {page}
+                    </button>
+                  )}
+
+                  {totalPages > 2 && page < totalPages - 1 && (
+                    <span className="px-1 opacity-70">..</span>
+                  )}
+
+                  {totalPages > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setPage(totalPages)}
+                      disabled={page === totalPages}
+                      className="rounded-full border border-white/15 px-2.5 py-1 tabular-nums disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {totalPages}
+                    </button>
+                  )}
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
                   className="rounded-full border border-white/15 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Seguinte
+                  Próxima
                 </button>
               </div>
             )}

@@ -7,3 +7,5 @@ api/node_modules/
 .next/
 web/.next/
 .DS_Store
+api/seeds.sql
+*.sqlite

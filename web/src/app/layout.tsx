@@ -287,7 +287,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   // Só admin vê a tab Ligas (beta)
   const navLinks = user?.isAdmin
-    ? [{ href: '/ligas', label: 'Ligas (beta)' }, ...baseNavLinks]
+    ? [{ href: '/ligas', label: 'Ligas (beta)' }, { href: '/admin/winners', label: 'Vencedores' }, ...baseNavLinks]
     : baseNavLinks;
 
   const fullNavLinks = user?.isAdmin

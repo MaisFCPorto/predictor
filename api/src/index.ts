@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { rankings, scoreUEFA } from './routes/rankings';
+import { winners } from './routes/winners';
 import { adminCompetitions } from './routes/admin/competitions';
 import { adminPlayers } from './routes/admin/players';
 import { adminFixtureScorers } from './routes/admin/fixture-scorers';
@@ -13,9 +14,6 @@ import { adminPredictions } from './routes/admin/predictions';
 import { fixtureTrends } from './routes/fixtures-trends';
 import { adminLeagues } from './routes/admin/leagues';
 import { leagues } from './routes/leagues';
-
-
-
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -92,6 +90,7 @@ app.get('/routes', (c) =>
 // Rankings e Competitions
 // ----------------------------------------------------
 app.route('/api/rankings', rankings);
+app.route('/api/winners', winners);
 app.route('/api/admin/competitions', adminCompetitions);
 app.route('/api/admin/players', adminPlayers);
 app.route('/api/admin/fixtures', adminFixtureScorers);

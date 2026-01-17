@@ -47,6 +47,11 @@ export default function AdminIndex() {
             title="Predictions"
             description="Inspecionar predictions registadas."
           />
+          <AdminCard
+            href="/admin/winners"
+            title="Vencedores"
+            description="Consultar vencedores por meses e jogo."
+          />
         </section>
       </main>
     </RequireAuth>

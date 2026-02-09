@@ -4428,68 +4428,110 @@ leagues.get("/leagues/:leagueId/ranking", async (c) => {
 });
 
 // src/routes/admin/form.ts
+function requireAdmin2(c) {
+  const key = c.req.header("x-admin-key") || c.req.header("X-Admin-Key");
+  if (!key || key !== c.env.ADMIN_KEY) return "unauthorized";
+  return null;
+}
+__name(requireAdmin2, "requireAdmin");
 var adminForm = new Hono2();
-adminForm.post("/", async (c) => {
-  const need = c.env.ADMIN_KEY;
-  if (need) {
-    const got = c.req.header("x-admin-key");
-    if (!got || got !== need) return c.json({ error: "forbidden" }, 403);
+adminForm.post("/sync", async (c) => {
+  const err = requireAdmin2(c);
+  if (err) return c.json({ error: err }, 403);
+  function isSyncBody(v) {
+    if (typeof v !== "object" || v === null) return false;
+    const obj = v;
+    return obj.teamId === void 0 || typeof obj.teamId === "string";
   }
-  const body = await c.req.json();
-  const teamId = String(body.teamId || "").trim();
-  const last5 = String(body.last5 || "").trim();
-  const last5Matches = body.last5Matches || [];
-  if (!teamId) return c.text("Invalid teamId", 400);
-  if (!/^[WDL]{5}$/.test(last5)) return c.text("Invalid last5", 400);
+  __name(isSyncBody, "isSyncBody");
+  const raw2 = await c.req.json().catch(() => null);
+  const body = isSyncBody(raw2) ? raw2 : {};
+  const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
+  if (!teamId) return c.json({ error: "missing_teamId" }, 400);
+  const team = await c.env.DB.prepare(
+    "SELECT id, name FROM teams WHERE id = ?"
+  ).bind(teamId).first();
+  if (!team) return c.json({ error: "unknown_team", teamId }, 400);
+  const token = c.env.FOOTBALL_DATA_TOKEN;
+  if (!token) return c.json({ error: "missing_token" }, 500);
+  const res = await fetch(
+    "https://api.football-data.org/v4/competitions/PPL/matches?status=FINISHED&limit=100",
+    { headers: { "X-Auth-Token": token } }
+  );
+  if (!res.ok) {
+    return c.json(
+      { error: "football_data_failed", status: res.status },
+      502
+    );
+  }
+  const data = await res.json();
+  const matches = Array.isArray(data?.matches) ? data.matches : [];
+  const lastMatches = matches.filter((m) => m?.homeTeam?.name === team.name || m?.awayTeam?.name === team.name).sort(
+    (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
+  ).slice(0, 5);
+  const last5Arr = lastMatches.map((m) => {
+    const isHome = m.homeTeam?.name === team.name;
+    const winner = m.score?.winner;
+    if (!winner || winner === "DRAW") return "E";
+    const win = winner === "HOME_TEAM" && isHome || winner === "AWAY_TEAM" && !isHome;
+    return win ? "V" : "D";
+  });
+  const last5 = last5Arr.join("");
   const updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-  await c.env.DB.prepare(`
-    INSERT INTO team_form (team_id, updated_at, last5, last5_json)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(team_id) DO UPDATE SET
-      updated_at=excluded.updated_at,
-      last5=excluded.last5,
-      last5_json=excluded.last5_json
-  `).bind(teamId, updatedAt, last5, JSON.stringify(last5Matches)).run();
-  return c.json({ ok: true, teamId, last5, updatedAt });
+  await c.env.DB.prepare(
+    `
+      INSERT INTO team_form (team_id, last5, last5_json, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(team_id) DO UPDATE SET
+        last5 = excluded.last5,
+        last5_json = excluded.last5_json,
+        updated_at = excluded.updated_at
+    `
+  ).bind(teamId, last5, JSON.stringify(lastMatches), updatedAt).run();
+  return c.json({
+    ok: true,
+    teamId,
+    teamName: team.name,
+    last5,
+    updatedAt,
+    count: lastMatches.length
+  });
 });
-var form_default = adminForm;
 
 // src/routes/form.ts
 var form = new Hono2();
 form.get("/:teamId", async (c) => {
-  const teamId = c.req.param("teamId");
-  const row = await c.env.DB.prepare(`
-    SELECT team_id, updated_at, last5
-    FROM team_form
-    WHERE team_id = ?
-  `).bind(teamId).first();
-  if (!row) {
-    return c.json({ teamId, last5_pt: null }, 404);
+  const teamId = c.req.param("teamId")?.trim();
+  if (!teamId) return c.json({ error: "missing_teamId" }, 400);
+  const row = await c.env.DB.prepare(
+    "SELECT team_id, last5, last5_json, updated_at FROM team_form WHERE team_id = ?"
+  ).bind(teamId).first();
+  if (!row) return c.json(null, 404);
+  let last5_json = [];
+  try {
+    last5_json = row.last5_json ? JSON.parse(row.last5_json) : [];
+  } catch {
+    last5_json = [];
   }
-  const mapPT = { W: "V", D: "E", L: "D" };
-  const last5_pt = String(row.last5).split("").map((c2) => mapPT[c2] || c2).join("");
   return c.json({
-    teamId,
-    last5: row.last5,
-    last5_pt,
+    teamId: row.team_id,
+    last5: row.last5 ?? "",
+    last5Matches: last5_json,
     updatedAt: row.updated_at
-  }, 200, {
-    "Cache-Control": "public, max-age=300"
   });
 });
-var form_default2 = form;
 
 // src/index.ts
 var app = new Hono2();
 app.use("*", corsMiddleware);
-function requireAdmin2(c) {
+function requireAdmin3(c) {
   const need = c.env.ADMIN_KEY;
   if (!need) return void 0;
   const got = c.req.header("x-admin-key");
   if (!got || got !== need) return c.json({ error: "forbidden" }, 403);
   return void 0;
 }
-__name(requireAdmin2, "requireAdmin");
+__name(requireAdmin3, "requireAdmin");
 var run2 = /* @__PURE__ */ __name((db, sql, ...args) => db.prepare(sql).bind(...args).run(), "run");
 var all2 = /* @__PURE__ */ __name((db, sql, ...args) => db.prepare(sql).bind(...args).all(), "all");
 var getLockMs = /* @__PURE__ */ __name((c) => {
@@ -4533,8 +4575,10 @@ app.route("/api/admin/predictions", adminPredictions);
 app.route("/api", fixtureTrends);
 app.route("/api/admin", adminLeagues);
 app.route("/api", leagues);
-app.route("/api/admin/form", form_default);
-app.route("/api/form", form_default2);
+app.route("/api/admin/form", adminForm);
+app.route("/api/form", form);
+app.route("/api/admin/form", adminForm);
+app.route("/api/form", form);
 async function listFixtures(c, matchdayId) {
   const lockMs = getLockMs(c);
   const now = Date.now();
@@ -4869,7 +4913,7 @@ app.get("/api/players", async (c) => {
   return c.json(results ?? []);
 });
 app.get("/api/admin/users", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const { results } = await all2(
     c.env.DB,
@@ -4890,7 +4934,7 @@ app.get("/api/admin/users", async (c) => {
   return c.json(results ?? []);
 });
 app.patch("/api/admin/users/:id", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const id = c.req.param("id");
   if (!id) return c.json({ error: "missing_id" }, 400);
@@ -4917,7 +4961,7 @@ app.patch("/api/admin/users/:id", async (c) => {
   return c.json({ ok: true });
 });
 app.delete("/api/admin/users/:id", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const id = c.req.param("id");
   if (!id) return c.json({ error: "missing_id" }, 400);
@@ -4934,7 +4978,7 @@ app.delete("/api/admin/users/:id", async (c) => {
   return c.json({ ok: true });
 });
 app.get("/api/admin/teams", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const { results } = await all2(
     c.env.DB,
@@ -4951,7 +4995,7 @@ app.get("/api/admin/teams", async (c) => {
   return c.json(results ?? []);
 });
 app.post("/api/admin/teams", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const body = await c.req.json().catch(() => null);
   if (!body?.id || !body?.name) {
@@ -4971,7 +5015,7 @@ app.post("/api/admin/teams", async (c) => {
   return c.json({ ok: true });
 });
 app.patch("/api/admin/teams/:id", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const id = c.req.param("id");
   const body = await c.req.json().catch(() => null);
@@ -4995,7 +5039,7 @@ app.patch("/api/admin/teams/:id", async (c) => {
   return c.json({ ok: true });
 });
 app.delete("/api/admin/teams/:id", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const id = c.req.param("id");
   if (!id) return c.json({ error: "missing_id" }, 400);
@@ -5012,12 +5056,12 @@ app.delete("/api/admin/teams/:id", async (c) => {
   return c.json({ ok: true });
 });
 app.get("/api/admin/check", (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   return c.json({ ok: true });
 });
 app.get("/api/admin/fixtures", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const { results } = await c.env.DB.prepare(
     `
@@ -5033,7 +5077,7 @@ app.get("/api/admin/fixtures", async (c) => {
   return c.json(results ?? []);
 });
 app.post("/api/admin/fixtures", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   try {
     const b = await c.req.json();
@@ -5075,7 +5119,7 @@ app.post("/api/admin/fixtures", async (c) => {
   }
 });
 app.patch("/api/admin/fixtures/:id", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const id = c.req.param("id");
   const b = await c.req.json();
@@ -5110,7 +5154,7 @@ app.patch("/api/admin/fixtures/:id", async (c) => {
   return c.json({ ok: true });
 });
 app.delete("/api/admin/fixtures/:id", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const id = c.req.param("id");
   await run2(c.env.DB, `DELETE FROM predictions WHERE fixture_id=?`, id);
@@ -5118,7 +5162,7 @@ app.delete("/api/admin/fixtures/:id", async (c) => {
   return c.json({ ok: true });
 });
 app.patch("/api/admin/fixtures/:id/result", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const id = c.req.param("id");
   const { home_score, away_score } = await c.req.json();
@@ -5133,7 +5177,7 @@ app.patch("/api/admin/fixtures/:id/result", async (c) => {
   return c.json({ ok: true });
 });
 app.patch("/api/admin/fixtures/:id/reopen", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const id = c.req.param("id");
   await run2(
@@ -5144,7 +5188,7 @@ app.patch("/api/admin/fixtures/:id/reopen", async (c) => {
   return c.json({ ok: true });
 });
 app.get("/api/admin/fixtures/:id/scorers", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const fixtureId = c.req.param("id");
   const { results } = await c.env.DB.prepare(
@@ -5170,7 +5214,7 @@ app.get("/api/admin/fixtures/:id/scorers", async (c) => {
   return c.json(results ?? []);
 });
 app.put("/api/admin/fixtures/:id/scorers", async (c) => {
-  const guard = requireAdmin2(c);
+  const guard = requireAdmin3(c);
   if (guard) return guard;
   const fixtureId = c.req.param("id");
   const body = await c.req.json().catch(() => null);
@@ -5293,33 +5337,9 @@ var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
 
-// ../../.nvm/versions/node/v22.18.0/lib/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
-function reduceError(e) {
-  return {
-    name: e?.name,
-    message: e?.message ?? String(e),
-    stack: e?.stack,
-    cause: e?.cause === void 0 ? void 0 : reduceError(e.cause)
-  };
-}
-__name(reduceError, "reduceError");
-var jsonError2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
-  try {
-    return await middlewareCtx.next(request, env);
-  } catch (e) {
-    const error = reduceError(e);
-    return Response.json(error, {
-      status: 500,
-      headers: { "MF-Experimental-Error-Stack": "true" }
-    });
-  }
-}, "jsonError");
-var middleware_miniflare3_json_error_default = jsonError2;
-
-// .wrangler/tmp/bundle-0v9skv/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-pkLy7U/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
-  middleware_ensure_req_body_drained_default,
-  middleware_miniflare3_json_error_default
+  middleware_ensure_req_body_drained_default
 ];
 var middleware_insertion_facade_default = src_default;
 
@@ -5348,7 +5368,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-0v9skv/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-pkLy7U/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

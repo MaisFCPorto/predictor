@@ -14,8 +14,8 @@ import { adminPredictions } from './routes/admin/predictions';
 import { fixtureTrends } from './routes/fixtures-trends';
 import { adminLeagues } from './routes/admin/leagues';
 import { leagues } from './routes/leagues';
-import adminForm from "./routes/admin/form";
-import form from "./routes/form";
+import {adminForm}  from "./routes/admin/form";
+import { form } from "./routes/form";
 
 
 
@@ -26,6 +26,7 @@ type Env = {
   DB: D1Database;
   ADMIN_KEY: string;
   LOCK_MINUTES_BEFORE?: string;
+  FOOTBALL_DATA_TOKEN: string;
   SUPABASE_URL: string;
 };
 
@@ -107,8 +108,8 @@ app.route('/api/admin', adminLeagues);
 app.route('/api', leagues);
 app.route("/api/admin/form", adminForm);
 app.route("/api/form", form);
-
-
+app.route("/api/admin/form", adminForm);
+app.route("/api/form", form);
 
 
 

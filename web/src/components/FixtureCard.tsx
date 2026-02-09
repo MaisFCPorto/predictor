@@ -694,7 +694,7 @@ export default function FixtureCard({
             {home_team_name}
           </div>
           <div className="mt-1 text-[12px] sm:text-[12px] font-extrabold tracking-[0.22em] text-white/80">
-  {loadingForms ? '-----' : homeForm ?? ''}
+  {loadingForms ? '-----' : homeForm ?? '-'}
 </div>
         </div>
 
@@ -777,7 +777,7 @@ export default function FixtureCard({
             {away_team_name}
           </div>
           <div className="mt-1 text-[12px] sm:text-[12px] font-extrabold tracking-[0.22em] text-white/80">
-  {loadingForms ? '-----' : awayForm ?? ''}
+  {loadingForms ? '-----' : awayForm ?? '-'}
 </div>
 
         </div>

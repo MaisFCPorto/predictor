@@ -9,6 +9,13 @@ binding = "DB"
 database_name = "predictor-db"
 database_id = "d5c31b11-0f4d-45d4-837d-d5cea7a81321"
 
+[vars]
+ADMIN_KEY = "VelhaGuarda12"
+LOCK_MINUTES_BEFORE = "5"
+SUPABASE_URL = "https://predictorporto.supabase.co"
+FOOTBALL_DATA_TOKEN = "0ad2a2751c984fd98cc9dd1c79c43f0b"
+
+
 [env.production]
 name = "predictor-porto-api"
 workers_dev = true

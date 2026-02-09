@@ -14,6 +14,10 @@ import { adminPredictions } from './routes/admin/predictions';
 import { fixtureTrends } from './routes/fixtures-trends';
 import { adminLeagues } from './routes/admin/leagues';
 import { leagues } from './routes/leagues';
+import adminForm from "./routes/admin/form";
+import form from "./routes/form";
+
+
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -101,6 +105,10 @@ app.route('/api/admin/predictions', adminPredictions);
 app.route('/api', fixtureTrends);
 app.route('/api/admin', adminLeagues);
 app.route('/api', leagues);
+app.route("/api/admin/form", adminForm);
+app.route("/api/form", form);
+
+
 
 
 

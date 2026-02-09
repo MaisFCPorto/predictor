@@ -424,6 +424,77 @@ export default function FixtureCard({
     }
   }, [competition_code]);
 
+
+  type TeamFormResp = {
+    teamId: string;
+    last5_pt: string | null;
+    last5?: string | null;
+    updatedAt?: string | null;
+  };
+  
+  function teamIdFromName(name: string) {
+    const n = name.toLowerCase();
+  
+    // mapping rápido (ajusta conforme os teus ids)
+    if (n.includes('porto')) return 'fcporto';
+    if (n.includes('sporting')) return 'sporting';
+    if (n.includes('benfica')) return 'benfica';
+    if (n.includes('braga')) return 'braga';
+    if (n.includes('vitória') || n.includes('vitoria')) return 'vitoriag';
+    if (n.includes('boavista')) return 'boavista';
+  
+    // fallback: slug simples (se decidires gravar na D1 com ids assim)
+    return n
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/[^a-z0-9]+/g, '')
+      .trim();
+  }
+  
+  const [homeForm, setHomeForm] = useState<string | null>(null);
+  const [awayForm, setAwayForm] = useState<string | null>(null);
+  const [loadingForms, setLoadingForms] = useState(false);
+  
+  useEffect(() => {
+    // se quiseres esconder em jogos passados:
+    // if (variant === 'past') { setHomeForm(null); setAwayForm(null); return; }
+  
+    let aborted = false;
+    async function loadForms() {
+      setLoadingForms(true);
+  
+      const homeId = teamIdFromName(home_team_name);
+      const awayId = teamIdFromName(away_team_name);
+  
+      try {
+        const [rh, ra] = await Promise.all([
+          fetch(`/api/form/${encodeURIComponent(homeId)}`, { headers: { 'cache-control': 'no-store' } }),
+          fetch(`/api/form/${encodeURIComponent(awayId)}`, { headers: { 'cache-control': 'no-store' } }),
+        ]);
+  
+        const homeData: TeamFormResp | null = rh.ok ? await rh.json() : null;
+        const awayData: TeamFormResp | null = ra.ok ? await ra.json() : null;
+  
+        if (aborted) return;
+  
+        setHomeForm(homeData?.last5_pt ?? null);
+        setAwayForm(awayData?.last5_pt ?? null);
+      } catch (e) {
+        if (aborted) return;
+        setHomeForm(null);
+        setAwayForm(null);
+      } finally {
+        if (!aborted) setLoadingForms(false);
+      }
+    }
+  
+    void loadForms();
+    return () => {
+      aborted = true;
+    };
+  }, [home_team_name, away_team_name, id]);
+  
+
   // -------- Tendências (resultado + marcador mais comum) --------
   const [trends, setTrends] = useState<Trends | null>(null);
 
@@ -622,6 +693,9 @@ export default function FixtureCard({
           <div className="truncate text-center text-[14px] sm:text-base font-medium mt-1">
             {home_team_name}
           </div>
+          <div className="mt-1 text-[12px] sm:text-[12px] font-extrabold tracking-[0.22em] text-white/80">
+  {loadingForms ? '-----' : homeForm ?? ''}
+</div>
         </div>
 
         {/* SCORE */}
@@ -702,6 +776,10 @@ export default function FixtureCard({
           <div className="truncate text-center text-[14px] sm:text-base font-medium mt-1">
             {away_team_name}
           </div>
+          <div className="mt-1 text-[12px] sm:text-[12px] font-extrabold tracking-[0.22em] text-white/80">
+  {loadingForms ? '-----' : awayForm ?? ''}
+</div>
+
         </div>
       </div>
 
@@ -1036,6 +1114,8 @@ function ScoreBox({
 }) {
   const displayValue =
     value === '' || value === null || value === undefined ? '' : String(value);
+
+
 
   return (
     <input

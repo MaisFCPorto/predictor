@@ -1,3 +1,4 @@
+// src/routes/admin/form.ts
 import { Hono } from "hono";
 
 type Env = {
@@ -6,37 +7,108 @@ type Env = {
   FOOTBALL_DATA_TOKEN: string;
 };
 
-function requireAdmin(c: { req: { header: (name: string) => string | undefined }; env: Env }): string | null {
-    const key = c.req.header("x-admin-key") || c.req.header("X-Admin-Key");
-    if (!key || key !== c.env.ADMIN_KEY) return "unauthorized";
-    return null;
-  }
-
 export const adminForm = new Hono<{ Bindings: Env }>();
+
+function requireAdmin(c: any): string | null {
+  const key = c.req.header("x-admin-key") || c.req.header("X-Admin-Key");
+  if (!key || key !== c.env.ADMIN_KEY) return "unauthorized";
+  return null;
+}
+
+type SyncBody = { teamId?: string };
+
+type DBTeam = {
+  id: string;
+  name: string;
+  short_name: string | null;
+};
+
+type FDTeam = { name?: string | null; shortName?: string | null };
+type FDScore = { winner?: "HOME_TEAM" | "AWAY_TEAM" | "DRAW" | null };
+type FDMatch = {
+  utcDate?: string;
+  status?: string;
+  homeTeam?: FDTeam;
+  awayTeam?: FDTeam;
+  score?: FDScore;
+};
+
+type FDResponse = { matches?: FDMatch[] };
+
+function normalize(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+function pickBestTeamName(team: DBTeam): string {
+  // usa name; se for curto tipo "FCP" preferimos name mesmo
+  return team.name?.trim() || team.id;
+}
+
+function matchIsTeam(m: FDMatch, teamNameN: string, teamShortN: string | null) {
+  const homeN = normalize(m.homeTeam?.name || "");
+  const awayN = normalize(m.awayTeam?.name || "");
+  const homeSN = normalize(m.homeTeam?.shortName || "");
+  const awaySN = normalize(m.awayTeam?.shortName || "");
+
+  const shortN = teamShortN ? normalize(teamShortN) : "";
+
+  const isByName = homeN === teamNameN || awayN === teamNameN;
+  const isByShort = shortN
+    ? homeSN === shortN || awaySN === shortN
+    : false;
+
+  return isByName || isByShort;
+}
+
+function resultLetter(m: FDMatch, teamNameN: string, teamShortN: string | null): "W" | "D" | "L" {
+  const homeNameN = normalize(m.homeTeam?.name || "");
+  const awayNameN = normalize(m.awayTeam?.name || "");
+
+  const teamShortN2 = teamShortN ? normalize(teamShortN) : "";
+  const homeShortN = normalize(m.homeTeam?.shortName || "");
+  const awayShortN = normalize(m.awayTeam?.shortName || "");
+
+  const isHome =
+    homeNameN === teamNameN ||
+    (teamShortN2 && homeShortN === teamShortN2);
+
+  const isAway =
+    awayNameN === teamNameN ||
+    (teamShortN2 && awayShortN === teamShortN2);
+
+  const winner = m.score?.winner ?? null;
+
+  // Se não conseguimos identificar lado, devolve empate para não “inventar”
+  if (!isHome && !isAway) return "D";
+
+  if (winner === "DRAW" || winner === null) return "D";
+  if (winner === "HOME_TEAM") return isHome ? "W" : "L";
+  if (winner === "AWAY_TEAM") return isAway ? "W" : "L";
+  return "D";
+}
 
 adminForm.post("/sync", async (c) => {
   const err = requireAdmin(c);
   if (err) return c.json({ error: err }, 403);
 
-  type SyncBody = { teamId?: string };
+  const raw: unknown = await c.req.json().catch(() => null);
+  const body: SyncBody =
+    raw && typeof raw === "object" ? (raw as SyncBody) : {};
 
-function isSyncBody(v: unknown): v is SyncBody {
-  if (typeof v !== "object" || v === null) return false;
-  const obj = v as Record<string, unknown>;
-  return obj.teamId === undefined || typeof obj.teamId === "string";
-}
+  const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
+  if (!teamId) return c.json({ error: "missing_teamId" }, 400);
 
-const raw: unknown = await c.req.json().catch(() => null);
-const body: SyncBody = isSyncBody(raw) ? raw : {};
-const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
-if (!teamId) return c.json({ error: "missing_teamId" }, 400);
-
-  // 1) equipa
+  // 1) equipa na BD
   const team = await c.env.DB.prepare(
-    "SELECT id, name FROM teams WHERE id = ?"
+    "SELECT id, name, short_name FROM teams WHERE id = ?"
   )
     .bind(teamId)
-    .first<{ id: string; name: string }>();
+    .first<DBTeam>();
 
   if (!team) return c.json({ error: "unknown_team", teamId }, 400);
 
@@ -44,11 +116,13 @@ if (!teamId) return c.json({ error: "missing_teamId" }, 400);
   const token = c.env.FOOTBALL_DATA_TOKEN;
   if (!token) return c.json({ error: "missing_token" }, 500);
 
-  // PPL (Liga Portugal). devolve lista de jogos terminados.
-  const res = await fetch(
-    "https://api.football-data.org/v4/competitions/PPL/matches?status=FINISHED&limit=100",
-    { headers: { "X-Auth-Token": token } }
-  );
+  // Liga Portugal: PPL
+  const url =
+    "https://api.football-data.org/v4/competitions/PPL/matches?status=FINISHED&limit=200";
+
+  const res = await fetch(url, {
+    headers: { "X-Auth-Token": token },
+  });
 
   if (!res.ok) {
     return c.json(
@@ -57,52 +131,60 @@ if (!teamId) return c.json({ error: "missing_teamId" }, 400);
     );
   }
 
-  const data = await res.json();
-  const matches = Array.isArray((data as any)?.matches) ? (data as any).matches : [];
+  const rawJson: unknown = await res.json().catch(() => null);
+  const data: FDResponse =
+    rawJson && typeof rawJson === "object"
+      ? (rawJson as FDResponse)
+      : { matches: [] };
 
-  // 3) filtrar jogos da equipa por NOME (porque na tua tabela tens só name)
-  const lastMatches = matches
-    .filter((m: any) => m?.homeTeam?.name === team.name || m?.awayTeam?.name === team.name)
-    .sort(
-      (a: any, b: any) =>
-        new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
-    )
-    .slice(0, 5);
+  const matchesAll = Array.isArray(data.matches) ? data.matches : [];
 
-  // 4) calcular forma (V/E/D)
-  const last5Arr = lastMatches.map((m: any) => {
-    const isHome = m.homeTeam?.name === team.name;
-    const winner = m.score?.winner as
-      | "HOME_TEAM"
-      | "AWAY_TEAM"
-      | "DRAW"
-      | undefined
-      | null;
+  // 3) filtrar jogos da equipa
+  const teamNameN = normalize(pickBestTeamName(team));
+  const teamShortN = team.short_name;
 
-    if (!winner || winner === "DRAW") return "E";
+  const teamMatches = matchesAll
+    .filter((m) => matchIsTeam(m, teamNameN, teamShortN))
+    .sort((a, b) => {
+      const ta = new Date(a.utcDate || 0).getTime();
+      const tb = new Date(b.utcDate || 0).getTime();
+      return tb - ta; // mais recente primeiro
+    });
 
-    const win =
-      (winner === "HOME_TEAM" && isHome) ||
-      (winner === "AWAY_TEAM" && !isHome);
+  const last5Matches = teamMatches.slice(0, 5);
 
-    return win ? "V" : "D";
-  });
+  // 4) calcular forma (últimos 5, do mais antigo para o mais recente)
+  const lettersNewestFirst = last5Matches.map((m) =>
+    resultLetter(m, teamNameN, teamShortN)
+  );
+  const last5 = lettersNewestFirst.slice().reverse().join("");
 
-  const last5 = last5Arr.join("");
-  const updatedAt = new Date().toISOString();
+  // guardar também uma versão compacta do detalhe dos 5 jogos
+  const last5Json = last5Matches
+    .slice()
+    .reverse()
+    .map((m) => ({
+      utcDate: m.utcDate ?? null,
+      home: m.homeTeam?.name ?? null,
+      away: m.awayTeam?.name ?? null,
+      winner: m.score?.winner ?? null,
+    }));
 
-  // 5) gravar no teu schema real
+  const now = new Date().toISOString();
+
+  // 5) upsert na team_form
   await c.env.DB.prepare(
     `
-      INSERT INTO team_form (team_id, last5, last5_json, updated_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(team_id) DO UPDATE SET
-        last5 = excluded.last5,
-        last5_json = excluded.last5_json,
-        updated_at = excluded.updated_at
+    INSERT INTO team_form (team_id, updated_at, last5, last5_json)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(team_id)
+    DO UPDATE SET
+      updated_at = excluded.updated_at,
+      last5 = excluded.last5,
+      last5_json = excluded.last5_json
     `
   )
-    .bind(teamId, last5, JSON.stringify(lastMatches), updatedAt)
+    .bind(teamId, now, last5, JSON.stringify(last5Json))
     .run();
 
   return c.json({
@@ -110,7 +192,7 @@ if (!teamId) return c.json({ error: "missing_teamId" }, 400);
     teamId,
     teamName: team.name,
     last5,
-    updatedAt,
-    count: lastMatches.length,
+    updatedAt: now,
+    count: last5Matches.length,
   });
 });

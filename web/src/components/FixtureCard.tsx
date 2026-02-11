@@ -50,6 +50,7 @@ type Props = {
   is_locked?: boolean;
   lock_at_utc?: string | null;
   leg?: number | null;
+  
   final_home_score?: number | null;
   final_away_score?: number | null;
   pred_home?: number | null;

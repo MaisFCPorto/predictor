@@ -25,6 +25,9 @@ type FixtureDTO = {
   lock_at_utc?: string | null;
   home_score?: number | null;
   away_score?: number | null;
+  home_team_id?: string | null;
+away_team_id?: string | null;
+
 
   // NOVO: nomes dos marcadores reais, vindo da API
   scorers_names?: string[] | null;
@@ -816,6 +819,8 @@ export default function JogosPage() {
                     competition_code={f.competition_code}
                     round_label={f.round_label}
                     leg={f.leg}
+                    home_team_id={f.home_team_id ?? null}
+away_team_id={f.away_team_id ?? null}
                     is_locked={f.is_locked}
                     lock_at_utc={f.lock_at_utc ?? null}
                     final_home_score={f.home_score ?? null}
@@ -864,6 +869,8 @@ export default function JogosPage() {
                     competition_code={f.competition_code}
                     round_label={f.round_label}
                     leg={f.leg}
+                    home_team_id={f.home_team_id ?? null}
+away_team_id={f.away_team_id ?? null}
                     is_locked={true}
                     lock_at_utc={null}
                     final_home_score={f.home_score ?? null}

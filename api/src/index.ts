@@ -129,6 +129,8 @@ async function listFixtures(c: Context<{ Bindings: Env }>, matchdayId: string) {
         f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
         f.competition_id, f.round_label,
         f.leg AS leg,
+f.home_team_id AS home_team_id,
+  f.away_team_id AS away_team_id,
         ht.name AS home_team_name, at.name AS away_team_name,
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
         co.code AS competition_code, co.name AS competition_name
@@ -155,6 +157,8 @@ async function listFixtures(c: Context<{ Bindings: Env }>, matchdayId: string) {
       leg: number | null;
       home_score: number | null;
       away_score: number | null;
+      home_team_id: string;
+away_team_id: string;
     }>();
 
   const lockMsLocal = lockMs;
@@ -181,6 +185,8 @@ app.get('/api/fixtures/open', async (c) => {
         f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
         f.competition_id, f.round_label,
         f.leg AS leg,
+        f.home_team_id AS home_team_id,
+  f.away_team_id AS away_team_id,
         ht.name AS home_team_name, at.name AS away_team_name,
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
         co.code AS competition_code, co.name AS competition_name
@@ -207,6 +213,8 @@ app.get('/api/fixtures/open', async (c) => {
       leg: number | null;
       home_score: number | null;
       away_score: number | null;
+      home_team_id: string;
+away_team_id: string;
     }>();
 
   const enriched = (results ?? []).map((f) => {
@@ -242,6 +250,10 @@ app.get('/api/fixtures/finished', async (c) => {
         f.id, f.kickoff_at, f.home_score, f.away_score, f.status,
         f.competition_id, f.round_label,
         f.leg AS leg,
+
+        f.home_team_id AS home_team_id,
+  f.away_team_id AS away_team_id,
+
         ht.name AS home_team_name, at.name AS away_team_name,
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
         co.code AS competition_code, co.name AS competition_name
@@ -270,6 +282,8 @@ app.get('/api/fixtures/finished', async (c) => {
       leg: number | null;
       home_score: number | null;
       away_score: number | null;
+      home_team_id: string;
+away_team_id: string;
     }>();
 
   return c.json(results ?? []);
@@ -300,6 +314,8 @@ app.get('/api/fixtures/closed', async (c) => {
         f.competition_id,
         f.round_label,
         f.leg AS leg,
+        f.home_team_id AS home_team_id,
+  f.away_team_id AS away_team_id,
         ht.name       AS home_team_name,
         at.name       AS away_team_name,
         ht.crest_url  AS home_crest,
@@ -337,6 +353,8 @@ app.get('/api/fixtures/closed', async (c) => {
       home_score: number | null;
       away_score: number | null;
       scorers_names: string | null;
+      home_team_id: string;
+away_team_id: string;
     }>();
 
   const rows = results ?? [];

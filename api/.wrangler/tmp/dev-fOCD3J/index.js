@@ -4429,72 +4429,130 @@ leagues.get("/leagues/:leagueId/ranking", async (c) => {
 
 // src/routes/admin/form.ts
 function requireAdmin2(c) {
-  const key = c.req.header("x-admin-key") || c.req.header("X-Admin-Key");
+  const key = c.req.header("x-admin-key") ?? c.req.header("X-Admin-Key") ?? c.req.header("X-ADMIN-KEY");
   if (!key || key !== c.env.ADMIN_KEY) return "unauthorized";
   return null;
 }
 __name(requireAdmin2, "requireAdmin");
+function normalize(s) {
+  return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
+}
+__name(normalize, "normalize");
+function teamMatchesApi(team, apiTeam) {
+  const tName = normalize(team.name);
+  const tShort = normalize(team.short_name ?? "");
+  const aName = normalize(apiTeam.name ?? "");
+  const aShort = normalize(apiTeam.shortName ?? "");
+  const aTla = normalize(apiTeam.tla ?? "");
+  return !!aName && (aName === tName || aName === tShort) || !!aShort && (aShort === tName || aShort === tShort) || !!aTla && (aTla === tName || aTla === tShort);
+}
+__name(teamMatchesApi, "teamMatchesApi");
+function isFDResponse(v) {
+  if (typeof v !== "object" || v === null) return false;
+  const obj = v;
+  return obj.matches === void 0 || Array.isArray(obj.matches);
+}
+__name(isFDResponse, "isFDResponse");
+function computeResultLetter(winner, isHome) {
+  if (winner === "DRAW") return "E";
+  if (winner === "HOME_TEAM") return isHome ? "V" : "D";
+  if (winner === "AWAY_TEAM") return isHome ? "D" : "V";
+  return "E";
+}
+__name(computeResultLetter, "computeResultLetter");
 var adminForm = new Hono2();
+adminForm.post("/", async (c) => {
+  const err = requireAdmin2(c);
+  if (err) return c.json({ error: err }, 403);
+  const raw2 = await c.req.json().catch(() => null);
+  const body = raw2 ?? {};
+  const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
+  if (!teamId) return c.json({ error: "missing_teamId" }, 400);
+  const last5 = typeof body.last5 === "string" ? body.last5.trim() : "";
+  const last5Matches = Array.isArray(body.last5Matches) ? body.last5Matches : [];
+  const updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  await c.env.DB.prepare(
+    `INSERT INTO team_form (team_id, updated_at, last5, last5_json)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(team_id) DO UPDATE SET
+       updated_at = excluded.updated_at,
+       last5 = excluded.last5,
+       last5_json = excluded.last5_json`
+  ).bind(teamId, updatedAt, last5, JSON.stringify(last5Matches)).run();
+  return c.json({ ok: true, teamId, last5, updatedAt });
+});
 adminForm.post("/sync", async (c) => {
   const err = requireAdmin2(c);
   if (err) return c.json({ error: err }, 403);
-  function isSyncBody(v) {
-    if (typeof v !== "object" || v === null) return false;
-    const obj = v;
-    return obj.teamId === void 0 || typeof obj.teamId === "string";
-  }
-  __name(isSyncBody, "isSyncBody");
   const raw2 = await c.req.json().catch(() => null);
-  const body = isSyncBody(raw2) ? raw2 : {};
+  const body = raw2 ?? {};
   const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
   if (!teamId) return c.json({ error: "missing_teamId" }, 400);
   const team = await c.env.DB.prepare(
-    "SELECT id, name FROM teams WHERE id = ?"
+    "SELECT id, name, short_name FROM teams WHERE id = ?"
   ).bind(teamId).first();
   if (!team) return c.json({ error: "unknown_team", teamId }, 400);
   const token = c.env.FOOTBALL_DATA_TOKEN;
   if (!token) return c.json({ error: "missing_token" }, 500);
-  const res = await fetch(
-    "https://api.football-data.org/v4/competitions/PPL/matches?status=FINISHED&limit=100",
-    { headers: { "X-Auth-Token": token } }
-  );
+  const url = "https://api.football-data.org/v4/competitions/PPL/matches?status=FINISHED&limit=200";
+  const res = await fetch(url, {
+    headers: { "X-Auth-Token": token }
+  });
   if (!res.ok) {
     return c.json(
       { error: "football_data_failed", status: res.status },
       502
     );
   }
-  const data = await res.json();
-  const matches = Array.isArray(data?.matches) ? data.matches : [];
-  const lastMatches = matches.filter((m) => m?.homeTeam?.name === team.name || m?.awayTeam?.name === team.name).sort(
-    (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
-  ).slice(0, 5);
-  const last5Arr = lastMatches.map((m) => {
-    const isHome = m.homeTeam?.name === team.name;
-    const winner = m.score?.winner;
-    if (!winner || winner === "DRAW") return "E";
-    const win = winner === "HOME_TEAM" && isHome || winner === "AWAY_TEAM" && !isHome;
-    return win ? "V" : "D";
+  const json = await res.json().catch(() => null);
+  if (!isFDResponse(json)) {
+    return c.json({ error: "football_data_bad_payload" }, 502);
+  }
+  const matches = Array.isArray(json.matches) ? json.matches : [];
+  const teamMatches = matches.filter((m) => {
+    if (!m || m.status !== "FINISHED") return false;
+    const homeOk = m.homeTeam ? teamMatchesApi(team, m.homeTeam) : false;
+    const awayOk = m.awayTeam ? teamMatchesApi(team, m.awayTeam) : false;
+    return homeOk || awayOk;
   });
-  const last5 = last5Arr.join("");
+  const lastMatches = teamMatches.slice().sort((a, b) => {
+    const ta = Date.parse(a.utcDate);
+    const tb = Date.parse(b.utcDate);
+    return tb - ta;
+  }).slice(0, 5);
+  const lastItems = lastMatches.map((m) => {
+    const isHome = teamMatchesApi(team, m.homeTeam);
+    const opponent = isHome ? m.awayTeam?.shortName || m.awayTeam?.name || "Opponent" : m.homeTeam?.shortName || m.homeTeam?.name || "Opponent";
+    const winner = m.score?.winner ?? null;
+    const result = computeResultLetter(winner, isHome);
+    const ftHome = m.score?.fullTime?.home ?? null;
+    const ftAway = m.score?.fullTime?.away ?? null;
+    return {
+      utcDate: m.utcDate,
+      competition: m.competition?.code || m.competition?.name,
+      opponent,
+      venue: isHome ? "H" : "A",
+      result,
+      score: { home: ftHome, away: ftAway }
+    };
+  });
+  const last5 = lastItems.map((x) => x.result).join("");
   const updatedAt = (/* @__PURE__ */ new Date()).toISOString();
   await c.env.DB.prepare(
-    `
-      INSERT INTO team_form (team_id, last5, last5_json, updated_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(team_id) DO UPDATE SET
-        last5 = excluded.last5,
-        last5_json = excluded.last5_json,
-        updated_at = excluded.updated_at
-    `
-  ).bind(teamId, last5, JSON.stringify(lastMatches), updatedAt).run();
+    `INSERT INTO team_form (team_id, updated_at, last5, last5_json)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(team_id) DO UPDATE SET
+       updated_at = excluded.updated_at,
+       last5 = excluded.last5,
+       last5_json = excluded.last5_json`
+  ).bind(teamId, updatedAt, last5, JSON.stringify(lastItems)).run();
   return c.json({
     ok: true,
     teamId,
     teamName: team.name,
     last5,
     updatedAt,
-    count: lastMatches.length
+    count: lastItems.length
   });
 });
 
@@ -5337,7 +5395,7 @@ var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
 
-// .wrangler/tmp/bundle-pkLy7U/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-xqaTM1/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default
 ];
@@ -5368,7 +5426,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-pkLy7U/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-xqaTM1/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

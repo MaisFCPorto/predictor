@@ -28,7 +28,6 @@ type Trends = {
   total_predictions: number;
   scores: ScoreTrend[];
   scorers: ScorerTrend[];
-  // opcional (vem da API mas não precisamos diretamente)
   most_common_score?: ScoreTrend | null;
   most_common_scorer?: ScorerTrend | null;
 };
@@ -37,6 +36,11 @@ type Props = {
   id: string;
   kickoff_at: string;
   status: 'SCHEDULED' | 'FINISHED' | string;
+
+  // ✅ NOVO: ids canonicos (vindos do backend/fixtures)
+  home_team_id?: string | null;
+  away_team_id?: string | null;
+
   home_team_name: string;
   away_team_name: string;
   home_crest?: string | null;
@@ -52,24 +56,14 @@ type Props = {
   pred_away?: number | null;
   points?: number | null;
 
-  // lista de nomes dos marcadores reais do jogo (do BO)
   scorersNames?: string[];
-
-  // palpite de marcador do utilizador
   pred_scorer_id?: string | null;
   players?: PlayerOption[];
 
-  onSave: (
-    id: string,
-    h: number,
-    a: number,
-    scorerId?: string | null
-  ) => Promise<void> | void;
+  onSave: (id: string, h: number, a: number, scorerId?: string | null) => Promise<void> | void;
   saving?: boolean;
   variant?: 'default' | 'past';
   canEdit?: boolean;
-
-  // (fica aqui para futuro, mas neste branch estamos a mostrar sempre em jogos não-past)
   showTrends?: boolean;
 };
 
@@ -97,10 +91,37 @@ function positionLabel(pos: string | undefined) {
   }
 }
 
+type TeamFormResp = {
+  teamId?: string;
+  last5_pt?: string | null;
+  last5?: string | null;
+  updatedAt?: string | null;
+};
+
+function fallbackTeamIdFromName(name: string) {
+  const n = name.toLowerCase();
+
+  // fallback mínimo (só se não vier ID do backend)
+  if (n.includes('porto')) return 'fcp';
+  if (n.includes('sporting')) return 'scp';
+  if (n.includes('benfica')) return 'slb';
+  if (n.includes('braga')) return 'scb';
+
+  return n
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]+/g, '')
+    .trim();
+}
+
 export default function FixtureCard({
   id,
   kickoff_at,
   status,
+
+  home_team_id,
+  away_team_id,
+
   home_team_name,
   away_team_name,
   home_crest,
@@ -140,8 +161,7 @@ export default function FixtureCard({
     const d = new Date(kickoff_at);
     const weekdayRaw = d.toLocaleDateString('pt-PT', { weekday: 'long' });
     const weekdayNorm = weekdayRaw.replace('-', ' ');
-    const weekdayCap =
-      weekdayNorm.charAt(0).toUpperCase() + weekdayNorm.slice(1);
+    const weekdayCap = weekdayNorm.charAt(0).toUpperCase() + weekdayNorm.slice(1);
     const dd = String(d.getDate()).padStart(2, '0');
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     return `${weekdayCap}, ${dd}/${mm}`;
@@ -218,13 +238,11 @@ export default function FixtureCard({
     return () => clearInterval(timerId);
   }, [lock_at_utc, variant, lockedBase]);
 
-  const nowLocked =
-    lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0) || !canEdit;
+  const nowLocked = lockedBase || (variant !== 'past' && (remainMs ?? 1) <= 0) || !canEdit;
 
   // jogo é do Porto?
   const involvesPorto =
-    home_team_name.toLowerCase().includes('porto') ||
-    away_team_name.toLowerCase().includes('porto');
+    home_team_name.toLowerCase().includes('porto') || away_team_name.toLowerCase().includes('porto');
 
   // ---------- ESTADO DOS INPUTS DE RESULTADO ----------
   const [home, setHome] = useState<number | ''>(() =>
@@ -233,7 +251,6 @@ export default function FixtureCard({
   const [away, setAway] = useState<number | ''>(() =>
     typeof pred_away === 'number' ? pred_away : ''
   );
-
   const [scoresTouched, setScoresTouched] = useState(false);
 
   useEffect(() => {
@@ -261,8 +278,7 @@ export default function FixtureCard({
   const [scorerCleared, setScorerCleared] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
-  const [positionFilter, setPositionFilter] =
-    useState<'ALL' | 'GR' | 'D' | 'M' | 'A'>('ALL');
+  const [positionFilter, setPositionFilter] = useState<'ALL' | 'GR' | 'D' | 'M' | 'A'>('ALL');
 
   useEffect(() => {
     setScorerId(pred_scorer_id ?? null);
@@ -271,26 +287,17 @@ export default function FixtureCard({
 
   const scorerPlayer = useMemo(
     () => players?.find((p) => p.id === scorerId) ?? null,
-    [players, scorerId],
+    [players, scorerId]
   );
 
   const pickerEnabled =
-    variant !== 'past' &&
-    !nowLocked &&
-    canEdit &&
-    involvesPorto &&
-    !!players &&
-    players.length > 0;
+    variant !== 'past' && !nowLocked && canEdit && involvesPorto && !!players && players.length > 0;
 
   const filteredPlayers = useMemo(() => {
     if (!players) return [];
     const q = pickerSearch.trim().toLowerCase();
 
-    const byPos =
-      positionFilter === 'ALL'
-        ? players
-        : players.filter((p) => p.position === positionFilter);
-
+    const byPos = positionFilter === 'ALL' ? players : players.filter((p) => p.position === positionFilter);
     if (!q) return byPos;
 
     const normQ = q.normalize('NFD').replace(/\p{Diacritic}/gu, '');
@@ -299,19 +306,16 @@ export default function FixtureCard({
         .toLowerCase()
         .normalize('NFD')
         .replace(/\p{Diacritic}/gu, '')
-        .includes(normQ),
+        .includes(normQ)
     );
   }, [players, pickerSearch, positionFilter]);
 
   const hasValidScores = typeof home === 'number' && typeof away === 'number';
   const hasMarkerChoice = !!scorerPlayer || scorerCleared;
   const predictionChanged =
-    home !== (pred_home ?? null) ||
-    away !== (pred_away ?? null) ||
-    (scorerId ?? null) !== (pred_scorer_id ?? null);
+    home !== (pred_home ?? null) || away !== (pred_away ?? null) || (scorerId ?? null) !== (pred_scorer_id ?? null);
 
-  const canSave =
-    !nowLocked && canEdit && hasValidScores && hasMarkerChoice && predictionChanged;
+  const canSave = !nowLocked && canEdit && hasValidScores && hasMarkerChoice && predictionChanged;
 
   const pointsBadge = useMemo(() => {
     if (variant !== 'past') return null;
@@ -322,16 +326,10 @@ export default function FixtureCard({
     const ra = typeof final_away_score === 'number' ? final_away_score : null;
 
     if (ph == null || pa == null) {
-      return {
-        label: 'Sem participação',
-        className: 'bg-red-500/25 text-red-100',
-      };
+      return { label: 'Sem participação', className: 'bg-red-500/25 text-red-100' };
     }
     if (rh == null || ra == null) {
-      return {
-        label: '+0 pontos',
-        className: 'bg-white/5 text-gray-200',
-      };
+      return { label: '+0 pontos', className: 'bg-white/5 text-gray-200' };
     }
 
     let pts: number;
@@ -348,12 +346,7 @@ export default function FixtureCard({
 
     const label = `+${pts} ${pts === 1 ? 'ponto' : 'pontos'}`;
 
-    if (pts === 0) {
-      return {
-        label,
-        className: 'bg-amber-400/25 text-amber-50',
-      };
-    }
+    if (pts === 0) return { label, className: 'bg-amber-400/25 text-amber-50' };
 
     const greens = [
       'bg-green-500/[0.12] text-green-100',
@@ -389,13 +382,9 @@ export default function FixtureCard({
 
   const lastPredScorerLabel = useMemo(() => {
     if (variant === 'past') return null;
-
-    const hasScores =
-      typeof pred_home === 'number' && typeof pred_away === 'number';
+    const hasScores = typeof pred_home === 'number' && typeof pred_away === 'number';
     if (!hasScores) return null;
-
     if (pred_scorer_id == null) return 'ninguém';
-
     if (!players || players.length === 0) return null;
     const sid = String(pred_scorer_id);
     const p = players.find((pl) => pl.id === sid);
@@ -403,8 +392,7 @@ export default function FixtureCard({
   }, [variant, pred_home, pred_away, pred_scorer_id, players]);
 
   const headerStatusLabel = useMemo(() => {
-    if (variant === 'past')
-      return status === 'FINISHED' ? 'Terminado' : 'Bloqueado';
+    if (variant === 'past') return status === 'FINISHED' ? 'Terminado' : 'Bloqueado';
     if (nowLocked) return 'Bloqueado';
     return null;
   }, [variant, status, nowLocked]);
@@ -424,62 +412,47 @@ export default function FixtureCard({
     }
   }, [competition_code]);
 
+  // ✅ FORMA: agora usa IDs do fixture, sem mapping por nomes
+  const resolvedHomeId = useMemo(() => {
+    const v = (home_team_id ?? '').trim();
+    return v ? v : fallbackTeamIdFromName(home_team_name);
+  }, [home_team_id, home_team_name]);
 
-  type TeamFormResp = {
-    teamId: string;
-    last5_pt: string | null;
-    last5?: string | null;
-    updatedAt?: string | null;
-  };
-  
-  function teamIdFromName(name: string) {
-    const n = name.toLowerCase();
-  
-    // mapping rápido (ajusta conforme os teus ids)
-    if (n.includes('porto')) return 'fcporto';
-    if (n.includes('sporting')) return 'sporting';
-    if (n.includes('benfica')) return 'benfica';
-    if (n.includes('braga')) return 'braga';
-    if (n.includes('vitória') || n.includes('vitoria')) return 'vitoriag';
-    if (n.includes('boavista')) return 'boavista';
-  
-    // fallback: slug simples (se decidires gravar na D1 com ids assim)
-    return n
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .replace(/[^a-z0-9]+/g, '')
-      .trim();
-  }
-  
+  const resolvedAwayId = useMemo(() => {
+    const v = (away_team_id ?? '').trim();
+    return v ? v : fallbackTeamIdFromName(away_team_name);
+  }, [away_team_id, away_team_name]);
+
   const [homeForm, setHomeForm] = useState<string | null>(null);
   const [awayForm, setAwayForm] = useState<string | null>(null);
   const [loadingForms, setLoadingForms] = useState(false);
-  
+
   useEffect(() => {
-    // se quiseres esconder em jogos passados:
-    // if (variant === 'past') { setHomeForm(null); setAwayForm(null); return; }
-  
     let aborted = false;
+
     async function loadForms() {
+      if (!resolvedHomeId || !resolvedAwayId) {
+        setHomeForm(null);
+        setAwayForm(null);
+        return;
+      }
+
       setLoadingForms(true);
-  
-      const homeId = teamIdFromName(home_team_name);
-      const awayId = teamIdFromName(away_team_name);
-  
+
       try {
         const [rh, ra] = await Promise.all([
-          fetch(`/api/form/${encodeURIComponent(homeId)}`, { headers: { 'cache-control': 'no-store' } }),
-          fetch(`/api/form/${encodeURIComponent(awayId)}`, { headers: { 'cache-control': 'no-store' } }),
+          fetch(`/api/form/${encodeURIComponent(resolvedHomeId)}`, { headers: { 'cache-control': 'no-store' } }),
+          fetch(`/api/form/${encodeURIComponent(resolvedAwayId)}`, { headers: { 'cache-control': 'no-store' } }),
         ]);
-  
+
         const homeData: TeamFormResp | null = rh.ok ? await rh.json() : null;
         const awayData: TeamFormResp | null = ra.ok ? await ra.json() : null;
-  
+
         if (aborted) return;
-  
-        setHomeForm(homeData?.last5_pt ?? null);
-        setAwayForm(awayData?.last5_pt ?? null);
-      } catch (e) {
+
+        setHomeForm((homeData?.last5_pt ?? homeData?.last5 ?? null) || null);
+        setAwayForm((awayData?.last5_pt ?? awayData?.last5 ?? null) || null);
+      } catch {
         if (aborted) return;
         setHomeForm(null);
         setAwayForm(null);
@@ -487,20 +460,17 @@ export default function FixtureCard({
         if (!aborted) setLoadingForms(false);
       }
     }
-  
+
     void loadForms();
     return () => {
       aborted = true;
     };
-  }, [home_team_name, away_team_name, id]);
-  
+  }, [resolvedHomeId, resolvedAwayId, id]);
 
   // -------- Tendências (resultado + marcador mais comum) --------
   const [trends, setTrends] = useState<Trends | null>(null);
 
   useEffect(() => {
-    // Neste branch: queremos trends visíveis em todos os jogos não-past,
-    // mesmo bloqueados. Se a rota falhar, mostramos só placeholder.
     if (!showTrends || variant === 'past') {
       setTrends(null);
       return;
@@ -537,10 +507,6 @@ export default function FixtureCard({
     onSave(id, home, away, scorerId ?? null);
   };
 
-  // helper para saber se temos dados "reais" de trends
-  const hasRealTrends =
-    !!trends && typeof trends.total_predictions === 'number' && trends.total_predictions > 0;
-
   return (
     <div
       className={clsx(
@@ -569,13 +535,7 @@ export default function FixtureCard({
       <div className="md:hidden relative flex items-center justify-center">
         <div className="absolute left-0 top-1/2 -translate-y-1/2 pl-1">
           {comp && (
-            <svg
-              className="h-5 w-5 text-white/80"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            >
+            <svg className="h-5 w-5 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M6 4h12v2a4 4 0 01-4 4h-4a4 4 0 01-4-4V4z" />
               <path d="M18 6h2a2 2 0 01-2 2" />
               <path d="M6 6H4a2 2 0 002 2" />
@@ -594,28 +554,18 @@ export default function FixtureCard({
           <span
             className={clsx(
               'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] leading-none',
-              headerStatusLabel
-                ? 'bg-white/5 text-gray-200'
-                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
+              headerStatusLabel ? 'bg-white/5 text-gray-200' : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
             )}
           >
             {headerStatusLabel ? (
               headerStatusLabel
             ) : (
               <>
-                <svg
-                  className="inline h-3 w-3 mr-1 align-[-2px] opacity-80"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
+                <svg className="inline h-3 w-3 mr-1 align-[-2px] opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="9" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
                 </svg>
-                <span className="tabular-nums">
-                  {remainMs != null ? formatCompactRemaining(remainMs) : '0s'}
-                </span>
+                <span className="tabular-nums">{remainMs != null ? formatCompactRemaining(remainMs) : '0s'}</span>
               </>
             )}
           </span>
@@ -656,9 +606,7 @@ export default function FixtureCard({
           <span
             className={clsx(
               'rounded-full px-3 py-1 text-[12px] leading-none',
-              headerStatusLabel
-                ? 'bg-white/5 text-gray-200'
-                : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
+              headerStatusLabel ? 'bg-white/5 text-gray-200' : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
             )}
           >
             {headerStatusLabel ? (
@@ -666,13 +614,7 @@ export default function FixtureCard({
             ) : (
               <>
                 <span className="mr-1">Fecha em</span>
-                <svg
-                  className="inline h-3.5 w-3.5 mr-1 align-[-2px] opacity-80"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
+                <svg className="inline h-3.5 w-3.5 mr-1 align-[-2px] opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="9" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
                 </svg>
@@ -694,8 +636,8 @@ export default function FixtureCard({
             {home_team_name}
           </div>
           <div className="mt-1 text-[12px] sm:text-[12px] font-extrabold tracking-[0.22em] text-white/80">
-  {loadingForms ? '-----' : homeForm ?? '-'}
-</div>
+            {loadingForms ? '-----' : homeForm ?? '-'}
+          </div>
         </div>
 
         {/* SCORE */}
@@ -726,27 +668,14 @@ export default function FixtureCard({
                   className={clsx(
                     'hidden md:flex absolute left-full top-1/2 -translate-y-1/2 items-center justify-center w-10 h-10 rounded-full transition ml-2',
                     !canSave ? 'md:hidden' : '',
-                    saving
-                      ? 'bg-white/5 text-white/40 cursor-not-allowed'
-                      : 'bg-white/10 hover:bg-white/15 text-white',
+                    saving ? 'bg-white/5 text-white/40 cursor-not-allowed' : 'bg-white/10 hover:bg-white/15 text-white',
                   )}
                   onClick={handleSave}
                   title="Guardar palpite"
                 >
                   {saving ? (
-                    <svg
-                      className="animate-spin h-5 w-5 text-white/60"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
+                    <svg className="animate-spin h-5 w-5 text-white/60" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path
                         className="opacity-75"
                         fill="currentColor"
@@ -754,13 +683,7 @@ export default function FixtureCard({
                       />
                     </svg>
                   ) : (
-                    <svg
-                      className="h-8 w-8"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
                     </svg>
                   )}
@@ -777,9 +700,8 @@ export default function FixtureCard({
             {away_team_name}
           </div>
           <div className="mt-1 text-[12px] sm:text-[12px] font-extrabold tracking-[0.22em] text-white/80">
-  {loadingForms ? '-----' : awayForm ?? '-'}
-</div>
-
+            {loadingForms ? '-----' : awayForm ?? '-'}
+          </div>
         </div>
       </div>
 
@@ -790,9 +712,7 @@ export default function FixtureCard({
           disabled={!pickerEnabled}
           className={clsx(
             'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs sm:text-sm border',
-            pickerEnabled
-              ? 'border-white/20 bg-white/5 hover:bg-white/10'
-              : 'border-white/10 bg-white/5 text-white/50 cursor-not-allowed',
+            pickerEnabled ? 'border-white/20 bg-white/5 hover:bg-white/10' : 'border-white/10 bg-white/5 text-white/50 cursor-not-allowed',
           )}
           onClick={() => {
             if (!pickerEnabled) return;
@@ -802,17 +722,9 @@ export default function FixtureCard({
           }}
         >
           <span>
-            {scorerPlayer
-              ? `Marcador: ${scorerPlayer.name}`
-              : scorerCleared
-              ? 'Marcador: ninguém'
-              : 'Escolher marcador'}
+            {scorerPlayer ? `Marcador: ${scorerPlayer.name}` : scorerCleared ? 'Marcador: ninguém' : 'Escolher marcador'}
           </span>
-          {scorerPlayer && (
-            <span className="text-[10px] uppercase opacity-70">
-              {positionLabel(scorerPlayer.position)}
-            </span>
-          )}
+          {scorerPlayer && <span className="text-[10px] uppercase opacity-70">{positionLabel(scorerPlayer.position)}</span>}
         </button>
         {scorerPlayer && (
           <button
@@ -838,19 +750,12 @@ export default function FixtureCard({
               Resultado Correto: {finalScoreText}
             </span>
           )}
-          <span
-            className={clsx(
-              'inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none',
-              pointsBadge.className,
-            )}
-          >
+          <span className={clsx('inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none', pointsBadge.className)}>
             {pointsBadge.label}
           </span>
 
           {variant === 'past' && scorersNames.length > 0 && (
-            <span className="mt-1 text-[12px] text-white/70">
-              Marcadores: {scorersNames.join(', ')}
-            </span>
+            <span className="mt-1 text-[12px] text-white/70">Marcadores: {scorersNames.join(', ')}</span>
           )}
         </div>
       )}
@@ -865,60 +770,45 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Tendência da comunidade (resultado + marcador mais comuns) */}
-{variant !== 'past' && showTrends && trends && (
-  <div className="mt-2 flex flex-col items-center gap-1">
-    {trends.total_predictions === 0 ? (
-      <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] sm:text-[12px] leading-none bg-white/5 text-white/70">
-        Tendência da comunidade: ainda sem dados suficientes
-      </span>
-    ) : (
-      <>
-        <span className="text-[11px] sm:text-[12px] text-white/70">
-          Tendência da comunidade
-        </span>
+      {/* Tendência da comunidade */}
+      {variant !== 'past' && showTrends && trends && (
+        <div className="mt-2 flex flex-col items-center gap-1">
+          {trends.total_predictions === 0 ? (
+            <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] sm:text-[12px] leading-none bg-white/5 text-white/70">
+              Tendência da comunidade: ainda sem dados suficientes
+            </span>
+          ) : (
+            <>
+              <span className="text-[11px] sm:text-[12px] text-white/70">Tendência da comunidade</span>
 
-        {/* Resultados mais comuns */}
-        {trends.scores && trends.scores.length > 0 ? (
-          <div className="flex flex-wrap justify-center gap-1">
-            {trends.scores.slice(0, 3).map((s) => (
-              <span
-                key={`${s.home}-${s.away}`}
-                className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90"
-              >
-                {s.home}–{s.away}{' '}
-                <span className="opacity-75">
-                  ({s.pct}%)
-                </span>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div className="text-[11px] text-white/60">
-            Sem tendência de resultado ainda.
-          </div>
-        )}
+              {trends.scores && trends.scores.length > 0 ? (
+                <div className="flex flex-wrap justify-center gap-1">
+                  {trends.scores.slice(0, 3).map((s) => (
+                    <span
+                      key={`${s.home}-${s.away}`}
+                      className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90"
+                    >
+                      {s.home}–{s.away} <span className="opacity-75">({s.pct}%)</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[11px] text-white/60">Sem tendência de resultado ainda.</div>
+              )}
 
-        {/* Marcadores mais escolhidos */}
-        {trends.scorers && trends.scorers.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-1 mt-1">
-            {trends.scorers.slice(0, 3).map((sc) => (
-              <span
-                key={sc.player_id}
-                className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90"
-              >
-                {sc.name}{' '}
-                <span className="opacity-75">
-                  ({sc.pct}%)
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
-      </>
-    )}
-  </div>
-)}
+              {trends.scorers && trends.scorers.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-1 mt-1">
+                  {trends.scorers.slice(0, 3).map((sc) => (
+                    <span key={sc.player_id} className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90">
+                      {sc.name} <span className="opacity-75">({sc.pct}%)</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Botão mobile Guardar */}
       {variant !== 'past' && (
@@ -927,9 +817,7 @@ export default function FixtureCard({
             disabled={!canSave || !!saving || nowLocked || !canEdit}
             className={clsx(
               'rounded-full px-4 py-2 text-sm font-medium',
-              !canSave || saving || nowLocked || !canEdit
-                ? 'bg-white/5 text-white/50 cursor-not-allowed'
-                : 'bg-white/10 hover:bg-white/15 text-white',
+              !canSave || saving || nowLocked || !canEdit ? 'bg-white/5 text-white/50 cursor-not-allowed' : 'bg-white/10 hover:bg-white/15 text-white',
             )}
             onClick={handleSave}
           >
@@ -944,75 +832,25 @@ export default function FixtureCard({
           <div className="w-full max-w-md max-h-[80vh] rounded-t-3xl sm:rounded-3xl bg-[#02051a] border border-white/10 shadow-xl p-4 flex flex-col">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-medium">Escolher marcador</h3>
-              <button
-                className="text-xs text-white/60 hover:text-white"
-                onClick={() => setPickerOpen(false)}
-              >
+              <button className="text-xs text-white/60 hover:text-white" onClick={() => setPickerOpen(false)}>
                 Fechar
               </button>
             </div>
 
             <div className="mb-2 flex flex-wrap gap-1 text-[11px] text-white/70">
-              <button
-                type="button"
-                className={clsx(
-                  'rounded-full px-2.5 py-0.5 border text-xs',
-                  positionFilter === 'ALL'
-                    ? 'border-white/50 bg-white/10 text-white'
-                    : 'border-white/15 bg-transparent hover:bg-white/5',
-                )}
-                onClick={() => setPositionFilter('ALL')}
-              >
-                Todos
-              </button>
-              <button
-                type="button"
-                className={clsx(
-                  'rounded-full px-2.5 py-0.5 border text-xs',
-                  positionFilter === 'GR'
-                    ? 'border-white/50 bg-white/10 text-white'
-                    : 'border-white/15 bg-transparent hover:bg-white/5',
-                )}
-                onClick={() => setPositionFilter('GR')}
-              >
-                Guarda-redes
-              </button>
-              <button
-                type="button"
-                className={clsx(
-                  'rounded-full px-2.5 py-0.5 border text-xs',
-                  positionFilter === 'D'
-                    ? 'border-white/50 bg-white/10 text-white'
-                    : 'border-white/15 bg-transparent hover:bg-white/5',
-                )}
-                onClick={() => setPositionFilter('D')}
-              >
-                Defesas
-              </button>
-              <button
-                type="button"
-                className={clsx(
-                  'rounded-full px-2.5 py-0.5 border text-xs',
-                  positionFilter === 'M'
-                    ? 'border-white/50 bg-white/10 text-white'
-                    : 'border-white/15 bg-transparent hover:bg-white/5',
-                )}
-                onClick={() => setPositionFilter('M')}
-              >
-                Médios
-              </button>
-              <button
-                type="button"
-                className={clsx(
-                  'rounded-full px-2.5 py-0.5 border text-xs',
-                  positionFilter === 'A'
-                    ? 'border-white/50 bg-white/10 text-white'
-                    : 'border-white/15 bg-transparent hover:bg-white/5',
-                )}
-                onClick={() => setPositionFilter('A')}
-              >
-                Avançados
-              </button>
+              {(['ALL', 'GR', 'D', 'M', 'A'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={clsx(
+                    'rounded-full px-2.5 py-0.5 border text-xs',
+                    positionFilter === k ? 'border-white/50 bg-white/10 text-white' : 'border-white/15 bg-transparent hover:bg-white/5',
+                  )}
+                  onClick={() => setPositionFilter(k)}
+                >
+                  {k === 'ALL' ? 'Todos' : k === 'GR' ? 'Guarda-redes' : k === 'D' ? 'Defesas' : k === 'M' ? 'Médios' : 'Avançados'}
+                </button>
+              ))}
             </div>
 
             <input
@@ -1024,9 +862,7 @@ export default function FixtureCard({
 
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {filteredPlayers.length === 0 ? (
-                <div className="text-xs text-white/60">
-                  Nenhum jogador encontrado.
-                </div>
+                <div className="text-xs text-white/60">Nenhum jogador encontrado.</div>
               ) : (
                 filteredPlayers.map((p) => (
                   <button
@@ -1034,9 +870,7 @@ export default function FixtureCard({
                     type="button"
                     className={clsx(
                       'w-full text-left rounded-xl px-3 py-2 text-sm flex items-center justify-between',
-                      scorerId === p.id
-                        ? 'bg-white/15 border border-white/30'
-                        : 'bg-white/5 border border-white/5 hover:bg-white/10',
+                      scorerId === p.id ? 'bg-white/15 border border-white/30' : 'bg-white/5 border border-white/5 hover:bg-white/10',
                     )}
                     onClick={() => {
                       setScorerId(p.id);
@@ -1045,9 +879,7 @@ export default function FixtureCard({
                     }}
                   >
                     <span>{p.name}</span>
-                    <span className="text-[11px] uppercase text-white/60">
-                      {positionLabel(p.position)}
-                    </span>
+                    <span className="text-[11px] uppercase text-white/60">{positionLabel(p.position)}</span>
                   </button>
                 ))
               )}
@@ -1112,10 +944,7 @@ function ScoreBox({
   value: number | '';
   onChange: (v: number | '') => void;
 }) {
-  const displayValue =
-    value === '' || value === null || value === undefined ? '' : String(value);
-
-
+  const displayValue = value === '' || value === null || value === undefined ? '' : String(value);
 
   return (
     <input

@@ -636,9 +636,13 @@ export default function FixtureCard({
           <div className="truncate text-center text-[14px] sm:text-base font-medium mt-1">
             {home_team_name}
           </div>
-          <div className="mt-1 text-[10px] sm:text-[11px] font-normal tracking-[0.12em] text-white/45 flex-col-reverse">
-            {loadingForms ? '-----' : homeForm ?? '-'}
-          </div>
+          <div className="mt-1 text-[10px] sm:text-[11px] font-light tracking-[0.12em] text-white/45">
+  {loadingForms
+    ? '-----'
+    : homeForm
+    ? homeForm.split('').reverse().join('')
+    : '-'}
+</div>
         </div>
 
         {/* SCORE */}
@@ -700,9 +704,13 @@ export default function FixtureCard({
           <div className="truncate text-center text-[14px] sm:text-base font-medium mt-1">
             {away_team_name}
           </div>
-          <div className="mt-1 text-[10px] sm:text-[11px] font-normal tracking-[0.12em] text-white/45 flex-col-reverse">
-            {loadingForms ? '-----' : awayForm ?? '-'}
-          </div>
+          <div className="mt-1 text-[10px] sm:text-[11px] font-light tracking-[0.12em] text-white/45">
+  {loadingForms
+    ? '-----'
+    : awayForm
+    ? awayForm.split('').reverse().join('')
+    : '-'}
+</div>
         </div>
       </div>
 

@@ -57,6 +57,19 @@ type LastMatchItem = {
   score?: { home: number | null; away: number | null };
 };
 
+type SyncAllBody = {
+    teamIds?: string[];
+    onlyPPL?: boolean;   // opcional (se quiseres filtrar por liga)
+    limit?: number;      // opcional (safety)
+  };
+  
+  function chunk<T>(arr: T[], size: number) {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  }
+  
+
 function requireAdmin(c: BindingsCtx): string | null {
   const key =
     c.req.header("x-admin-key") ??
@@ -184,6 +197,151 @@ adminForm.post("/sync", async (c) => {
   const res = await fetch(url, {
     headers: { "X-Auth-Token": token },
   });
+
+  adminForm.post("/sync-all", async (c) => {
+    const err = requireAdmin(c as unknown as BindingsCtx);
+    if (err) return c.json({ error: err }, 403);
+  
+    const raw: unknown = await c.req.json().catch(() => null);
+    const body = (raw ?? {}) as SyncAllBody;
+  
+    // 1) descobrir lista de equipas a sincronizar
+    let teamIds: string[] = [];
+  
+    // se vierem teamIds no body, usa isso
+    if (Array.isArray(body.teamIds) && body.teamIds.length > 0) {
+      teamIds = body.teamIds
+        .map((x) => (typeof x === "string" ? x.trim() : ""))
+        .filter(Boolean);
+    } else {
+      // senão, vai buscar todas as equipas na tabela teams
+      const rows = await c.env.DB.prepare(`SELECT id FROM teams`).all<{ id: string }>();
+      teamIds = (rows.results ?? []).map((r) => String(r.id)).filter(Boolean);
+    }
+  
+    // safety limit opcional
+    const limit =
+      typeof body.limit === "number" && Number.isFinite(body.limit) && body.limit > 0
+        ? Math.floor(body.limit)
+        : null;
+  
+    if (limit != null) teamIds = teamIds.slice(0, limit);
+  
+    if (teamIds.length === 0) {
+      return c.json({ ok: true, total: 0, success: 0, failed: 0, results: [] });
+    }
+  
+    // 2) buscar payload do football-data UMA vez
+    const token = c.env.FOOTBALL_DATA_TOKEN;
+    if (!token) return c.json({ error: "missing_token" }, 500);
+  
+    const url =
+      "https://api.football-data.org/v4/competitions/PPL/matches?status=FINISHED&limit=200";
+  
+    const res = await fetch(url, { headers: { "X-Auth-Token": token } });
+    if (!res.ok) {
+      return c.json({ error: "football_data_failed", status: res.status }, 502);
+    }
+  
+    const json: unknown = await res.json().catch(() => null);
+    if (!isFDResponse(json)) {
+      return c.json({ error: "football_data_bad_payload" }, 502);
+    }
+  
+    const matches = Array.isArray(json.matches) ? json.matches : [];
+  
+    // 3) para cada equipa, calcula e faz upsert
+    const results: Array<{
+      teamId: string;
+      ok: boolean;
+      last5?: string;
+      count?: number;
+      error?: string;
+    }> = [];
+  
+    // opcional: processar em batches para não estourar limites
+    for (const batch of chunk(teamIds, 10)) {
+      for (const teamId of batch) {
+        try {
+          const team = await c.env.DB.prepare(
+            "SELECT id, name, short_name FROM teams WHERE id = ?"
+          )
+            .bind(teamId)
+            .first<TeamRow>();
+  
+          if (!team) {
+            results.push({ teamId, ok: false, error: "unknown_team" });
+            continue;
+          }
+  
+          // filtra jogos da equipa
+          const teamMatches = matches.filter((m) => {
+            if (!m || m.status !== "FINISHED") return false;
+            const homeOk = m.homeTeam ? teamMatchesApi(team, m.homeTeam) : false;
+            const awayOk = m.awayTeam ? teamMatchesApi(team, m.awayTeam) : false;
+            return homeOk || awayOk;
+          });
+  
+          const lastMatches = teamMatches
+            .slice()
+            .sort((a, b) => Date.parse(b.utcDate) - Date.parse(a.utcDate))
+            .slice(0, 5);
+  
+          const lastItems: LastMatchItem[] = lastMatches.map((m) => {
+            const isHome = teamMatchesApi(team, m.homeTeam);
+            const opponent = isHome
+              ? m.awayTeam?.shortName || m.awayTeam?.name || "Opponent"
+              : m.homeTeam?.shortName || m.homeTeam?.name || "Opponent";
+  
+            const winner = m.score?.winner ?? null;
+            const result = computeResultLetter(winner, isHome);
+  
+            const ftHome = m.score?.fullTime?.home ?? null;
+            const ftAway = m.score?.fullTime?.away ?? null;
+  
+            return {
+              utcDate: m.utcDate,
+              competition: m.competition?.code || m.competition?.name,
+              opponent,
+              venue: isHome ? "H" : "A",
+              result,
+              score: { home: ftHome, away: ftAway },
+            };
+          });
+  
+          const last5 = lastItems.map((x) => x.result).join("");
+          const updatedAt = new Date().toISOString();
+  
+          await c.env.DB.prepare(
+            `INSERT INTO team_form (team_id, updated_at, last5, last5_json)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(team_id) DO UPDATE SET
+               updated_at = excluded.updated_at,
+               last5 = excluded.last5,
+               last5_json = excluded.last5_json`
+          )
+            .bind(teamId, updatedAt, last5, JSON.stringify(lastItems))
+            .run();
+  
+          results.push({ teamId, ok: true, last5, count: lastItems.length });
+        } catch (e: any) {
+          results.push({ teamId, ok: false, error: e?.message ?? "error" });
+        }
+      }
+    }
+  
+    const success = results.filter((r) => r.ok).length;
+    const failed = results.length - success;
+  
+    return c.json({
+      ok: true,
+      total: results.length,
+      success,
+      failed,
+      results,
+    });
+  });
+  
 
   if (!res.ok) {
     return c.json(

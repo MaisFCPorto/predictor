@@ -315,3 +315,104 @@ adminForm.post("/sync-all", async (c) => {
     totalTeams: teams.length,
   });
 });
+
+async function fetchFinishedPPL(env: Env) {
+    const token = env.FOOTBALL_DATA_TOKEN;
+    if (!token) throw new Error("missing_token");
+  
+    const url =
+      "https://api.football-data.org/v4/competitions/PPL/matches?status=FINISHED&limit=200";
+  
+    const res = await fetch(url, { headers: { "X-Auth-Token": token } });
+    if (!res.ok) throw new Error(`football_data_failed_${res.status}`);
+  
+    const json: unknown = await res.json().catch(() => null);
+    if (!isFDResponse(json)) throw new Error("football_data_bad_payload");
+  
+    return Array.isArray(json.matches) ? json.matches : [];
+  }
+  
+  async function syncTeamForm(env: Env, teamId: string, matches: FDMatch[]) {
+    const team = await env.DB.prepare(
+      "SELECT id, name, short_name FROM teams WHERE id = ?"
+    )
+      .bind(teamId)
+      .first<TeamRow>();
+  
+    if (!team) return { ok: false as const, teamId, error: "unknown_team" };
+  
+    const teamMatches = matches.filter((m) => {
+      if (!m || m.status !== "FINISHED") return false;
+      const homeOk = m.homeTeam ? teamMatchesApi(team, m.homeTeam) : false;
+      const awayOk = m.awayTeam ? teamMatchesApi(team, m.awayTeam) : false;
+      return homeOk || awayOk;
+    });
+  
+    const lastMatches = teamMatches
+      .slice()
+      .sort((a, b) => Date.parse(b.utcDate) - Date.parse(a.utcDate))
+      .slice(0, 5);
+  
+    const lastItems: LastMatchItem[] = lastMatches.map((m) => {
+      const isHome = teamMatchesApi(team, m.homeTeam);
+      const opponent = isHome
+        ? m.awayTeam?.shortName || m.awayTeam?.name || "Opponent"
+        : m.homeTeam?.shortName || m.homeTeam?.name || "Opponent";
+  
+      const winner = m.score?.winner ?? null;
+      const result = computeResultLetter(winner as any, isHome);
+  
+      const ftHome = m.score?.fullTime?.home ?? null;
+      const ftAway = m.score?.fullTime?.away ?? null;
+  
+      return {
+        utcDate: m.utcDate,
+        competition: m.competition?.code || m.competition?.name,
+        opponent,
+        venue: isHome ? "H" : "A",
+        result,
+        score: { home: ftHome, away: ftAway },
+      };
+    });
+  
+    const last5 = lastItems.map((x) => x.result).join("");
+    const updatedAt = new Date().toISOString();
+  
+    await env.DB.prepare(
+      `INSERT INTO team_form (team_id, updated_at, last5, last5_json)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(team_id) DO UPDATE SET
+         updated_at = excluded.updated_at,
+         last5 = excluded.last5,
+         last5_json = excluded.last5_json`
+    )
+      .bind(teamId, updatedAt, last5, JSON.stringify(lastItems))
+      .run();
+  
+    return { ok: true as const, teamId, teamName: team.name, last5 };
+  }
+  
+  // ✅ export para o cron conseguir chamar
+  export async function syncAllTeamForms(env: Env) {
+    const matches = await fetchFinishedPPL(env);
+  
+    const { results } = await env.DB.prepare(
+      `SELECT id FROM teams ORDER BY id`
+    ).all<{ id: string }>();
+  
+    const teamIds = (results ?? []).map((r) => r.id).filter(Boolean);
+  
+    const out: Array<any> = [];
+    for (const teamId of teamIds) {
+      try {
+        const r = await syncTeamForm(env, teamId, matches);
+        out.push(r);
+      } catch (e: any) {
+        out.push({ ok: false, teamId, error: String(e?.message ?? e) });
+      }
+    }
+  
+    const okCount = out.filter((x) => x.ok).length;
+    return { ok: true, total: teamIds.length, okCount, results: out };
+  }
+  

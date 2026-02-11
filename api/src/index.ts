@@ -16,6 +16,8 @@ import { adminLeagues } from './routes/admin/leagues';
 import { leagues } from './routes/leagues';
 import {adminForm}  from "./routes/admin/form";
 import { form } from "./routes/form";
+import { syncAllTeamForms } from "./routes/admin/form";
+
 
 
 
@@ -1275,4 +1277,19 @@ app.get('/api/users/:id/last-points', async (c) => {
 // ----------------------------------------------------
 // Exporta App
 // ----------------------------------------------------
-export default app;
+export default {
+  fetch: app.fetch,
+  scheduled: async (_event: ScheduledEvent, env: Env, ctx: ExecutionContext) => {
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const r = await syncAllTeamForms(env);
+          console.log("CRON sync-all OK", r.okCount, "/", r.total);
+        } catch (e) {
+          console.error("CRON sync-all FAILED", e);
+        }
+      })()
+    );
+  },
+};
+

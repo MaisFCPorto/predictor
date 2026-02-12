@@ -15,11 +15,25 @@ type TeamRow = {
   short_name: string | null;
 };
 
+type ManualBody = {
+  teamId?: string;
+  last5?: string;
+  last5Matches?: unknown[];
+};
+
+type SyncBody = {
+  teamId?: string;
+};
+
 type FDTeam = {
   id?: number;
   name?: string;
   shortName?: string;
   tla?: string;
+};
+
+type FDTeamsResponse = {
+  teams?: FDTeam[];
 };
 
 type FDMatch = {
@@ -34,7 +48,7 @@ type FDMatch = {
   };
 };
 
-type FDResponse = {
+type FDMatchesResponse = {
   matches?: FDMatch[];
 };
 
@@ -47,16 +61,11 @@ type LastMatchItem = {
   score?: { home: number | null; away: number | null };
 };
 
-// ----------------------------------------------------
-// Helpers
-// ----------------------------------------------------
-
 function requireAdmin(c: BindingsCtx): string | null {
   const key =
     c.req.header("x-admin-key") ??
     c.req.header("X-Admin-Key") ??
     c.req.header("X-ADMIN-KEY");
-
   if (!key || key !== c.env.ADMIN_KEY) return "unauthorized";
   return null;
 }
@@ -78,6 +87,7 @@ function teamMatchesApi(team: TeamRow, apiTeam: FDTeam): boolean {
   const aShort = normalize(apiTeam.shortName ?? "");
   const aTla = normalize(apiTeam.tla ?? "");
 
+  // match por qualquer combinação
   return (
     (!!aName && (aName === tName || aName === tShort)) ||
     (!!aShort && (aShort === tName || aShort === tShort)) ||
@@ -85,7 +95,13 @@ function teamMatchesApi(team: TeamRow, apiTeam: FDTeam): boolean {
   );
 }
 
-function isFDResponse(v: unknown): v is FDResponse {
+function isFDTeamsResponse(v: unknown): v is FDTeamsResponse {
+  if (typeof v !== "object" || v === null) return false;
+  const obj = v as { teams?: unknown };
+  return obj.teams === undefined || Array.isArray(obj.teams);
+}
+
+function isFDMatchesResponse(v: unknown): v is FDMatchesResponse {
   if (typeof v !== "object" || v === null) return false;
   const obj = v as { matches?: unknown };
   return obj.matches === undefined || Array.isArray(obj.matches);
@@ -101,48 +117,56 @@ function computeResultLetter(
   return "E";
 }
 
-// ----------------------------------------------------
-// Core logic
-// ----------------------------------------------------
-
-async function fetchFinishedPPL(env: Env): Promise<FDMatch[]> {
+async function fetchPPLTeams(env: Env): Promise<FDTeam[]> {
   const token = env.FOOTBALL_DATA_TOKEN;
   if (!token) throw new Error("missing_token");
 
-  const url =
-    "https://api.football-data.org/v4/competitions/PPL/matches?status=FINISHED&limit=200";
-
-  const res = await fetch(url, {
-    headers: { "X-Auth-Token": token },
-  });
-
-  if (!res.ok) {
-    throw new Error(`football_data_failed_${res.status}`);
-  }
+  const url = "https://api.football-data.org/v4/competitions/PPL/teams";
+  const res = await fetch(url, { headers: { "X-Auth-Token": token } });
+  if (!res.ok) throw new Error(`football_data_failed_${res.status}`);
 
   const json: unknown = await res.json().catch(() => null);
-  if (!isFDResponse(json)) {
-    throw new Error("football_data_bad_payload");
-  }
+  if (!isFDTeamsResponse(json)) throw new Error("football_data_bad_payload");
+
+  return Array.isArray(json.teams) ? json.teams : [];
+}
+
+function resolveFDTeamId(team: TeamRow, fdTeams: FDTeam[]): number | null {
+  const t = fdTeams.find((x) => teamMatchesApi(team, x));
+  const id = t?.id;
+  return typeof id === "number" && Number.isFinite(id) ? id : null;
+}
+
+async function fetchTeamMatchesAllComps(
+  env: Env,
+  fdTeamId: number
+): Promise<FDMatch[]> {
+  const token = env.FOOTBALL_DATA_TOKEN;
+  if (!token) throw new Error("missing_token");
+
+  // 15 por segurança (às vezes há adiamentos/duplicados), e depois cortamos para 5
+  const url = `https://api.football-data.org/v4/teams/${fdTeamId}/matches?status=FINISHED&limit=15`;
+  const res = await fetch(url, { headers: { "X-Auth-Token": token } });
+  if (!res.ok) throw new Error(`football_data_failed_${res.status}`);
+
+  const json: unknown = await res.json().catch(() => null);
+  if (!isFDMatchesResponse(json)) throw new Error("football_data_bad_payload");
 
   return Array.isArray(json.matches) ? json.matches : [];
 }
 
-function buildLast5ForTeam(team: TeamRow, matches: FDMatch[]) {
-  const teamMatches = matches.filter((m) => {
-    if (!m || m.status !== "FINISHED") return false;
-    const homeOk = m.homeTeam ? teamMatchesApi(team, m.homeTeam) : false;
-    const awayOk = m.awayTeam ? teamMatchesApi(team, m.awayTeam) : false;
-    return homeOk || awayOk;
-  });
-
-  const lastMatches = teamMatches
+function buildLast5FromTeamMatches(
+  fdTeamId: number,
+  matches: FDMatch[]
+): { last5: string; lastItems: LastMatchItem[] } {
+  const sorted = matches
     .slice()
+    .filter((m) => m && m.status === "FINISHED" && !!m.utcDate)
     .sort((a, b) => Date.parse(b.utcDate) - Date.parse(a.utcDate))
     .slice(0, 5);
 
-  const lastItems: LastMatchItem[] = lastMatches.map((m) => {
-    const isHome = teamMatchesApi(team, m.homeTeam);
+  const items: LastMatchItem[] = sorted.map((m) => {
+    const isHome = (m.homeTeam?.id ?? null) === fdTeamId;
 
     const opponent = isHome
       ? m.awayTeam?.shortName || m.awayTeam?.name || "Opponent"
@@ -163,26 +187,18 @@ function buildLast5ForTeam(team: TeamRow, matches: FDMatch[]) {
     };
   });
 
-  const last5 = lastItems.map((x) => x.result).join("");
+  // ⚠️ aqui fica: mais recente -> esquerda (VVVDE como tu queres)
+  const last5 = items.map((x) => x.result).join("");
 
-  return { last5, lastItems };
+  return { last5, lastItems: items };
 }
 
-async function syncTeamForm(
+async function upsertTeamForm(
   env: Env,
   teamId: string,
-  matches: FDMatch[]
+  last5: string,
+  lastItems: LastMatchItem[]
 ) {
-  const team = await env.DB.prepare(
-    "SELECT id, name, short_name FROM teams WHERE id = ?"
-  )
-    .bind(teamId)
-    .first<TeamRow>();
-
-  if (!team) return { ok: false, teamId };
-
-  const { last5, lastItems } = buildLast5ForTeam(team, matches);
-
   const updatedAt = new Date().toISOString();
 
   await env.DB.prepare(
@@ -196,56 +212,135 @@ async function syncTeamForm(
     .bind(teamId, updatedAt, last5, JSON.stringify(lastItems))
     .run();
 
-  return { ok: true, teamId, teamName: team.name, last5 };
+  return updatedAt;
+}
+
+// ✅ export para o CRON (sem admin key)
+export async function syncAllTeamForms(env: Env) {
+  const fdTeams = await fetchPPLTeams(env);
+
+  const { results } = await env.DB.prepare(
+    "SELECT id, name, short_name FROM teams ORDER BY name"
+  ).all<TeamRow>();
+
+  const teams = (results ?? []).filter(Boolean);
+
+  let okCount = 0;
+  const out: any[] = [];
+
+  for (const t of teams) {
+    try {
+      const fdTeamId = resolveFDTeamId(t, fdTeams);
+      if (!fdTeamId) {
+        out.push({ ok: false, teamId: t.id, error: "fd_team_not_found" });
+        continue;
+      }
+
+      const matches = await fetchTeamMatchesAllComps(env, fdTeamId);
+      const { last5, lastItems } = buildLast5FromTeamMatches(fdTeamId, matches);
+
+      const updatedAt = await upsertTeamForm(env, t.id, last5, lastItems);
+
+      okCount++;
+      out.push({ ok: true, teamId: t.id, fdTeamId, last5, updatedAt });
+    } catch (e: any) {
+      out.push({ ok: false, teamId: t.id, error: String(e?.message ?? e) });
+    }
+  }
+
+  return {
+    ok: true,
+    total: teams.length,
+    okCount,
+    results: out,
+  };
 }
 
 // ----------------------------------------------------
-// Hono Router
+// Router
 // ----------------------------------------------------
-
 export const adminForm = new Hono<{ Bindings: Env }>();
 
-// Manual update
+/**
+ * POST /api/admin/form
+ * Body: { teamId, last5, last5Matches? }
+ */
 adminForm.post("/", async (c) => {
   const err = requireAdmin(c as unknown as BindingsCtx);
   if (err) return c.json({ error: err }, 403);
 
-  const body = await c.req.json().catch(() => null);
-  const teamId = body?.teamId?.trim();
+  const raw: unknown = await c.req.json().catch(() => null);
+  const body = (raw ?? {}) as ManualBody;
 
+  const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
   if (!teamId) return c.json({ error: "missing_teamId" }, 400);
+
+  const last5 = typeof body.last5 === "string" ? body.last5.trim() : "";
+  const last5Matches = Array.isArray(body.last5Matches) ? body.last5Matches : [];
 
   const updatedAt = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO team_form (team_id, updated_at, last5)
-     VALUES (?, ?, ?)
+    `INSERT INTO team_form (team_id, updated_at, last5, last5_json)
+     VALUES (?, ?, ?, ?)
      ON CONFLICT(team_id) DO UPDATE SET
        updated_at = excluded.updated_at,
-       last5 = excluded.last5`
+       last5 = excluded.last5,
+       last5_json = excluded.last5_json`
   )
-    .bind(teamId, updatedAt, body?.last5 ?? "")
+    .bind(teamId, updatedAt, last5, JSON.stringify(last5Matches))
     .run();
 
-  return c.json({ ok: true });
+  return c.json({ ok: true, teamId, last5, updatedAt });
 });
 
-// Sync single team
+/**
+ * POST /api/admin/form/sync
+ * Body: { teamId }
+ * Últimos 5 jogos independentemente da competição
+ */
 adminForm.post("/sync", async (c) => {
   const err = requireAdmin(c as unknown as BindingsCtx);
   if (err) return c.json({ error: err }, 403);
 
-  const body = await c.req.json().catch(() => null);
-  const teamId = body?.teamId?.trim();
+  const raw: unknown = await c.req.json().catch(() => null);
+  const body = (raw ?? {}) as SyncBody;
+
+  const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
   if (!teamId) return c.json({ error: "missing_teamId" }, 400);
 
-  const matches = await fetchFinishedPPL(c.env);
-  const result = await syncTeamForm(c.env, teamId, matches);
+  const team = await c.env.DB.prepare(
+    "SELECT id, name, short_name FROM teams WHERE id = ?"
+  )
+    .bind(teamId)
+    .first<TeamRow>();
 
-  return c.json(result);
+  if (!team) return c.json({ error: "unknown_team", teamId }, 400);
+
+  const fdTeams = await fetchPPLTeams(c.env);
+  const fdTeamId = resolveFDTeamId(team, fdTeams);
+  if (!fdTeamId) return c.json({ error: "fd_team_not_found", teamId }, 404);
+
+  const matches = await fetchTeamMatchesAllComps(c.env, fdTeamId);
+  const { last5, lastItems } = buildLast5FromTeamMatches(fdTeamId, matches);
+  const updatedAt = await upsertTeamForm(c.env, teamId, last5, lastItems);
+
+  return c.json({
+    ok: true,
+    teamId,
+    teamName: team.name,
+    fdTeamId,
+    last5,
+    updatedAt,
+    count: lastItems.length,
+  });
 });
 
-// Sync ALL teams
+/**
+ * POST /api/admin/form/sync-all
+ * Sem body.
+ * Últimos 5 jogos independentemente da competição (para todas as equipas)
+ */
 adminForm.post("/sync-all", async (c) => {
   const err = requireAdmin(c as unknown as BindingsCtx);
   if (err) return c.json({ error: err }, 403);
@@ -253,34 +348,3 @@ adminForm.post("/sync-all", async (c) => {
   const result = await syncAllTeamForms(c.env);
   return c.json(result);
 });
-
-// ----------------------------------------------------
-// Export para CRON
-// ----------------------------------------------------
-
-export async function syncAllTeamForms(env: Env) {
-  const matches = await fetchFinishedPPL(env);
-
-  const { results } = await env.DB.prepare(
-    "SELECT id FROM teams ORDER BY id"
-  ).all<{ id: string }>();
-
-  const teamIds = (results ?? []).map((r) => r.id);
-
-  const out = [];
-  for (const teamId of teamIds) {
-    try {
-      const r = await syncTeamForm(env, teamId, matches);
-      out.push(r);
-    } catch (e: any) {
-      out.push({ ok: false, teamId, error: String(e) });
-    }
-  }
-
-  return {
-    ok: true,
-    total: teamIds.length,
-    okCount: out.filter((x) => x.ok).length,
-    results: out,
-  };
-}

@@ -165,7 +165,7 @@ async function getOrResolveFdTeamId(env: Env, team: TeamRow): Promise<number | n
     if (cached?.fd_team_id != null) return Number(cached.fd_team_id);
   
     // 2️⃣ Tentar resolver por competições principais
-    const competitions = ["PPL", "CL", "EL"]; // Liga PT, Champions, Europa
+    const competitions = ["PPL", "CL", "EL", "FL1"]; // Liga PT, Champions, Europa
   
     for (const comp of competitions) {
       try {

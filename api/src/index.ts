@@ -16,7 +16,8 @@ import { adminLeagues } from './routes/admin/leagues';
 import { leagues } from './routes/leagues';
 import {adminForm}  from "./routes/admin/form";
 import { form } from "./routes/form";
-import { syncAllTeamForms } from "./routes/admin/form";
+import { syncTeamFormsBatch } from "./routes/admin/form";
+
 
 
 
@@ -108,8 +109,6 @@ app.route('/api/admin/predictions', adminPredictions);
 app.route('/api', fixtureTrends);
 app.route('/api/admin', adminLeagues);
 app.route('/api', leagues);
-app.route("/api/admin/form", adminForm);
-app.route("/api/form", form);
 app.route("/api/admin/form", adminForm);
 app.route("/api/form", form);
 
@@ -800,6 +799,7 @@ app.get('/api/admin/teams', async (c) => {
     name: string;
     short_name: string | null;
     crest_url: string | null;
+    fd_team_id: number | null
   }>(
     c.env.DB,
     `
@@ -807,7 +807,8 @@ app.get('/api/admin/teams', async (c) => {
       id,
       name,
       short_name,
-      crest_url
+      crest_url,
+      fd_team_id
     FROM teams
     ORDER BY name
     `,
@@ -851,7 +852,7 @@ app.patch('/api/admin/teams/:id', async (c) => {
 
   const id = c.req.param('id');
   const body = (await c.req.json().catch(() => null)) as
-    | { name?: string; short_name?: string | null; crest_url?: string | null }
+    | { name?: string; short_name?: string | null; crest_url?: string | null;fd_team_id?: number | null }
     | null;
 
   if (!id) return c.json({ error: 'missing_id' }, 400);
@@ -864,7 +865,8 @@ app.patch('/api/admin/teams/:id', async (c) => {
     SET
       name       = COALESCE(?, name),
       short_name = COALESCE(?, short_name),
-      crest_url  = COALESCE(?, crest_url)
+      crest_url  = COALESCE(?, crest_url),
+      fd_team_id = COALESCE(?, fd_team_id)
     WHERE id = ?
     `,
     body.name ?? null,
@@ -1274,22 +1276,17 @@ app.get('/api/users/:id/last-points', async (c) => {
   return c.json(payload);
 });
 
+
+
+
 // ----------------------------------------------------
 // Exporta App
 // ----------------------------------------------------
 export default {
   fetch: app.fetch,
   scheduled: async (_event: ScheduledEvent, env: Env, ctx: ExecutionContext) => {
-    ctx.waitUntil(
-      (async () => {
-        try {
-          const r = await syncAllTeamForms(env);
-          console.log("CRON sync-all OK", r.okCount, "/", r.total);
-        } catch (e) {
-          console.error("CRON sync-all FAILED", e);
-        }
-      })()
-    );
+    ctx.waitUntil(syncTeamFormsBatch(env, 6)); // ou 8/10
   },
 };
+
 

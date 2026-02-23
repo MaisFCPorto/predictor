@@ -52,18 +52,13 @@ export default function ShopPage() {
       try {
         const res = await fetch('/api/auth/me');
         if (!res.ok) {
-          router.push('/');
+          setLoading(false);
           return;
         }
         const data = await res.json();
-        if (data.role !== 'admin') {
-          router.push('/');
-          return;
-        }
-        setIsAdmin(true);
+        setIsAdmin(data.role === 'admin');
       } catch (e) {
         console.error('Failed to check admin status:', e);
-        router.push('/');
       } finally {
         setLoading(false);
       }
@@ -81,7 +76,23 @@ export default function ShopPage() {
   }
 
   if (!isAdmin) {
-    return null;
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
+        <div className="max-w-xl mx-auto mt-10 rounded-2xl border border-white/10 p-6 space-y-3">
+          <h2 className="text-lg font-semibold mb-2">Acesso restrito</h2>
+          <p className="opacity-80 mb-2 text-sm">
+            Esta área é exclusiva para administradores. Faz login com uma conta de admin.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/auth')}
+            className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/15"
+          >
+            Ir para login
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

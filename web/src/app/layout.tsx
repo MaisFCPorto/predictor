@@ -286,9 +286,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     { href: '/regras', label: 'Regras' },
   ];
 
-  // Só admin vê a tab Ligas (beta)
+  // Links que só admin vê
   const navLinks = user?.isAdmin
-    ? [{ href: '/ligas', label: 'Ligas (beta)' }, ...baseNavLinks]
+    ? [
+        { href: '/ligas', label: 'Ligas (beta)' },
+        { href: '/shop', label: 'Loja' },
+        ...baseNavLinks
+      ]
     : baseNavLinks;
 
   const fullNavLinks = user?.isAdmin

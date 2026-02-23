@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useCart } from '@/components/CartContext';
 import { CartSlideOver } from '@/components/CartSlideOver';
+import AdminGate from '../admin/_components/AdminGate';
 
 type Product = {
   id: string;
@@ -41,59 +40,8 @@ const PRODUCTS: Product[] = [
   },
 ];
 
-export default function ShopPage() {
+function ShopInner() {
   const { addItem } = useCart();
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const router = useRouter();
-
-  useEffect(() => {
-    async function checkAdmin() {
-      try {
-        const res = await fetch('/api/auth/me');
-        if (!res.ok) {
-          setLoading(false);
-          return;
-        }
-        const data = await res.json();
-        setIsAdmin(data.role === 'admin');
-      } catch (e) {
-        console.error('Failed to check admin status:', e);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    checkAdmin();
-  }, [router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-6 opacity-70">
-        A verificar permissões...
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
-        <div className="max-w-xl mx-auto mt-10 rounded-2xl border border-white/10 p-6 space-y-3">
-          <h2 className="text-lg font-semibold mb-2">Acesso restrito</h2>
-          <p className="opacity-80 mb-2 text-sm">
-            Esta área é exclusiva para administradores. Faz login com uma conta de admin.
-          </p>
-          <button
-            type="button"
-            onClick={() => router.push('/auth')}
-            className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/15"
-          >
-            Ir para login
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
@@ -168,5 +116,13 @@ export default function ShopPage() {
 
       <CartSlideOver />
     </div>
+  );
+}
+
+export default function ShopPage() {
+  return (
+    <AdminGate>
+      <ShopInner />
+    </AdminGate>
   );
 }

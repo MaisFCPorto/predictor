@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabasePKCE } from '@/utils/supabase/client';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import { CartProvider } from '@/components/CartContext';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
@@ -220,7 +221,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       }
     })();
 
-    const { data } = supabasePKCE.auth.onAuthStateChange(async (_event, session) => {
+    const { data } = supabasePKCE.auth.onAuthStateChange(async (_event: string, session: { user: any } | null) => {
       if (ignore) return;
 
       const authUser = session?.user ?? null;
@@ -577,7 +578,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </footer>
         <Analytics />
-        <SpeedInsights/> 
+        <SpeedInsights/>
+        <CartProvider>{children}</CartProvider>
       </body>
     </html>
   );

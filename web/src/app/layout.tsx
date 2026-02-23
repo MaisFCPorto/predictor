@@ -510,7 +510,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
 
         {/* CONTEÚDO */}
-        <main className="mx-auto w-full max-w-6xl px-4">{children}</main>
+        <main className="mx-auto w-full max-w-6xl px-4">
+          <CartProvider>{children}</CartProvider>
+        </main>
 
         {/* FOOTER */}
         <footer className="mt-10 border-t border-white/10">
@@ -579,7 +581,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </footer>
         <Analytics />
         <SpeedInsights/>
-        <CartProvider>{children}</CartProvider>
       </body>
     </html>
   );

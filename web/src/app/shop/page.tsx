@@ -17,7 +17,7 @@ const PRODUCTS: Product[] = [
   {
     id: '1',
     name: 'Camisola Champions \'87',
-    description: 'Réplica oficial da camisola usada na final da Taça dos Campeões Europeus de 1987.',
+    description: 'Camisola comemorativa da Taça dos Campeões Europeus de 1987.',
     price: 8700, // 87.00€
     imageUrl: '/win-icons-01.svg',
     stock: 10,
@@ -44,15 +44,15 @@ function ShopInner() {
   const { addItem } = useCart();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
-      <main className="mx-auto max-w-6xl px-6 py-10 md:py-14">
-        <header className="mb-12">
+    <div>
+      <main className="mx-auto max-w-5xl px-6 py-10 md:py-14">
+        <header className="mb-8">
           <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-white/40">
-            Loja Oficial
+            +Loja
           </p>
-          <h1 className="mb-3 text-3xl font-bold md:text-4xl">+FCPorto Store</h1>
-          <p className="max-w-2xl text-sm text-white/70 md:text-base">
-            Produtos exclusivos para verdadeiros dragões.
+          <h1 className="mb-3 text-3xl font-bold">+FCPorto Store</h1>
+          <p className="max-w-2xl text-sm text-white/70">
+            Produtos exclusivos para verdadeiros +Portistas.
           </p>
         </header>
 
@@ -60,7 +60,7 @@ function ShopInner() {
           {PRODUCTS.map((product) => (
             <div
               key={product.id}
-              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.015] p-6 shadow-[0_8px_40px_rgba(0,0,0,0.35)]"
+              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-6"
             >
               <div className="aspect-w-1 aspect-h-1 mb-6 overflow-hidden rounded-xl bg-black/20">
                 <img
@@ -88,7 +88,7 @@ function ShopInner() {
                     price: product.price,
                     imageUrl: product.imageUrl,
                   })}
-                  className="rounded-full bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20 transition-colors"
+                  className="rounded-full bg-white/10 px-3 py-1 text-sm hover:bg-white/15"
                 >
                   Adicionar ao carrinho
                 </button>
@@ -103,8 +103,10 @@ function ShopInner() {
           ))}
         </div>
 
-        <div className="mt-12 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/70">
-          <h3 className="mb-2 font-medium text-white">Informações importantes:</h3>
+        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/70">
+          <p className="leading-relaxed mb-2">
+            <span className="font-medium">Informações importantes:</span>
+          </p>
           <ul className="list-inside list-disc space-y-1">
             <li>Todos os preços incluem IVA à taxa legal em vigor</li>
             <li>Entregas em 3-5 dias úteis para Portugal Continental</li>

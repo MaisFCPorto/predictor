@@ -105,8 +105,8 @@ app.route('/api/admin', adminLeagues);
 app.route('/api', leagues);
 
 // Shop routes
-app.route('/api/shop', orders);
-app.route('/api/shop', payments);
+app.route('/api/shop/orders', orders);
+app.route('/api/shop/payments', payments);
 
 
 

@@ -5,6 +5,9 @@ import { EuPagoService } from '../../services/eupago';
 
 export const payments = new Hono<{ Bindings: Env }>();
 
+// Handle CORS preflight
+payments.options('*', (c) => c.body(null, 204));
+
 // Create a new payment for an order
 payments.post('/', async (c) => {
   const { orderId, method, phone } = await c.req.json();

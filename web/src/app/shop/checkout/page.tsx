@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabasePKCE } from '@/utils/supabase/client';
 import { useCart } from '@/components/CartContext';
 import AdminGate from '../../admin/_components/AdminGate';
 
@@ -51,10 +52,19 @@ function CheckoutInner() {
     setError(null);
 
     try {
+      // Get auth token
+      const { data: { session } } = await supabasePKCE.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Não autenticado');
+      }
+
       // 1. Create order
       const orderRes = await fetch('/api/shop/orders', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          'authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           items,
           total,

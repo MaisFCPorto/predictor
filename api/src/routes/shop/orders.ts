@@ -7,6 +7,9 @@ import { createRemoteJWKSet } from 'jose';
 
 export const orders = new Hono<{ Bindings: Env }>();
 
+// Handle CORS preflight
+orders.options('*', (c) => c.body(null, 204));
+
 // Create a new order
 orders.post('/', async (c) => {
   const { items, total, shipping } = await c.req.json();

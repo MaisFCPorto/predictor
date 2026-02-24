@@ -113,12 +113,12 @@ export function CartSlideOver() {
                   Portes de envio calculados no checkout.
                 </p>
                 <div className="mt-6">
-                  <button
-                    type="button"
+                  <a
+                    href="/shop/checkout"
                     className="flex w-full items-center justify-center rounded-full bg-white/10 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-white/20"
                   >
-                    Checkout
-                  </button>
+                    Finalizar compra
+                  </a>
                 </div>
                 <div className="mt-6 flex justify-center text-center text-sm text-white/70">
                   <button

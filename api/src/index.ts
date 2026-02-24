@@ -14,6 +14,8 @@ import { adminPredictions } from './routes/admin/predictions';
 import { fixtureTrends } from './routes/fixtures-trends';
 import { adminLeagues } from './routes/admin/leagues';
 import { leagues } from './routes/leagues';
+import { orders } from './routes/shop/orders';
+import { payments } from './routes/shop/payments';
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -101,6 +103,10 @@ app.route('/api/admin/predictions', adminPredictions);
 app.route('/api', fixtureTrends);
 app.route('/api/admin', adminLeagues);
 app.route('/api', leagues);
+
+// Shop routes
+app.route('/api/shop', orders);
+app.route('/api/shop', payments);
 
 
 

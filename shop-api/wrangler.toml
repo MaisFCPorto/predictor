@@ -1,0 +1,17 @@
+name = "predictor-shop-api"
+main = "src/index.ts"
+compatibility_date = "2024-10-01"
+workers_dev = true
+account_id = "f63dd6eeae9beca95a9818fac027c267"  # Your account
+
+[env.production]
+name = "predictor-shop-api"
+workers_dev = true
+account_id = "f63dd6eeae9beca95a9818fac027c267"
+
+[env.production.vars]
+SHOP_SUPABASE_URL = "https://efguqopmcfklbnytbejo.supabase.co"
+SHOP_SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmZ3Vxb3BtY2ZrbGJueXRiZWpvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjE0NDI3MSwiZXhwIjoyMDg3NzIwMjcxfQ.vzzWQRo_cHCSNzgmq-JyarH_39bXhmiLRXjTEjC3t7c"
+EUPAGO_API_KEY = "demo-maisfcp-9a28124"
+EUPAGO_API_URL = "https://sandbox.eupago.pt/api"
+EUPAGO_WEBHOOK_SECRET = "demo-maisfcp-webhook"

@@ -2,21 +2,17 @@ name = "predictor-porto-api"
 main = "src/index.ts"
 compatibility_date = "2024-10-01"
 workers_dev = true
-account_id = "31b3483d39dca7d948bf92ed7b263d8f"
+account_id = "31b3483d39dca7d948bf92ed7b263d8f"  # Original production account
 
 [[d1_databases]]
 binding = "DB"
 database_name = "predictor-db"
 database_id = "d5c31b11-0f4d-45d4-837d-d5cea7a81321"
 
-[[d1_databases]]
-binding = "SHOP_DB"
-database_name = "predictor-shop"
-database_id = "" # You'll need to add the ID after creating the database
-
 [env.production]
 name = "predictor-porto-api"
 workers_dev = true
+account_id = "31b3483d39dca7d948bf92ed7b263d8f"  # Original production account
 
 [[env.production.d1_databases]]
 binding = "DB"
@@ -27,4 +23,24 @@ database_id = "d5c31b11-0f4d-45d4-837d-d5cea7a81321"
 ADMIN_KEY = "VelhaGuarda12"
 LOCK_MINUTES_BEFORE = "5"
 SUPABASE_URL = "https://predictorporto.supabase.co"
+SHOP_SUPABASE_URL = "https://efguqopmcfklbnytbejo.supabase.co"
+SHOP_SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmZ3Vxb3BtY2ZrbGJueXRiZWpvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjE0NDI3MSwiZXhwIjoyMDg3NzIwMjcxfQ.vzzWQRo_cHCSNzgmq-JyarH_39bXhmiLRXjTEjC3t7c"
+EUPAGO_API_KEY = "demo-maisfcp-9a28124"
+EUPAGO_API_URL = "https://sandbox.eupago.pt/api"
+EUPAGO_WEBHOOK_SECRET = "demo-maisfcp-webhook"
 FOOTBALL_DATA_TOKEN="0ad2a2751c984fd98cc9dd1c79c43f0b"
+
+# Development environment - your account
+[env.dev]
+name = "predictor-porto-api-dev"
+workers_dev = true
+account_id = "f63dd6eeae9beca95a9818fac027c267"  # Your account
+
+[env.dev.vars]
+ADMIN_KEY = "dev-key"
+SUPABASE_URL = "https://predictorporto.supabase.co"
+SHOP_SUPABASE_URL = "https://efguqopmcfklbnytbejo.supabase.co"
+SHOP_SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmZ3Vxb3BtY2ZrbGJueXRiZWpvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjE0NDI3MSwiZXhwIjoyMDg3NzIwMjcxfQ.vzzWQRo_cHCSNzgmq-JyarH_39bXhmiLRXjTEjC3t7c"
+EUPAGO_API_KEY = "demo-maisfcp-9a28124"
+EUPAGO_API_URL = "https://sandbox.eupago.pt/api"
+EUPAGO_WEBHOOK_SECRET = "demo-maisfcp-webhook"

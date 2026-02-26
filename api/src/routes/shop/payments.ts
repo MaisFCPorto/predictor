@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Env } from '../../types';
-import { nanoid } from 'nanoid';
+import { ShopSupabaseService } from '../../services/supabase-shop';
 import { EuPagoService } from '../../services/eupago';
 
 export const payments = new Hono<{ Bindings: Env }>();
@@ -15,18 +15,15 @@ payments.post('/', async (c) => {
     return c.json({ error: 'missing required fields' }, 400);
   }
 
+  const shopService = new ShopSupabaseService(c.env);
+  
   // Get order details
-  const { results: orders } = await c.env.DB
-    .prepare('SELECT * FROM shop_orders WHERE id = ?')
-    .bind(orderId)
-    .all<{ id: string; total: number; user_id: string }>();
-
-  const order = orders[0];
+  const order = await shopService.getOrder(orderId);
   if (!order) {
     return c.json({ error: 'order not found' }, 404);
   }
 
-  // Get user details
+  // Get user details from main database
   const { results: users } = await c.env.DB
     .prepare('SELECT * FROM users WHERE id = ?')
     .bind(order.user_id)
@@ -39,7 +36,7 @@ payments.post('/', async (c) => {
 
   // Initialize EuPago service
   const eupago = new EuPagoService(c.env);
-  const paymentId = nanoid();
+  const paymentId = crypto.randomUUID();
 
   try {
     let eupagoResponse;
@@ -78,25 +75,17 @@ payments.post('/', async (c) => {
     }
 
     // Save payment details
-    await c.env.DB
-      .prepare(`
-        INSERT INTO shop_payments (
-          id, order_id, method, amount, status,
-          eupago_payment_id, entity, reference, expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .bind(
-        paymentId,
-        orderId,
-        method,
-        order.total,
-        'pending',
-        eupagoResponse.id,
-        method === 'multibanco' ? (eupagoResponse as any).payment.entity : null,
-        (eupagoResponse as any).payment.reference,
-        new Date(eupagoResponse.payment.expiryDate),
-      )
-      .run();
+    await shopService.createPayment({
+      id: paymentId,
+      order_id: orderId,
+      method,
+      amount: order.total,
+      status: 'pending',
+      eupago_payment_id: eupagoResponse.id,
+      entity: method === 'multibanco' ? (eupagoResponse as any).payment.entity : undefined,
+      reference: (eupagoResponse as any).payment.reference,
+      expires_at: new Date(eupagoResponse.payment.expiryDate).toISOString(),
+    });
 
     return c.json({
       id: paymentId,
@@ -114,48 +103,28 @@ payments.post('/', async (c) => {
 payments.get('/:id/status', async (c) => {
   const { id } = c.req.param();
 
-  const { results } = await c.env.DB
-    .prepare('SELECT * FROM shop_payments WHERE id = ?')
-    .bind(id)
-    .all<{
-      id: string;
-      order_id: string;
-      method: string;
-      amount: number;
-      status: string;
-      eupago_payment_id: string;
-      entity: string | null;
-      reference: string;
-      expires_at: string;
-      paid_at: string | null;
-    }>();
-
-  const payment = results[0];
-  if (!payment) {
-    return c.json({ error: 'payment not found' }, 404);
-  }
-
+  const shopService = new ShopSupabaseService(c.env);
+  
   try {
+    const payment = await shopService.getPayment(id);
+    if (!payment) {
+      return c.json({ error: 'payment not found' }, 404);
+    }
+
     const eupago = new EuPagoService(c.env);
     const status = await eupago.getPaymentStatus(payment.eupago_payment_id);
 
     // Update payment status if changed
     if (status.status !== payment.status) {
-      await c.env.DB
-        .prepare('UPDATE shop_payments SET status = ?, paid_at = ? WHERE id = ?')
-        .bind(
-          status.status,
-          status.payment.paidDate ? new Date(status.payment.paidDate) : null,
-          id,
-        )
-        .run();
+      await shopService.updatePaymentStatus(
+        id,
+        status.status,
+        status.payment.paidDate
+      );
 
       // If payment is confirmed, update order status
       if (status.status === 'paid') {
-        await c.env.DB
-          .prepare('UPDATE shop_orders SET status = ? WHERE id = ?')
-          .bind('paid', payment.order_id)
-          .run();
+        await shopService.updateOrderStatus(payment.order_id, 'paid');
       }
     }
 
@@ -178,28 +147,24 @@ payments.post('/webhook', async (c) => {
   const { payment_id, status, paid_date } = data;
 
   try {
-    // Update payment status
-    const { results } = await c.env.DB
-      .prepare('SELECT * FROM shop_payments WHERE eupago_payment_id = ?')
-      .bind(payment_id)
-      .all();
-
-    const payment = results[0];
+    const shopService = new ShopSupabaseService(c.env);
+    
+    // Get payment by EuPago ID
+    const payment = await shopService.getPaymentByEuPagoId(payment_id);
     if (!payment) {
       return c.json({ error: 'payment not found' }, 404);
     }
 
-    await c.env.DB
-      .prepare('UPDATE shop_payments SET status = ?, paid_at = ? WHERE id = ?')
-      .bind(status, paid_date ? new Date(paid_date) : null, payment.id)
-      .run();
+    // Update payment status
+    await shopService.updatePaymentStatus(
+      payment.id,
+      status,
+      paid_date
+    );
 
     // If payment is confirmed, update order status
     if (status === 'paid') {
-      await c.env.DB
-        .prepare('UPDATE shop_orders SET status = ? WHERE id = ?')
-        .bind('paid', payment.order_id)
-        .run();
+      await shopService.updateOrderStatus(payment.order_id, 'paid');
     }
 
     return c.json({ success: true });

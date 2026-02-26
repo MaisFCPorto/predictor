@@ -2,7 +2,8 @@ export interface Env {
   DB: D1Database;
   ADMIN_KEY: string;
   SUPABASE_URL: string;
-  SUPABASE_KEY: string;
+  SHOP_SUPABASE_URL: string;
+  SHOP_SUPABASE_SERVICE_KEY: string;
   EUPAGO_API_KEY: string;
   EUPAGO_API_URL?: string;
   EUPAGO_WEBHOOK_SECRET: string;

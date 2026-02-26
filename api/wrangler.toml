@@ -9,6 +9,11 @@ binding = "DB"
 database_name = "predictor-db"
 database_id = "d5c31b11-0f4d-45d4-837d-d5cea7a81321"
 
+[[d1_databases]]
+binding = "SHOP_DB"
+database_name = "predictor-shop"
+database_id = "" # You'll need to add the ID after creating the database
+
 [env.production]
 name = "predictor-porto-api"
 workers_dev = true

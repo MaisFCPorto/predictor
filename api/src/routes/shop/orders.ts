@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Env } from '../../types';
-import { nanoid } from 'nanoid';
+import { ShopSupabaseService } from '../../services/supabase-shop';
 import { requireAdminKey } from '../admin';
 import { jwtVerify } from 'jose';
 import { createRemoteJWKSet } from 'jose';
@@ -33,43 +33,34 @@ orders.post('/', async (c) => {
       return c.json({ error: 'invalid token' }, 401);
     }
 
+    const shopService = new ShopSupabaseService(c.env);
+    
     // Create order
-    const orderId = nanoid();
-    await c.env.DB
-      .prepare(`
-        INSERT INTO shop_orders (
-          id, user_id, status, total,
-          shipping_address, shipping_city, shipping_postal_code, shipping_country
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .bind(
-        orderId,
-        userId,
-        'pending',
-        total,
-        shipping.address,
-        shipping.city,
-        shipping.postalCode,
-        shipping.country,
-      )
-      .run();
+    const orderId = crypto.randomUUID();
+    await shopService.createOrder({
+      id: orderId,
+      user_id: userId,
+      status: 'pending',
+      total,
+      shipping_address: shipping.address,
+      shipping_city: shipping.city,
+      shipping_postal_code: shipping.postalCode,
+      shipping_country: shipping.country,
+    });
 
     // Create order items
-    for (const item of items) {
-      await c.env.DB
-        .prepare(`
-          INSERT INTO shop_order_items (
-            id, order_id, product_id, quantity, price
-          ) VALUES (?, ?, ?, ?, ?)
-        `)
-        .bind(nanoid(), orderId, item.id, item.quantity, item.price)
-        .run();
+    const orderItems = items.map((item: any) => ({
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      product_id: item.id,
+      quantity: item.quantity,
+      price: item.price,
+    }));
+    await shopService.createOrderItems(orderItems);
 
-      // Update product stock
-      await c.env.DB
-        .prepare('UPDATE shop_products SET stock = stock - ? WHERE id = ?')
-        .bind(item.quantity, item.id)
-        .run();
+    // Update product stock
+    for (const item of items) {
+      await shopService.updateProductStock(item.id, item.quantity);
     }
 
     return c.json({ id: orderId });
@@ -83,52 +74,32 @@ orders.post('/', async (c) => {
 orders.get('/:id', requireAdminKey, async (c) => {
   const { id } = c.req.param();
 
-  const { results: orders } = await c.env.DB
-    .prepare('SELECT * FROM shop_orders WHERE id = ?')
-    .bind(id)
-    .all();
+  try {
+    const shopService = new ShopSupabaseService(c.env);
+    const order = await shopService.getOrder(id);
+    
+    if (!order) {
+      return c.json({ error: 'order not found' }, 404);
+    }
 
-  const order = orders[0];
-  if (!order) {
-    return c.json({ error: 'order not found' }, 404);
+    return c.json(order);
+  } catch (error) {
+    console.error('Order fetch error:', error);
+    return c.json({ error: 'order fetch failed' }, 500);
   }
-
-  const { results: items } = await c.env.DB
-    .prepare(`
-      SELECT oi.*, p.name, p.image_url
-      FROM shop_order_items oi
-      LEFT JOIN shop_products p ON p.id = oi.product_id
-      WHERE oi.order_id = ?
-    `)
-    .bind(id)
-    .all();
-
-  const { results: payments } = await c.env.DB
-    .prepare('SELECT * FROM shop_payments WHERE order_id = ?')
-    .bind(id)
-    .all();
-
-  return c.json({
-    ...order,
-    items,
-    payments,
-  });
 });
 
 // List orders (admin only)
 orders.get('/', requireAdminKey, async (c) => {
-  const { results } = await c.env.DB
-    .prepare(`
-      SELECT o.*, COUNT(oi.id) as item_count, 
-             (SELECT status FROM shop_payments WHERE order_id = o.id ORDER BY created_at DESC LIMIT 1) as payment_status
-      FROM shop_orders o
-      LEFT JOIN shop_order_items oi ON oi.order_id = o.id
-      GROUP BY o.id
-      ORDER BY o.created_at DESC
-    `)
-    .all();
-
-  return c.json(results);
+  try {
+    const shopService = new ShopSupabaseService(c.env);
+    const orders = await shopService.listOrders();
+    
+    return c.json(orders);
+  } catch (error) {
+    console.error('Orders list error:', error);
+    return c.json({ error: 'orders list failed' }, 500);
+  }
 });
 
 // Update order status (admin only)
@@ -139,10 +110,13 @@ orders.patch('/:id', requireAdminKey, async (c) => {
     return c.json({ error: 'missing status' }, 400);
   }
 
-  await c.env.DB
-    .prepare('UPDATE shop_orders SET status = ? WHERE id = ?')
-    .bind(status, id)
-    .run();
-
-  return c.json({ success: true });
+  try {
+    const shopService = new ShopSupabaseService(c.env);
+    await shopService.updateOrderStatus(id, status);
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Order status update error:', error);
+    return c.json({ error: 'order status update failed' }, 500);
+  }
 });

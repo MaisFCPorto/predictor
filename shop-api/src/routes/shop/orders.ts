@@ -24,7 +24,9 @@ orders.post('/', async (c) => {
   }
 
   try {
+    console.log('SUPABASE_URL:', c.env.SUPABASE_URL);
     const jwksUrl = new URL('/auth/v1/keys', c.env.SUPABASE_URL).toString();
+    console.log('JWKS URL:', jwksUrl);
     const JWKS = createRemoteJWKSet(new URL(jwksUrl));
     const { payload } = await jwtVerify(token, JWKS);
     const userId = String(payload.sub || '');

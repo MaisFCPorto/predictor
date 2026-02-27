@@ -159,8 +159,11 @@ export class ShopSupabaseService {
       .from('shop_orders')
       .select(`
         *,
-        shop_order_items (id),
-        shop_payments (status)
+        shop_order_items (
+          *,
+          shop_products (name, image_url)
+        ),
+        shop_payments (*)
       `)
       .order('created_at', { ascending: false });
 
@@ -187,5 +190,45 @@ export class ShopSupabaseService {
 
     if (error) throw error;
     return data;
+  }
+
+  async createProduct(productData: {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    stock: number;
+    image_url: string;
+    category: string;
+  }) {
+    const { data, error } = await this.client
+      .from('shop_products')
+      .insert(productData)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async updateProduct(id: string, updates: any) {
+    const { data, error } = await this.client
+      .from('shop_products')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async deleteProduct(id: string) {
+    const { error } = await this.client
+      .from('shop_products')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
   }
 }

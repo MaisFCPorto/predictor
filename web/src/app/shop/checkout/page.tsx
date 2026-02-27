@@ -32,6 +32,78 @@ function CheckoutInner() {
   const [error, setError] = useState<string | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
 
+  // Show payment details if available (even if cart is empty)
+  if (paymentDetails) {
+    return (
+      <div className="mx-auto max-w-2xl py-10">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+          <h2 className="mb-4 text-xl font-medium">Pagamento</h2>
+          
+          {paymentDetails.method === 'multibanco' && (
+            <div className="space-y-4">
+              <p className="text-sm text-white/70">
+                Para concluir a sua compra, efetue o pagamento por Multibanco com os seguintes dados:
+              </p>
+              <div className="space-y-2 rounded-xl bg-white/[0.02] p-4 font-mono">
+                <p>
+                  <span className="text-white/50">Entidade:</span>{' '}
+                  {paymentDetails.details.entity}
+                </p>
+                <p>
+                  <span className="text-white/50">Referência:</span>{' '}
+                  {paymentDetails.details.reference}
+                </p>
+                <p>
+                  <span className="text-white/50">Valor:</span>{' '}
+                  {(paymentDetails.amount / 100).toLocaleString('pt-PT', {
+                    style: 'currency',
+                    currency: 'EUR',
+                  })}
+                </p>
+              </div>
+              {paymentDetails.details.expiryDate && (
+                <p className="text-xs text-white/50">
+                  Válido até: {new Date(paymentDetails.details.expiryDate).toLocaleDateString('pt-PT', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  })}
+                </p>
+              )}
+            </div>
+          )}
+
+          {paymentDetails.method === 'mbway' && (
+            <div className="space-y-4">
+              <p className="text-sm text-white/70">
+                Foi enviado um pedido de pagamento para o seu telemóvel. Por favor, aceite o pagamento na app MB WAY.
+              </p>
+              <div className="space-y-2 rounded-xl bg-white/[0.02] p-4">
+                <p className="font-mono">
+                  <span className="text-white/50">Valor:</span>{' '}
+                  {(paymentDetails.amount / 100).toLocaleString('pt-PT', {
+                    style: 'currency',
+                    currency: 'EUR',
+                  })}
+                </p>
+              </div>
+              <p className="text-xs text-white/50">
+                O pagamento deve ser aceite nos próximos 5 minutos.
+              </p>
+            </div>
+          )}
+
+          <button
+            onClick={() => router.push('/shop')}
+            className="mt-6 w-full rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/15"
+          >
+            Voltar à loja
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div className="py-10 text-center">
@@ -111,71 +183,6 @@ function CheckoutInner() {
       setLoading(false);
     }
   };
-
-  if (paymentDetails) {
-    return (
-      <div className="mx-auto max-w-2xl py-10">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-          <h2 className="mb-4 text-xl font-medium">Pagamento</h2>
-          
-          {paymentDetails.method === 'multibanco' && (
-            <div className="space-y-4">
-              <p className="text-sm text-white/70">
-                Para concluir a sua compra, efetue o pagamento por Multibanco com os seguintes dados:
-              </p>
-              <div className="space-y-2 rounded-xl bg-white/[0.02] p-4 font-mono">
-                <p>
-                  <span className="text-white/50">Entidade:</span>{' '}
-                  {paymentDetails.details.entity}
-                </p>
-                <p>
-                  <span className="text-white/50">Referência:</span>{' '}
-                  {paymentDetails.details.reference}
-                </p>
-                <p>
-                  <span className="text-white/50">Valor:</span>{' '}
-                  {(paymentDetails.amount / 100).toLocaleString('pt-PT', {
-                    style: 'currency',
-                    currency: 'EUR',
-                  })}
-                </p>
-              </div>
-              <p className="text-xs text-white/50">
-                O pagamento deve ser efetuado nas próximas 48 horas.
-              </p>
-            </div>
-          )}
-
-          {paymentDetails.method === 'mbway' && (
-            <div className="space-y-4">
-              <p className="text-sm text-white/70">
-                Foi enviado um pedido de pagamento para o seu telemóvel. Por favor, aceite o pagamento na app MB WAY.
-              </p>
-              <div className="space-y-2 rounded-xl bg-white/[0.02] p-4">
-                <p className="font-mono">
-                  <span className="text-white/50">Valor:</span>{' '}
-                  {(paymentDetails.amount / 100).toLocaleString('pt-PT', {
-                    style: 'currency',
-                    currency: 'EUR',
-                  })}
-                </p>
-              </div>
-              <p className="text-xs text-white/50">
-                O pagamento deve ser aceite nos próximos 5 minutos.
-              </p>
-            </div>
-          )}
-
-          <button
-            onClick={() => router.push('/shop')}
-            className="mt-6 w-full rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/15"
-          >
-            Voltar à loja
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto max-w-2xl py-10">

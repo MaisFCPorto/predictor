@@ -296,7 +296,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     : baseNavLinks;
 
   const fullNavLinks = user?.isAdmin
-    ? [{ href: '/admin', label: 'Backoffice' }, ...navLinks]
+    ? [
+        { href: '/admin', label: 'Backoffice' },
+        { href: '/admin/shop', label: 'Gestão Loja' },
+        ...navLinks
+      ]
     : navLinks;
 
   const isActive = (href: string) =>

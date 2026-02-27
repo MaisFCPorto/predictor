@@ -10,10 +10,15 @@ const app = new Hono<{ Bindings: Env }>();
 // Apply CORS to all routes
 app.use('*', corsMiddleware);
 
-// Shop routes
+// Shop routes (with and without /api prefix for compatibility)
 app.route('/shop/orders', orders);
 app.route('/shop/payments', payments);
 app.route('/shop/products', products);
+
+// Also support /api prefix for production compatibility
+app.route('/api/shop/orders', orders);
+app.route('/api/shop/payments', payments);
+app.route('/api/shop/products', products);
 
 // Health check
 app.get('/', (c: any) => {
@@ -28,6 +33,13 @@ app.get('/', (c: any) => {
   });
 });
 
+import { checkPendingPayments } from './cron';
+
 export default {
   fetch: app.fetch,
+  
+  // Scheduled cron job to check pending payments
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(checkPendingPayments(env));
+  },
 };

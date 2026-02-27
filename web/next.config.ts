@@ -4,6 +4,7 @@ const predictorBase = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '
 const shopBase = (process.env.NEXT_PUBLIC_SHOP_API_URL || '').replace(/\/+$/, '');
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: require('path').join(__dirname, '..'),
   eslint: {
     // não falha build se houver avisos de lint
     ignoreDuringBuilds: true,

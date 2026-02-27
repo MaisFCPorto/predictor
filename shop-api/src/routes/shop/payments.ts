@@ -23,17 +23,6 @@ payments.post('/', async (c) => {
     return c.json({ error: 'order not found' }, 404);
   }
 
-  // Get user details from main database
-  const { results: users } = await c.env.DB
-    .prepare('SELECT * FROM users WHERE id = ?')
-    .bind(order.user_id)
-    .all<{ email: string; name: string }>();
-
-  const user = users[0];
-  if (!user) {
-    return c.json({ error: 'user not found' }, 404);
-  }
-
   // Initialize EuPago service
   const eupago = new EuPagoService(c.env);
   const paymentId = crypto.randomUUID();
@@ -49,8 +38,8 @@ payments.post('/', async (c) => {
           expiryDays: 3,
         },
         customer: {
-          name: user.name,
-          email: user.email,
+          name: 'Cliente FC Porto',
+          email: 'cliente@fcpporto.pt',
         },
       });
     } else if (method === 'mbway') {
@@ -65,8 +54,8 @@ payments.post('/', async (c) => {
           expiry: 30, // 30 minutes
         },
         customer: {
-          name: user.name,
-          email: user.email,
+          name: 'Cliente FC Porto',
+          email: 'cliente@fcpporto.pt',
           phone,
         },
       });

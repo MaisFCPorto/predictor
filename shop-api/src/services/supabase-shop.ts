@@ -167,4 +167,14 @@ export class ShopSupabaseService {
     if (error) throw error;
     return data;
   }
+
+  async listProducts() {
+    const { data, error } = await this.client
+      .from('shop_products')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  }
 }

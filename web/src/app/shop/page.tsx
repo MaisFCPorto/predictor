@@ -1,47 +1,51 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useCart } from '@/components/CartContext';
 import { CartSlideOver } from '@/components/CartSlideOver';
-import AdminGate from '../admin/_components/AdminGate';
+import AdminGate from '@/app/admin/_components/AdminGate';
 
-type Product = {
+interface Product {
   id: string;
   name: string;
   description: string;
   price: number;
-  imageUrl: string;
   stock: number;
-};
-
-const PRODUCTS: Product[] = [
-  {
-    id: '1',
-    name: 'Camisola Champions \'87',
-    description: 'Camisola comemorativa da Taça dos Campeões Europeus de 1987.',
-    price: 8700, // 87.00€
-    imageUrl: '/win-icons-01.svg',
-    stock: 10,
-  },
-  {
-    id: '2',
-    name: 'Cachecol +FCPorto',
-    description: 'Cachecol oficial do +FCPorto, perfeito para mostrar o teu apoio.',
-    price: 1500, // 15.00€
-    imageUrl: '/win-icons-03.svg',
-    stock: 50,
-  },
-  {
-    id: '3',
-    name: 'Pack Sócio Premium',
-    description: 'Acesso exclusivo a conteúdos premium e descontos especiais.',
-    price: 2999, // 29.99€
-    imageUrl: '/win-icons-02.svg',
-    stock: 100,
-  },
-];
+  image_url: string;
+  category: string;
+}
 
 function ShopInner() {
   const { addItem } = useCart();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const shopApiUrl = process.env.NEXT_PUBLIC_SHOP_API_URL || 'https://predictor-shop-api.maisfcp.workers.dev';
+        const response = await fetch(`${shopApiUrl}/api/shop/products`);
+        if (response.ok) {
+          const data = await response.json();
+          setProducts(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-white/70">A carregar produtos...</div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -57,14 +61,14 @@ function ShopInner() {
         </header>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {PRODUCTS.map((product) => (
+          {products.map((product) => (
             <div
               key={product.id}
               className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-6"
             >
               <div className="aspect-w-1 aspect-h-1 mb-6 overflow-hidden rounded-xl bg-black/20">
                 <img
-                  src={product.imageUrl}
+                  src={product.image_url}
                   alt={product.name}
                   className="h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
                 />
@@ -86,7 +90,7 @@ function ShopInner() {
                     id: product.id,
                     name: product.name,
                     price: product.price,
-                    imageUrl: product.imageUrl,
+                    imageUrl: product.image_url,
                   })}
                   className="rounded-full bg-white/10 px-3 py-1 text-sm hover:bg-white/15"
                 >

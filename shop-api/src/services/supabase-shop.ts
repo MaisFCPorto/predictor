@@ -53,9 +53,20 @@ export class ShopSupabaseService {
   }
 
   async updateProductStock(productId: string, quantity: number) {
+    // First get current stock
+    const { data: product, error: fetchError } = await this.client
+      .from('shop_products')
+      .select('stock')
+      .eq('id', productId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Then update with new stock
+    const newStock = Math.max(0, product.stock - quantity);
     const { data, error } = await this.client
       .from('shop_products')
-      .update({ stock: this.client.sql`stock - ${quantity}` })
+      .update({ stock: newStock })
       .eq('id', productId)
       .select()
       .single();

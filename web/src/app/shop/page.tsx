@@ -24,7 +24,7 @@ function ShopInner() {
     const fetchProducts = async () => {
       try {
         const shopApiUrl = process.env.NEXT_PUBLIC_SHOP_API_URL || 'https://predictor-shop-api.maisfcp.workers.dev';
-        const response = await fetch(`${shopApiUrl}/api/shop/products`);
+        const response = await fetch(`${shopApiUrl}/shop/products`);
         if (response.ok) {
           const data = await response.json();
           setProducts(data);

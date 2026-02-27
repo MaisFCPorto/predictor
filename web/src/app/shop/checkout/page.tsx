@@ -61,7 +61,7 @@ function CheckoutInner() {
       // 1. Create order
       const shopApiUrl = process.env.NEXT_PUBLIC_SHOP_API_URL || 'https://predictor-shop-api.maisfcp.workers.dev';
       console.log('Using shop API URL:', shopApiUrl);
-      const orderRes = await fetch(`${shopApiUrl}/api/shop/orders`, {
+      const orderRes = await fetch(`${shopApiUrl}/shop/orders`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -87,7 +87,7 @@ function CheckoutInner() {
       const order = await orderRes.json();
 
       // 2. Create payment
-      const paymentRes = await fetch(`${shopApiUrl}/api/shop/payments`, {
+      const paymentRes = await fetch(`${shopApiUrl}/shop/payments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

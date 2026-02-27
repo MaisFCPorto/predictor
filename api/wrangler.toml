@@ -30,6 +30,28 @@ EUPAGO_API_URL = "https://sandbox.eupago.pt/api"
 EUPAGO_WEBHOOK_SECRET = "demo-maisfcp-webhook"
 FOOTBALL_DATA_TOKEN="0ad2a2751c984fd98cc9dd1c79c43f0b"
 
+# Local test environment (keeps Predictor D1, but points Shop Supabase to your ueksvd... project)
+[env.local-test]
+name = "predictor-porto-api-local-test"
+workers_dev = true
+account_id = "31b3483d39dca7d948bf92ed7b263d8f"  # doesn't deploy; used for `wrangler dev`
+
+[[env.local-test.d1_databases]]
+binding = "DB"
+database_name = "predictor-db"
+database_id = "d5c31b11-0f4d-45d4-837d-d5cea7a81321"
+
+[env.local-test.vars]
+ADMIN_KEY = "VelhaGuarda12"
+LOCK_MINUTES_BEFORE = "5"
+SUPABASE_URL = "https://predictorporto.supabase.co"
+SHOP_SUPABASE_URL = "https://ueksvdnjwlyeviunhlhw.supabase.co"
+SHOP_SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVla3N2ZG5qd2x5ZXZpdW5obGh3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjE4MjcxOSwiZXhwIjoyMDc3NzU4NzE5fQ.CPt9v3vhUBgu1Z1Qs-GrtXZ3KiKeDPiqOjU_aNSRTT4"
+EUPAGO_API_KEY = "demo-maisfcp-9a28124"
+EUPAGO_API_URL = "https://sandbox.eupago.pt/api"
+EUPAGO_WEBHOOK_SECRET = "demo-maisfcp-webhook"
+FOOTBALL_DATA_TOKEN="0ad2a2751c984fd98cc9dd1c79c43f0b"
+
 # Development environment - your account
 [env.dev]
 name = "predictor-porto-api-dev"

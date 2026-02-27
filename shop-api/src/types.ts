@@ -1,5 +1,4 @@
 export interface Env {
-  DB: D1Database;
   ADMIN_KEY: string;
   SUPABASE_URL: string;
   SHOP_SUPABASE_URL: string;

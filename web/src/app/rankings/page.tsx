@@ -343,7 +343,7 @@ function RankingsPageInner() {
         </div>
 
         {/* Estados */}
-        {err && <div className="px-5 py-3 text-sm text-red-300">{err}</div>}
+        {err && <div className="px-5 py-3 text-sm text-red-300">Ocorreu um erro, tenta novamente mais tarde e contacta-nos se o erro persistir.</div>}
         {loading && !err && (
           <div className="px-5 py-3 text-sm text-white/70">A carregar…</div>
         )}

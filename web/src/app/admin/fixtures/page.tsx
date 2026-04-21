@@ -59,13 +59,16 @@ function toLocalDTValue(isoOrSqlUTC: string) {
 
 function fromLocalDTValue(localValue: string) {
   if (!localValue) return '';
-  const d = new Date(localValue);
-  const y = d.getFullYear();
-const mm = String(d.getMonth() + 1).padStart(2, '0');
-const dd = String(d.getDate()).padStart(2, '0');
-const hh = String(d.getHours()).padStart(2, '0');
-const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${y}-${mm}-${dd} ${hh}:${mi}:00`;
+
+  // formato esperado: "YYYY-MM-DDTHH:mm"
+  const [date, time] = localValue.split('T');
+
+  if (!date || !time) return '';
+
+  const [y, m, d] = date.split('-');
+  const [hh, mi] = time.split(':');
+
+  return `${y}-${m}-${d} ${hh}:${mi}:00`;
 }
 
 function splitLocal(dt: string | undefined) {

@@ -47,11 +47,15 @@ type Player = {
 /* -------------------- Utils datas -------------------- */
 function toLocalDTValue(isoOrSqlUTC: string) {
   if (!isoOrSqlUTC) return '';
+
   const asISO = isoOrSqlUTC.includes('T')
     ? isoOrSqlUTC
-    : isoOrSqlUTC.replace(' ', 'T') + 'Z';
+    : isoOrSqlUTC.replace(' ', 'T'); // ❌ sem Z
+
   const d = new Date(asISO);
+
   const pad = (n: number) => (n < 10 ? '0' + n : String(n));
+
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
     d.getDate(),
   )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { getActiveSeasonId } from '../app-settings';
 import { scoreUEFA } from './rankings';
 
 type Env = { DB: D1Database };
@@ -40,13 +41,18 @@ function cmpRanking(a: RowScore, b: RowScore) {
 }
 
 winners.get('/months', async (c) => {
+  const activeSeasonId = await getActiveSeasonId(c.env.DB);
+
   const { results } = await c.env.DB
     .prepare(`
-      SELECT DISTINCT strftime('%Y-%m', kickoff_at) AS ym
-      FROM fixtures
-      WHERE status='FINISHED'
+      SELECT DISTINCT strftime('%Y-%m', f.kickoff_at) AS ym
+      FROM fixtures f
+      JOIN matchdays md ON md.id = f.matchday_id
+      WHERE f.status = 'FINISHED'
+        AND md.season_id = ?
       ORDER BY ym DESC
     `)
+    .bind(activeSeasonId)
     .all<{ ym: string }>();
 
   return c.json((results ?? []).map((r) => r.ym), 200);
@@ -55,8 +61,9 @@ winners.get('/months', async (c) => {
 winners.get('/', async (c) => {
   const ym = c.req.query('ym');
 
-  const params: unknown[] = [];
-  let where = `f.status = 'FINISHED'`;
+  const activeSeasonId = await getActiveSeasonId(c.env.DB);
+  const params: unknown[] = [activeSeasonId];
+  let where = `f.status = 'FINISHED' AND md.season_id = ?`;
   if (ym) {
     where += ` AND strftime('%Y-%m', f.kickoff_at) = ?`;
     params.push(ym);
@@ -81,6 +88,7 @@ winners.get('/', async (c) => {
         f.round_label
       FROM predictions p
       JOIN fixtures f ON f.id = p.fixture_id
+      JOIN matchdays md ON md.id = f.matchday_id
       JOIN teams ht ON ht.id = f.home_team_id
       JOIN teams at ON at.id = f.away_team_id
       LEFT JOIN competitions co ON co.id = f.competition_id
@@ -119,6 +127,7 @@ winners.get('/', async (c) => {
       FROM fixture_scorers fs
       LEFT JOIN players p ON p.id = fs.player_id
       JOIN fixtures f ON f.id = fs.fixture_id
+      JOIN matchdays md ON md.id = f.matchday_id
       WHERE ${where}
     `,
     )
@@ -264,8 +273,11 @@ winners.get('/monthly', async (c) => {
   const ym = c.req.query('ym');
   if (!ym) return c.json({ error: 'missing_ym' }, 400);
 
-  const params: unknown[] = [ym];
-  const where = `f.status = 'FINISHED' AND strftime('%Y-%m', f.kickoff_at) = ?`;
+  const activeSeasonId = await getActiveSeasonId(c.env.DB);
+  const params: unknown[] = [activeSeasonId, ym];
+  const where = `f.status = 'FINISHED'
+    AND md.season_id = ?
+    AND strftime('%Y-%m', f.kickoff_at) = ?`;
 
   const { results: rows } = await c.env.DB
     .prepare(
@@ -281,6 +293,7 @@ winners.get('/monthly', async (c) => {
         f.away_score
       FROM predictions p
       JOIN fixtures f ON f.id = p.fixture_id
+      JOIN matchdays md ON md.id = f.matchday_id
       WHERE ${where}
     `,
     )
@@ -309,6 +322,7 @@ winners.get('/monthly', async (c) => {
       FROM fixture_scorers fs
       LEFT JOIN players p ON p.id = fs.player_id
       JOIN fixtures f ON f.id = fs.fixture_id
+      JOIN matchdays md ON md.id = f.matchday_id
       WHERE ${where}
     `,
     )

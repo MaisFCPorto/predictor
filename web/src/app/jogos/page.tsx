@@ -471,7 +471,7 @@ export default function JogosPage() {
         let list: FixtureDTO[] = await fetchJson('/api/fixtures/open');
 
         if (!Array.isArray(list) || list.length === 0) {
-          list = await fetchJson('/api/matchdays/md1/fixtures');
+          list = await fetchJson('/api/matchdays/active/fixtures');
         }
 
         if (!abort) setFixtures(Array.isArray(list) ? list : []);

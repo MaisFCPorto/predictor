@@ -1,6 +1,10 @@
 // predictor-porto/api/src/index.ts
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import {
+  getActiveMatchdayId,
+  getActiveSeasonId,
+} from './app-settings';
 import { rankings, scoreUEFA } from './routes/rankings';
 import { winners } from './routes/winners';
 import { adminCompetitions } from './routes/admin/competitions';
@@ -128,9 +132,11 @@ async function listFixtures(c: Context<{ Bindings: Env }>, matchdayId: string) {
       JOIN teams at ON at.id = f.away_team_id
       LEFT JOIN competitions co ON co.id = f.competition_id
       WHERE f.status = 'SCHEDULED'
+        AND f.matchday_id = ?
       ORDER BY f.kickoff_at ASC
     `,
     )
+    .bind(matchdayId)
     .all<{
       id: string;
       kickoff_at: string;
@@ -164,6 +170,7 @@ async function listFixtures(c: Context<{ Bindings: Env }>, matchdayId: string) {
 app.get('/api/fixtures/open', async (c) => {
   const lockMs = getLockMs(c);
   const now = Date.now();
+  const activeSeasonId = await getActiveSeasonId(c.env.DB);
 
   const { results } = await c.env.DB
     .prepare(
@@ -176,13 +183,16 @@ app.get('/api/fixtures/open', async (c) => {
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
         co.code AS competition_code, co.name AS competition_name
       FROM fixtures f
+      JOIN matchdays md ON md.id = f.matchday_id
       JOIN teams ht ON ht.id = f.home_team_id
       JOIN teams at ON at.id = f.away_team_id
       LEFT JOIN competitions co ON co.id = f.competition_id
       WHERE f.status = 'SCHEDULED'
+        AND md.season_id = ?
       ORDER BY f.kickoff_at ASC
     `,
     )
+    .bind(activeSeasonId)
     .all<{
       id: string;
       kickoff_at: string;
@@ -212,10 +222,14 @@ app.get('/api/fixtures/open', async (c) => {
   return c.json(enriched);
 });
 
+app.get('/api/matchdays/active/fixtures', async (c) => {
+  const matchdayId = await getActiveMatchdayId(c.env.DB);
+  return listFixtures(c, matchdayId);
+});
+
 app.get('/api/matchdays/:id/fixtures', (c) =>
   listFixtures(c, c.req.param('id')),
 );
-app.get('/api/matchdays/md1/fixtures', (c) => listFixtures(c, 'md1'));
 
 // ----------------------------------------------------
 // PUBLIC: Finished fixtures with pagination
@@ -225,6 +239,7 @@ app.get('/api/fixtures/finished', async (c) => {
   const offsetQ = Number(c.req.query('offset') ?? '0');
   const limit = Number.isFinite(limitQ) ? Math.min(Math.max(limitQ, 1), 100) : 10;
   const offset = Number.isFinite(offsetQ) ? Math.max(offsetQ, 0) : 0;
+  const activeSeasonId = await getActiveSeasonId(c.env.DB);
 
   const { results } = await c.env.DB
     .prepare(
@@ -237,15 +252,17 @@ app.get('/api/fixtures/finished', async (c) => {
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
         co.code AS competition_code, co.name AS competition_name
       FROM fixtures f
+      JOIN matchdays md ON md.id = f.matchday_id
       JOIN teams ht ON ht.id = f.home_team_id
       JOIN teams at ON at.id = f.away_team_id
       LEFT JOIN competitions co ON co.id = f.competition_id
       WHERE f.status = 'FINISHED'
+        AND md.season_id = ?
       ORDER BY f.kickoff_at DESC
       LIMIT ? OFFSET ?
     `,
     )
-    .bind(limit, offset)
+    .bind(activeSeasonId, limit, offset)
     .all<{
       id: string;
       kickoff_at: string;
@@ -278,6 +295,7 @@ app.get('/api/fixtures/closed', async (c) => {
 
   const lockMinutes = Number(c.env.LOCK_MINUTES_BEFORE ?? '0');
   const lockStr = String(Number.isFinite(lockMinutes) ? lockMinutes : 0);
+  const activeSeasonId = await getActiveSeasonId(c.env.DB);
 
   const { results } = await c.env.DB
     .prepare(
@@ -299,19 +317,23 @@ app.get('/api/fixtures/closed', async (c) => {
         co.name       AS competition_name,
         GROUP_CONCAT(p.name, ',') AS scorers_names
       FROM fixtures f
+      JOIN matchdays md ON md.id = f.matchday_id
       JOIN teams ht ON ht.id = f.home_team_id
       JOIN teams at ON at.id = f.away_team_id
       LEFT JOIN competitions    co ON co.id = f.competition_id
       LEFT JOIN fixture_scorers fs ON fs.fixture_id = f.id
       LEFT JOIN players         p  ON p.id = fs.player_id
-      WHERE f.status = 'FINISHED'
-         OR DATETIME('now') >= DATETIME(f.kickoff_at, '-' || ? || ' minutes')
+      WHERE md.season_id = ?
+        AND (
+          f.status = 'FINISHED'
+          OR DATETIME('now') >= DATETIME(f.kickoff_at, '-' || ? || ' minutes')
+        )
       GROUP BY f.id
       ORDER BY f.kickoff_at DESC
       LIMIT ? OFFSET ?
     `,
     )
-    .bind(lockStr, limit, offset)
+    .bind(activeSeasonId, lockStr, limit, offset)
     .all<{
       id: string;
       kickoff_at: string;
@@ -925,7 +947,10 @@ app.post('/api/admin/fixtures', async (c) => {
     const competition_id = b.competition_id ?? null;
     const round_label = b.round_label ?? null;
     const leg = b.leg_number ?? b.leg ?? null;
-    const matchday_id = b.matchday_id ?? 'md1';
+    const matchday_id =
+      b.matchday_id != null && String(b.matchday_id).trim() !== ''
+        ? String(b.matchday_id).trim()
+        : await getActiveMatchdayId(c.env.DB);
 
     await run(
       c.env.DB,
@@ -1142,6 +1167,7 @@ app.get('/api/users/:id/last-points', async (c) => {
   if (!userId) return c.json(null, 400);
 
   const db = c.env.DB;
+  const activeSeasonId = await getActiveSeasonId(db);
 
   const last = await db
     .prepare(
@@ -1153,8 +1179,10 @@ app.get('/api/users/:id/last-points', async (c) => {
         f.away_score
       FROM predictions p
       JOIN fixtures f ON f.id = p.fixture_id
+      JOIN matchdays md ON md.id = f.matchday_id
       WHERE 
         p.user_id = ?
+        AND md.season_id = ?
         AND f.status = 'FINISHED'
         AND f.home_score IS NOT NULL
         AND f.away_score IS NOT NULL
@@ -1162,7 +1190,7 @@ app.get('/api/users/:id/last-points', async (c) => {
       LIMIT 1
     `,
     )
-    .bind(userId)
+    .bind(userId, activeSeasonId)
     .first<{
       fixture_id: string;
       kickoff_at: string;

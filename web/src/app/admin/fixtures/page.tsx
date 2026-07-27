@@ -437,10 +437,8 @@ export default function AdminFixtures() {
       if (!kickoff_local) throw new Error('Kickoff em falta.');
 
       const kickoff_at = fromLocalDTValue(kickoff_local);
-      const matchday_id = 'md1';
 
       await adm.post('/api/admin/fixtures', {
-        matchday_id,
         competition_id: competition_id || null,
         round_label: round_label ? round_label.toUpperCase().slice(0, 3) : null,
         leg_number: leg_number ? Number(leg_number) : null,

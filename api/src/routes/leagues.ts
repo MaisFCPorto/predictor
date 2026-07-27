@@ -1,5 +1,6 @@
 // predictor-porto/api/src/routes/leagues.ts
 import { Hono } from 'hono';
+import { getActiveSeasonId } from '../app-settings';
 
 type Env = {
   DB: D1Database;
@@ -457,6 +458,8 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
   }
 
   try {
+    const activeSeasonId = await getActiveSeasonId(db);
+
     const league = await db
       .prepare(
         `SELECT id, name, code, visibility, ranking_from
@@ -489,27 +492,38 @@ leagues.get('/leagues/:leagueId/ranking', async (c) => {
             END
           ) AS display_name,
           u.avatar_url,
-          COALESCE(SUM(p.points), 0) AS total_points
+          COALESCE(
+            SUM(
+              CASE
+                WHEN f.status = 'FINISHED'
+                  AND md.season_id = ?
+                  AND (
+                    l.ranking_from IS NULL
+                    OR f.kickoff_at >= l.ranking_from
+                  )
+                THEN p.points
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_points
         FROM league_members lm
         JOIN users u
           ON u.id = lm.user_id
+        JOIN leagues l
+          ON l.id = lm.league_id
         LEFT JOIN predictions p
           ON p.user_id = u.id
         LEFT JOIN fixtures f
           ON f.id = p.fixture_id
-        JOIN leagues l
-          ON l.id = lm.league_id
+        LEFT JOIN matchdays md
+          ON md.id = f.matchday_id
         WHERE lm.league_id = ?
-          AND (
-            p.id IS NULL
-            OR l.ranking_from IS NULL
-            OR f.kickoff_at >= l.ranking_from
-          )
         GROUP BY u.id, display_name, u.avatar_url
         ORDER BY total_points DESC, display_name ASC
         `,
       )
-      .bind(leagueId)
+      .bind(activeSeasonId, leagueId)
       .all<{
         user_id: string;
         display_name: string | null;

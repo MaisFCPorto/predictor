@@ -473,7 +473,7 @@ export default function FixtureCard({
   return (
     <div
       className={clsx(
-        'fixture-card group w-full p-4 pb-7 sm:p-6 sm:pb-7 md:p-8 md:pb-8',
+        'fixture-card group w-full p-4 pb-5 sm:p-5 sm:pb-5 md:p-6 md:pb-6',
         'transition-colors duration-200',
       )}
     >
@@ -612,7 +612,7 @@ export default function FixtureCard({
       </div>
 
       {/* Layout principal */}
-      <div className="mt-6 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap mb-4">
+      <div className="mt-4 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap mb-2">
         {/* HOME */}
         <div className="flex flex-col items-center w-[25%] min-w-[60px]">
           <Crest src={home_crest} alt={home_team_name} />
@@ -703,7 +703,7 @@ export default function FixtureCard({
       </div>
 
       {/* Marcador (palpite) */}
-      <div className="mt-2 flex flex-col items-center gap-1">
+      <div className="mt-1 flex flex-col items-center gap-1">
         <button
           type="button"
           disabled={!pickerEnabled}
@@ -774,70 +774,69 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Pill "Última previsão" para jogos em aberto */}
+      {/* Estado persistente do palpite */}
       {!pointsBadge && lastPredText && (
-        <div className="flex justify-center mt-2">
-          <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
-            Última previsão: {lastPredText}
-            {lastPredScorerLabel && ` | Marcador: ${lastPredScorerLabel}`}
+        <div
+          className={clsx(
+            'prediction-status',
+            predictionChanged
+              ? 'prediction-status--pending'
+              : 'prediction-status--saved',
+          )}
+          role="status"
+        >
+          <span aria-hidden className="text-sm">
+            {predictionChanged ? '•' : '✓'}
           </span>
+          <div>
+            <strong>
+              {predictionChanged ? 'Alterações por guardar' : 'Palpite guardado'}
+            </strong>
+            <span className="ml-2 text-white/60">
+              {lastPredText}
+              {lastPredScorerLabel && ` · ${lastPredScorerLabel}`}
+            </span>
+          </div>
         </div>
       )}
 
-      {/* Tendência da comunidade (resultado + marcador mais comuns) */}
-{variant !== 'past' && showTrends && trends && (
-  <div className="mt-2 flex flex-col items-center gap-1">
-    {trends.total_predictions === 0 ? (
-      <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] sm:text-[12px] leading-none bg-white/5 text-white/70">
-        Tendência da comunidade: ainda sem dados suficientes
-      </span>
-    ) : (
-      <>
-        <span className="text-[11px] sm:text-[12px] text-white/70">
-          Tendência da comunidade
-        </span>
+      {/* Tendência da comunidade, separada da área de edição */}
+      {variant !== 'past' && showTrends && trends && (
+        <div className="community-trends">
+          {!hasRealTrends ? (
+            <div className="trend-row">
+              <span className="trend-label">Comunidade</span>
+              <span className="trend-value">Ainda sem dados suficientes</span>
+            </div>
+          ) : (
+            <>
+              <div className="trend-row">
+                <span className="trend-label">Resultados mais escolhidos</span>
+                <div className="trend-values">
+                  {trends.scores.slice(0, 3).map((score) => (
+                    <span className="trend-value" key={`${score.home}-${score.away}`}>
+                      {score.home}–{score.away} <span>{score.pct}%</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
 
-        {/* Resultados mais comuns */}
-        {trends.scores && trends.scores.length > 0 ? (
-          <div className="flex flex-wrap justify-center gap-1">
-            {trends.scores.slice(0, 3).map((s) => (
-              <span
-                key={`${s.home}-${s.away}`}
-                className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90"
-              >
-                {s.home}–{s.away}{' '}
-                <span className="opacity-75">
-                  ({s.pct}%)
-                </span>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div className="text-[11px] text-white/60">
-            Sem tendência de resultado ainda.
-          </div>
-        )}
-
-        {/* Marcadores mais escolhidos */}
-        {trends.scorers && trends.scorers.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-1 mt-1">
-            {trends.scorers.slice(0, 3).map((sc) => (
-              <span
-                key={sc.player_id}
-                className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90"
-              >
-                {sc.name}{' '}
-                <span className="opacity-75">
-                  ({sc.pct}%)
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
-      </>
-    )}
-  </div>
-)}
+              {trends.scorers.length > 0 && (
+                <div className="trend-row">
+                  <span className="trend-label">Marcadores mais escolhidos</span>
+                  <div className="trend-values">
+                    {trends.scorers.slice(0, 3).map((scorer) => (
+                      <span className="trend-value" key={scorer.player_id}>
+                        {scorer.name} <span>{scorer.pct}%</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Botão mobile Guardar */}
       {variant !== 'past' && (

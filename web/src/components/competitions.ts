@@ -5,34 +5,79 @@ export const COMP_META: Record<
   string,
   {
     name: string;
-    // barra superior de 6px
     accent: string;
-    // toques discretos (pill/borda)
-    subtle?: string;
-    // opcional: segundo tom para gradiente
-    accent2?: string;
+    pill: string;
+    watermarkUrl?: string;
   }
 > = {
-  LP: { name: 'Liga Portugal', accent: '#001334', subtle: '#022b6dff' },
-  LE: { name: 'Liga Europa', accent: '#5f3601ff', subtle: '#c27502ff' },
-  TP: { name: 'Taça de Portugal', accent: '#005e32ff', subtle: '#F44336' },
-  TL: { name: 'Taça da Liga', accent: '#022786ff', subtle: '#0233afff' },
+  LP: {
+    name: 'Liga Portugal',
+    accent: '#001334',
+    pill: '#022B6D',
+    watermarkUrl:
+      'https://upload.wikimedia.org/wikipedia/commons/5/5a/S%C3%ADmbolo_da_Liga_Portuguesa_de_Futebol_Profissional.png',
+  },
+  LE: {
+    name: 'Liga Europa',
+    accent: '#5F3601',
+    pill: '#C27502',
+    watermarkUrl:
+      'https://img.uefa.com/imgml/uefacom/uel/2024/logos/uel_logotype_fc_dark.svg',
+  },
+  TP: {
+    name: 'Taça de Portugal',
+    accent: '#005E32',
+    pill: '#F44336',
+    watermarkUrl:
+      'https://r2.thesportsdb.com/images/media/league/badge/hyy7lq1593011553.png',
+  },
+  TL: {
+    name: 'Taça da Liga',
+    accent: '#022786',
+    pill: '#0233AF',
+    watermarkUrl:
+      'https://www.ligaportugal.pt/backoffice/assets/ic_allianzcup_cbcb5ca1e0.png',
+  },
 };
 
-export function compName(code?: string | null) {
+function cleanColor(value?: string | null) {
+  const color = value?.trim();
+  return color && /^#[0-9a-fA-F]{6}$/.test(color)
+    ? color.toUpperCase()
+    : undefined;
+}
+
+function cleanUrl(value?: string | null) {
+  const url = value?.trim();
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url) || url.startsWith('/')) return url;
+  return undefined;
+}
+
+export function compName(code?: string | null, overrideName?: string | null) {
+  const name = overrideName?.trim();
+  if (name) return name;
   if (!code) return null;
   return COMP_META[code]?.name ?? code;
 }
 
-export function compAccent(code?: string | null) {
-  if (!code) return undefined;
-  return COMP_META[code]?.accent;
+export function compAccent(code?: string | null, overrideColor?: string | null) {
+  return cleanColor(overrideColor) ?? (code ? COMP_META[code]?.accent : undefined);
 }
 
-export function compSubtle(code?: string | null) {
-  if (!code) return undefined;
-  return COMP_META[code]?.subtle;
+export function compPill(code?: string | null, overrideColor?: string | null) {
+  return cleanColor(overrideColor) ?? (code ? COMP_META[code]?.pill : undefined);
 }
+
+export function compWatermark(
+  code?: string | null,
+  overrideUrl?: string | null,
+) {
+  return cleanUrl(overrideUrl) ?? (code ? COMP_META[code]?.watermarkUrl : undefined);
+}
+
+// Compatibilidade com chamadas antigas.
+export const compSubtle = compPill;
 
 // “J1”, “QF”, “SF”, “F”, “M1”… -> texto por extenso
 export function roundText(label?: string | null) {

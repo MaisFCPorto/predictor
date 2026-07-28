@@ -440,7 +440,12 @@ textarea:focus-visible {
   position: absolute;
   inset: 0 0 auto;
   height: 3px;
-  background: linear-gradient(90deg, var(--blue-500), var(--cyan-400), transparent 78%);
+  background: linear-gradient(
+    90deg,
+    var(--competition-accent, var(--blue-500)),
+    var(--competition-pill, var(--cyan-400)),
+    transparent 78%
+  );
   opacity: .8;
 }
 
@@ -711,4 +716,33 @@ select option:checked { background-color: var(--ink-800); color: var(--text); }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Shared backoffice controls */
+.admin-field-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: rgba(247, 249, 255, 0.48);
+  font-size: 0.65rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-input {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.admin-input:focus {
+  border-color: rgba(86, 216, 255, 0.48);
+  background: rgba(0, 0, 0, 0.3);
 }

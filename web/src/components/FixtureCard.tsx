@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, type CSSProperties } from 'react';
 import clsx from 'clsx';
-import { compName, compAccent, compSubtle, roundText } from './competitions';
+import { compName, compAccent, compPill, compWatermark, roundText } from './competitions';
 
 type PlayerOption = {
   id: string;
@@ -42,6 +42,10 @@ type Props = {
   home_crest?: string | null;
   away_crest?: string | null;
   competition_code?: string | null;
+  competition_name?: string | null;
+  competition_accent_color?: string | null;
+  competition_pill_color?: string | null;
+  competition_watermark_url?: string | null;
   round_label?: string | null;
   is_locked?: boolean;
   lock_at_utc?: string | null;
@@ -106,6 +110,10 @@ export default function FixtureCard({
   home_crest,
   away_crest,
   competition_code,
+  competition_name,
+  competition_accent_color,
+  competition_pill_color,
+  competition_watermark_url,
   round_label,
   is_locked,
   lock_at_utc,
@@ -125,7 +133,7 @@ export default function FixtureCard({
 }: Props) {
   const dateTxt = useMemo(() => formatLocalDate(kickoff_at), [kickoff_at]);
 
-  const comp = compName(competition_code);
+  const comp = compName(competition_code, competition_name);
   const rnd = roundText(round_label);
 
   const [compL1, compL2] = useMemo(() => {
@@ -163,8 +171,9 @@ export default function FixtureCard({
     return `${hh}h${mm}`;
   }, [kickoff_at]);
 
-  const accent = compAccent(competition_code) ?? '#1e293b';
-  const subtle = compSubtle(competition_code) ?? 'transparent';
+  const accent =
+    compAccent(competition_code, competition_accent_color) ?? '#1e293b';
+  const subtle = compPill(competition_code, competition_pill_color) ?? accent;
   const lockedBase = !!is_locked || status === 'FINISHED';
 
   // countdown
@@ -409,20 +418,10 @@ export default function FixtureCard({
     return null;
   }, [variant, status, nowLocked]);
 
-  const watermarkUrl = useMemo(() => {
-    switch (competition_code) {
-      case 'TP':
-        return 'https://r2.thesportsdb.com/images/media/league/badge/hyy7lq1593011553.png';
-      case 'LE':
-        return 'https://img.uefa.com/imgml/uefacom/uel/2024/logos/uel_logotype_fc_dark.svg';
-      case 'LP':
-        return 'https://upload.wikimedia.org/wikipedia/commons/5/5a/S%C3%ADmbolo_da_Liga_Portuguesa_de_Futebol_Profissional.png';
-      case 'TL':
-        return 'https://www.ligaportugal.pt/backoffice/assets/ic_allianzcup_cbcb5ca1e0.png';
-      default:
-        return null;
-    }
-  }, [competition_code]);
+  const watermarkUrl = useMemo(
+    () => compWatermark(competition_code, competition_watermark_url),
+    [competition_code, competition_watermark_url],
+  );
 
   // -------- Tendências (resultado + marcador mais comum) --------
   const [trends, setTrends] = useState<Trends | null>(null);
@@ -476,6 +475,12 @@ export default function FixtureCard({
         'fixture-card group w-full',
         'transition-colors duration-200',
       )}
+      style={
+        {
+          '--competition-accent': accent,
+          '--competition-pill': subtle,
+        } as CSSProperties
+      }
     >
       {/* Watermark */}
       {watermarkUrl && (
@@ -557,10 +562,7 @@ export default function FixtureCard({
             <span
               className="comp-tag max-w-full justify-center gap-2 text-center"
               style={{
-                background:
-                  subtle === 'transparent'
-                    ? `${accent}1A`
-                    : `linear-gradient(90deg, ${accent} 0%, ${subtle} 100%)`,
+                background: `linear-gradient(90deg, ${accent} 0%, ${subtle} 100%)`,
                 color: '#e9eef9',
                 border: `1px solid ${accent}66`,
                 boxShadow: '0 0 0 1px rgba(0,0,0,0.15) inset',

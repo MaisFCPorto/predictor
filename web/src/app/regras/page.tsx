@@ -5,16 +5,13 @@ import Link from 'next/link';
 
 export default function RegrasPage() {
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10 md:py-14">
+    <main className="page-shell max-w-5xl">
       <title>+Predictor - Regras</title>
-      <header className="mb-8">
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-white/40">
-          Como funciona o +Predictor
-        </p>
-        <h1 className="mb-3 text-3xl font-bold md:text-4xl">Regras</h1>
-        <p className="max-w-2xl text-sm text-white/70 md:text-base">
-          Aqui encontras um resumo simples de quem pode participar, como funcionam os
-          palpites, a pontuação e o que é preciso para estares elegível aos prémios.
+      <header className="page-header">
+        <p className="eyebrow">Como funciona</p>
+        <h1 className="display-title">Regras simples. Palpites com peso.</h1>
+        <p className="page-copy">
+          Participação, pontuação, desempates e prémios explicados sem letras pequenas escondidas.
         </p>
       </header>
 
@@ -184,7 +181,7 @@ export default function RegrasPage() {
       </RuleCard>
 
       {/* CTA rápido */}
-      <section className="mt-10 rounded-3xl border border-white/10 bg-white/[0.02] p-5 md:p-6">
+      <section className="surface-strong mt-10 p-5 md:p-6">
         <div className="mb-4">
           <h2 className="mb-1 text-base font-semibold md:text-lg">Pronto para começar?</h2>
           <p className="text-sm text-white/70">
@@ -213,10 +210,10 @@ function AnchorCard({ title, href }: { title: string; href: string }) {
   return (
     <Link
       href={href}
-      className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/80 shadow-sm transition hover:border-white/25 hover:bg-white/[0.06]"
+      className="surface flex items-center justify-between px-4 py-3 text-sm text-white/80 transition hover:border-white/25 hover:bg-white/[0.06]"
     >
       <span>{title}</span>
-      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/25 text-white/70 text-sm">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/20 text-white/70 text-sm">
         <span>↓</span>
       </span>
     </Link>
@@ -235,7 +232,7 @@ function RuleCard({
   return (
     <section
       id={id}
-      className="mb-6 rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.015] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] md:mb-7 md:p-6"
+      className="surface mb-5 scroll-mt-24 p-5 md:mb-6 md:p-6"
     >
       <h2 className="mb-3 text-base font-semibold tracking-tight md:text-lg">{title}</h2>
       {children}

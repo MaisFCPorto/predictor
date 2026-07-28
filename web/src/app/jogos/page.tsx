@@ -662,9 +662,7 @@ export default function JogosPage() {
 
   const CardLink = ({ href, children, aria }: CardLinkProps) => {
     const base =
-      'group rounded-2xl border border-white/10 bg-white/[0.04] p-4 ' +
-      'transition-all duration-200 hover:bg-white/[0.07] ' +
-      'hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.45)]';
+      'metric-card group';
 
     if (userId && href) {
       return (
@@ -677,56 +675,47 @@ export default function JogosPage() {
   };
 
   return (
-    <main className="px-2 sm:px-4 md:px-6 lg:px-10 py-6 sm:py-8">
+    <main className="page-shell">
       <title>+Predictor - Jogos</title>
       <Toaster position="top-center" />
 
-      <div className="mx-auto w-full max-w-6xl space-y-8">
+      <div className="space-y-10">
         {/* Header + mini dashboard OU botão de login */}
-        <header className="space-y-4">
+        <header className="page-header">
           {authLoading ? (
             <div className="bg-card shadow-card rounded-2xl border border-white/10 p-4 text-sm opacity-80">
               A carregar utilizador…
             </div>
           ) : userId ? (
             <>
-              <div className="text-sm opacity-80">Bem-vind@,</div>
-              <h1 className="text-3xl font-bold tracking-tight text-gradient">
-                {userName}
-              </h1>
+              <p className="eyebrow">Painel do jogador</p>
+              <h1 className="display-title">Olá, {userName}</h1>
+              <p className="page-copy">
+                Acompanha a tua época e deixa o próximo palpite antes do fecho.
+              </p>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="metric-grid mt-6">
                 <CardLink
                   href={linkGeneral}
                   aria="Ir para o ranking geral"
                 >
-                  <div className="text-xs opacity-75">
-                    Classificação Geral
-                  </div>
-                  {/* linha extra invisível para alinhar cards em mobile */}
-                  <div className="mt-1 text-xs opacity-0 select-none md:hidden">
-                    placeholder
-                  </div>
-                  <div className="mt-1 text-2xl sm:text-3xl font-bold">
+                  <div className="metric-label">Classificação geral</div>
+                  <div className="metric-value">
                     {genPos == null ? '—' : `#${genPos}`}
                   </div>
-                  <div className="mt-1 text-xs opacity-75">
-                    {genPoints == null ? '—' : genPoints} Pontos
-                  </div>
+                  <div className="metric-caption">{genPoints == null ? 'Sem pontuação' : `${genPoints} pontos`}</div>
                 </CardLink>
 
                 <CardLink
                   href={linkMonthly}
                   aria="Ir para o ranking mensal"
                 >
-                  <div className="text-xs opacity-75">
-                    Classificação Mensal: {formatYmLabel(ym)}
-                  </div>
-                  <div className="mt-1 text-2xl sm:text-3xl font-bold">
+                  <div className="metric-label">Ranking mensal · {formatYmLabel(ym)}</div>
+                  <div className="metric-value">
                     {monPos == null ? '—' : `#${monPos}`}
                   </div>
-                  <div className="mt-1 text-xs opacity-75">
-                    {monPoints == null ? '—' : monPoints} Pontos
+                  <div className="metric-caption">
+                    {monPoints == null ? 'Sem pontuação' : `${monPoints} pontos`}
                   </div>
                 </CardLink>
 
@@ -734,20 +723,16 @@ export default function JogosPage() {
                   href={linkByGame}
                   aria="Ir para o ranking do último jogo"
                 >
-                  <div className="text-xs opacity-75">
-                    {lastGameLabel
-                      ? `Último Jogo: ${lastGameLabel}`
-                      : 'Último Jogo'}
+                  <div className="metric-label">
+                    {lastGameLabel ? `Último jogo · ${lastGameLabel}` : 'Último jogo'}
                   </div>
-                  <div className="mt-1 text-2xl sm:text-3xl font-bold">
+                  <div className="metric-value">
                     {lastPoints == null || lastPoints.position == null
                       ? '—'
                       : `#${lastPoints.position}`}
                   </div>
-                  <div className="mt-1 text-xs opacity-75">
-                    {lastPoints == null
-                      ? 'Sem palpite'
-                      : `${lastPoints.points ?? 0} Pontos`}
+                  <div className="metric-caption">
+                    {lastPoints == null ? 'Ainda sem resultado' : `${lastPoints.points ?? 0} pontos`}
                   </div>
                 </CardLink>
               </div>
@@ -760,18 +745,13 @@ export default function JogosPage() {
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-6">
-              <h1 className="mb-2 text-3xl font-bold tracking-tight text-gradient">
-                Convidado
-              </h1>
-              <p className="mb-4 text-sm opacity-80">
-                Entra para veres a tua classificação e começares a
-                pontuar!
+              <p className="eyebrow">+Predictor</p>
+              <h1 className="display-title">Faz o teu palpite.</h1>
+              <p className="page-copy text-center">
+                Escolhe o resultado e o marcador antes do apito inicial.
               </p>
-              <button
-                onClick={() => router.push('/auth')}
-                className="cursor-pointer rounded-2xl border border-white/10 bg-white/[0.10] px-6 py-3 text-base font-medium hover:bg-white/[0.15] transition shadow-card"
-              >
-                🔐 Entrar / Criar Conta
+              <button onClick={() => router.push('/auth')} className="action-button mt-5">
+                Entrar ou criar conta
               </button>
             </div>
           )}
@@ -791,11 +771,20 @@ export default function JogosPage() {
         {/* Jogos em aberto */}
         {!loading && (
           <section>
-            <h2 className="text-2xl font-bold mb-4 text-gradient">
-              Jogos em aberto
-            </h2>
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Próximos desafios</p>
+                <h2 className="section-title">Jogos em aberto</h2>
+              </div>
+              <span className="section-meta">{openFixtures.length} disponíveis</span>
+            </div>
             {openFixtures.length === 0 ? (
-              <div className="opacity-70">Sem jogos abertos.</div>
+              <div className="empty-state">
+                <div>
+                  <strong>A próxima jornada ainda não abriu.</strong>
+                  <span>Assim que houver um novo jogo, aparece aqui com o contador e a opção de palpite.</span>
+                </div>
+              </div>
             ) : (
               <div className="space-y-4">
                 {openFixtures.map((f) => (
@@ -837,13 +826,22 @@ export default function JogosPage() {
         {/* Jogos passados (scroll infinito) */}
         {!loading && (
           <section>
-            <h2 className="text-2xl font-bold mb-4 text-gradient">
-              Jogos passados
-            </h2>
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Arquivo da época</p>
+                <h2 className="section-title">Jogos passados</h2>
+              </div>
+              <span className="section-meta">Resultados e pontos</span>
+            </div>
             {past.length === 0 && pastLoading ? (
               <div className="opacity-70">A carregar…</div>
             ) : past.length === 0 ? (
-              <div className="opacity-70">Sem jogos passados.</div>
+              <div className="empty-state">
+                <div>
+                  <strong>A época ainda não tem resultados.</strong>
+                  <span>Os jogos terminados desta temporada vão ficar disponíveis nesta área.</span>
+                </div>
+              </div>
             ) : (
               <div className="space-y-4">
                 {past.map((f) => (
@@ -881,7 +879,7 @@ export default function JogosPage() {
                 {past.length > 3 && (
                   <div className="flex justify-center">
                     <button
-                      className="rounded bg-white/10 px-3 py-1 hover:bg-white/15"
+                      className="secondary-button"
                       onClick={collapsePast}
                       title="Ocultar jogos carregados e voltar aos 3 mais recentes"
                     >
@@ -897,7 +895,7 @@ export default function JogosPage() {
                 {manualLoad && pastHasMore && past.length <= 3 && (
                   <div className="flex justify-center">
                     <button
-                      className="mt-2 rounded bg-white/10 px-3 py-1 hover:bg-white/15 disabled:opacity-50"
+                      className="secondary-button mt-2 disabled:opacity-50"
                       onClick={loadMoreManual}
                       disabled={pastLoading}
                     >

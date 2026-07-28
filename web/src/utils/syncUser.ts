@@ -8,6 +8,8 @@ export async function syncUserToD1(supa: SupabaseClient) {
   if (!user) throw new Error('user_missing');
 
   const name =
+    // Prefer an explicit visible name set by the user to avoid provider overwrites
+    user.user_metadata?.visible_name ??
     user.user_metadata?.name ??
     user.user_metadata?.full_name ??
     user.user_metadata?.user_name ??

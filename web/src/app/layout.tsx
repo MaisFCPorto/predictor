@@ -181,6 +181,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         if (user) {
           const friendlyName =
+            (user.user_metadata?.visible_name as string | undefined) ??
             (user.user_metadata?.name as string | undefined) ??
             user.email?.split('@')[0] ??
             'Jogador';
@@ -224,6 +225,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       const authUser = session?.user ?? null;
       if (authUser) {
         const friendlyName =
+          (authUser.user_metadata?.visible_name as string | undefined) ??
           (authUser.user_metadata?.name as string | undefined) ??
           authUser.email?.split('@')[0] ??
           'Jogador';

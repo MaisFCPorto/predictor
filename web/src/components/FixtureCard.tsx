@@ -473,7 +473,7 @@ export default function FixtureCard({
   return (
     <div
       className={clsx(
-        'fixture-card group w-full p-4 pb-5 sm:p-5 sm:pb-5 md:p-6 md:pb-6',
+        'fixture-card group w-full',
         'transition-colors duration-200',
       )}
     >
@@ -491,6 +491,7 @@ export default function FixtureCard({
         />
       )}
 
+      <div className="fixture-match-zone">
       {/* Cabeçalho mobile */}
       <div className="md:hidden relative flex items-center justify-center">
         <div className="absolute left-0 top-1/2 -translate-y-1/2 pl-1">
@@ -520,6 +521,7 @@ export default function FixtureCard({
           <span
             className={clsx(
               'status-tag',
+              !headerStatusLabel && 'deadline-tag',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
                 : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
@@ -582,6 +584,7 @@ export default function FixtureCard({
           <span
             className={clsx(
               'status-tag',
+              !headerStatusLabel && 'deadline-tag',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
                 : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
@@ -702,8 +705,16 @@ export default function FixtureCard({
         </div>
       </div>
 
+      </div>
+
+      <div className="fixture-prediction-zone">
+        {variant !== 'past' && (
+          <div className="prediction-zone-kicker">O teu palpite</div>
+        )}
+
+      <div className="prediction-action-row">
       {/* Marcador (palpite) */}
-      <div className="mt-1 flex flex-col items-center gap-1">
+      <div className="prediction-editor">
         <button
           type="button"
           disabled={!pickerEnabled}
@@ -800,6 +811,8 @@ export default function FixtureCard({
         </div>
       )}
 
+      </div>
+
       {/* Tendência da comunidade, separada da área de edição */}
       {variant !== 'past' && showTrends && trends && (
         <div className="community-trends">
@@ -855,6 +868,8 @@ export default function FixtureCard({
           </button>
         </div>
       )}
+
+      </div>
 
       {/* Modal simples de escolha de jogador */}
       {pickerOpen && pickerEnabled && (

@@ -661,8 +661,7 @@ export default function JogosPage() {
     : null;
 
   const CardLink = ({ href, children, aria }: CardLinkProps) => {
-    const base =
-      'metric-card group';
+    const base = 'metric-item group';
 
     if (userId && href) {
       return (
@@ -679,7 +678,7 @@ export default function JogosPage() {
       <title>+Predictor - Jogos</title>
       <Toaster position="top-center" />
 
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header + mini dashboard OU botão de login */}
         <header className="page-header">
           {authLoading ? (
@@ -694,28 +693,32 @@ export default function JogosPage() {
                 Acompanha a tua época e deixa o próximo palpite antes do fecho.
               </p>
 
-              <div className="metric-grid mt-5">
+              <div className="metric-strip mt-4">
                 <CardLink
                   href={linkGeneral}
                   aria="Ir para o ranking geral"
                 >
-                  <div className="metric-label">Classificação geral</div>
+                  <div className="metric-copy">
+                    <div className="metric-label">Classificação geral</div>
+                    <div className="metric-caption">{genPoints == null ? 'Sem pontuação' : `${genPoints} pontos`}</div>
+                  </div>
                   <div className="metric-value">
                     {genPos == null ? '—' : `#${genPos}`}
                   </div>
-                  <div className="metric-caption">{genPoints == null ? 'Sem pontuação' : `${genPoints} pontos`}</div>
                 </CardLink>
 
                 <CardLink
                   href={linkMonthly}
                   aria="Ir para o ranking mensal"
                 >
-                  <div className="metric-label">Ranking mensal · {formatYmLabel(ym)}</div>
+                  <div className="metric-copy">
+                    <div className="metric-label">Ranking mensal · {formatYmLabel(ym)}</div>
+                    <div className="metric-caption">
+                      {monPoints == null ? 'Sem pontuação' : `${monPoints} pontos`}
+                    </div>
+                  </div>
                   <div className="metric-value">
                     {monPos == null ? '—' : `#${monPos}`}
-                  </div>
-                  <div className="metric-caption">
-                    {monPoints == null ? 'Sem pontuação' : `${monPoints} pontos`}
                   </div>
                 </CardLink>
 
@@ -723,16 +726,18 @@ export default function JogosPage() {
                   href={linkByGame}
                   aria="Ir para o ranking do último jogo"
                 >
-                  <div className="metric-label">
-                    {lastGameLabel ? `Último jogo · ${lastGameLabel}` : 'Último jogo'}
+                  <div className="metric-copy">
+                    <div className="metric-label">
+                      {lastGameLabel ? `Último jogo · ${lastGameLabel}` : 'Último jogo'}
+                    </div>
+                    <div className="metric-caption">
+                      {lastPoints == null ? 'Ainda sem resultado' : `${lastPoints.points ?? 0} pontos`}
+                    </div>
                   </div>
                   <div className="metric-value">
                     {lastPoints == null || lastPoints.position == null
                       ? '—'
                       : `#${lastPoints.position}`}
-                  </div>
-                  <div className="metric-caption">
-                    {lastPoints == null ? 'Ainda sem resultado' : `${lastPoints.points ?? 0} pontos`}
                   </div>
                 </CardLink>
               </div>

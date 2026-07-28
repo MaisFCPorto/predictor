@@ -212,11 +212,11 @@ textarea:focus-visible {
 
 .page-shell {
   width: 100%;
-  padding: 1.5rem 0 0.75rem;
+  padding: 1.1rem 0 0.75rem;
 }
 
 .page-header {
-  margin-bottom: 1.15rem;
+  margin-bottom: 0.65rem;
 }
 
 .eyebrow {
@@ -239,17 +239,17 @@ textarea:focus-visible {
 .display-title {
   margin: 0;
   max-width: 600px;
-  font-size: clamp(1.9rem, 3.8vw, 3rem);
+  font-size: clamp(1.75rem, 3.2vw, 2.55rem);
   font-weight: 800;
   letter-spacing: -0.035em;
-  line-height: 1.04;
+  line-height: 1.02;
 }
 
 .page-copy {
   max-width: 680px;
-  margin-top: 0.65rem;
-  color: #b8c3df;
-  font-size: 0.92rem;
+  margin-top: 0.45rem;
+  color: #bec9e3;
+  font-size: 0.88rem;
   line-height: 1.55;
 }
 
@@ -276,7 +276,6 @@ textarea:focus-visible {
 
 .surface,
 .surface-strong,
-.metric-card,
 .fixture-card {
   border: 1px solid var(--line);
   background: var(--surface);
@@ -290,58 +289,78 @@ textarea:focus-visible {
     linear-gradient(145deg, rgba(18, 44, 102, .82), rgba(7, 19, 52, .92));
 }
 
-.metric-grid {
+.metric-strip {
   display: grid;
-  grid-template-columns: 1.25fr 1fr 1fr;
-  gap: 0.65rem;
-}
-
-.metric-card {
-  position: relative;
-  min-height: 100px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
+  border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 0.85rem 1rem;
-  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+  background: linear-gradient(145deg, rgba(12, 30, 74, .82), rgba(5, 16, 45, .88));
+  box-shadow: var(--shadow-soft);
 }
 
-.metric-card::before {
+.metric-item {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 70px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  transition: background 160ms ease;
+}
+
+.metric-item + .metric-item {
+  border-left: 1px solid var(--line);
+}
+
+.metric-item:hover {
+  background: rgba(255,255,255,.045);
+}
+
+.metric-item::after {
   content: "";
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: linear-gradient(var(--cyan-400), var(--blue-500));
-  opacity: 0.7;
+  inset: auto 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan-400), transparent);
+  opacity: 0;
+  transition: opacity 160ms ease;
 }
 
-.metric-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--line-strong);
-  background: var(--surface-raised);
+.metric-item:hover::after {
+  opacity: .7;
+}
+
+.metric-copy {
+  min-width: 0;
 }
 
 .metric-label {
-  color: #bac5df;
-  font-size: 0.68rem;
-  font-weight: 720;
-  letter-spacing: 0.04em;
+  overflow: hidden;
+  color: #c3cde4;
+  font-size: 0.66rem;
+  font-weight: 760;
+  letter-spacing: 0.045em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .metric-value {
-  margin-top: 0.25rem;
-  font-size: clamp(1.75rem, 4vw, 2.45rem);
-  font-weight: 800;
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: clamp(1.45rem, 2.5vw, 1.9rem);
+  font-weight: 820;
   letter-spacing: -0.04em;
   line-height: 1;
 }
 
 .metric-caption {
-  margin-top: 0.35rem;
-  color: rgba(247,249,255,.68);
-  font-size: 0.72rem;
+  margin-top: 0.2rem;
+  color: rgba(247,249,255,.64);
+  font-size: 0.69rem;
 }
 
 .empty-state {
@@ -427,31 +446,96 @@ textarea:focus-visible {
 
 .fixture-card:hover { border-color: rgba(116,191,255,.28); }
 
+.fixture-match-zone {
+  position: relative;
+  z-index: 1;
+  padding: 1rem 1rem 0.85rem;
+}
+
+.fixture-prediction-zone {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid rgba(255,255,255,.09);
+  padding: 0.7rem 1rem 0.8rem;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.025), transparent 60%),
+    rgba(1, 8, 29, .3);
+}
+
+.prediction-zone-kicker {
+  margin-bottom: 0.5rem;
+  color: rgba(116,191,255,.82);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: .15em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.prediction-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+}
+
+.prediction-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.deadline-tag {
+  border-color: rgba(86,216,255,.3) !important;
+  background: rgba(40,120,255,.11) !important;
+  box-shadow: 0 0 0 1px rgba(86,216,255,.05) inset, 0 8px 24px rgba(21,89,232,.12);
+  color: #eaf8ff !important;
+  font-weight: 760;
+}
+
 .prediction-status {
   display: flex;
   width: fit-content;
   max-width: min(100%, 560px);
   align-items: center;
   gap: 0.55rem;
-  margin: 0.65rem auto 0;
+  margin: 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.5rem 0.75rem;
+  border-radius: 11px;
+  padding: 0.55rem 0.8rem;
   background: rgba(255,255,255,.035);
   color: rgba(247,249,255,.8);
   font-size: 0.72rem;
   line-height: 1.25;
 }
 
+.prediction-status > span {
+  display: inline-grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+}
+
 .prediction-status strong {
   color: white;
-  font-size: 0.74rem;
-  font-weight: 760;
+  font-size: 0.76rem;
+  font-weight: 780;
 }
 
 .prediction-status--saved {
-  border-color: rgba(56,217,159,.25);
-  background: rgba(56,217,159,.075);
+  border-color: rgba(56,217,159,.34);
+  background: rgba(56,217,159,.1);
+  box-shadow: 0 8px 24px rgba(56,217,159,.06);
+}
+
+.prediction-status--saved > span {
+  background: rgba(56,217,159,.18);
+  color: #a7f3d0;
 }
 
 .prediction-status--pending {
@@ -460,9 +544,9 @@ textarea:focus-visible {
 }
 
 .community-trends {
-  margin-top: 0.75rem;
+  margin-top: 0.65rem;
   border-top: 1px solid rgba(255,255,255,.08);
-  padding-top: 0.65rem;
+  padding-top: 0.55rem;
 }
 
 .trend-row {
@@ -580,6 +664,17 @@ select option:checked { background-color: var(--ink-800); color: var(--text); }
 }
 .animate-card { animation: cardIn 360ms cubic-bezier(.2,.8,.2,1) forwards; }
 
+
+@media (min-width: 768px) {
+  .fixture-match-zone {
+    padding: 1.05rem 1.35rem 0.9rem;
+  }
+
+  .fixture-prediction-zone {
+    padding: 0.7rem 1.35rem 0.8rem;
+  }
+}
+
 @media (min-width: 768px) {
   .app-body { padding-bottom: 0; }
   .mobile-bottom-nav { display: none; }
@@ -593,10 +688,11 @@ select option:checked { background-color: var(--ink-800); color: var(--text); }
 }
 
 @media (max-width: 767px) {
-  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .metric-card:first-child { grid-column: 1 / -1; min-height: 106px; }
-  .metric-card { min-height: 96px; }
-  .display-title { font-size: clamp(2rem, 10vw, 2.7rem); }
+  .metric-strip { grid-template-columns: 1fr; }
+  .metric-item { min-height: 58px; padding: 0.6rem 0.75rem; }
+  .metric-item + .metric-item { border-left: 0; border-top: 1px solid var(--line); }
+  .metric-value { font-size: 1.45rem; }
+  .display-title { font-size: clamp(1.85rem, 9vw, 2.45rem); }
   .section-heading { align-items: center; }
   .trend-row { align-items: flex-start; flex-direction: column; gap: 0.3rem; }
   .trend-values { justify-content: flex-start; }

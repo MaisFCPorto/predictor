@@ -679,7 +679,7 @@ export default function JogosPage() {
       <title>+Predictor - Jogos</title>
       <Toaster position="top-center" />
 
-      <div className="space-y-10">
+      <div className="space-y-8">
         {/* Header + mini dashboard OU botão de login */}
         <header className="page-header">
           {authLoading ? (
@@ -694,7 +694,7 @@ export default function JogosPage() {
                 Acompanha a tua época e deixa o próximo palpite antes do fecho.
               </p>
 
-              <div className="metric-grid mt-6">
+              <div className="metric-grid mt-5">
                 <CardLink
                   href={linkGeneral}
                   aria="Ir para o ranking geral"
@@ -786,7 +786,7 @@ export default function JogosPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {openFixtures.map((f) => (
                   <FixtureCard
                     key={f.id}

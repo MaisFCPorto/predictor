@@ -53,10 +53,9 @@ const RAIL_CONFIG: Record<
 };
 
 function pickVariant(width: number): RailVariant {
-  // podes afinar estes valores se quiseres
-  if (width >= 1900) return '300'; // écrans bem largos → 300x600
-  if (width >= 1500) return '160'; // intermédio → 160x600
-  return '120';                    // mais justo → 120x600
+  if (width >= 2200) return '300';
+  if (width >= 1680) return '160';
+  return '120';
 }
 
 function BetanoSideRails() {
@@ -77,10 +76,10 @@ function BetanoSideRails() {
   const cfg = RAIL_CONFIG[variant];
 
   return (
-    // só mostra em >= 1280px (xl) para não esmagar layout em portáteis pequenos
-    <div className="pointer-events-none fixed inset-y-0 left-0 right-0 z-[40] hidden items-center justify-between min-[1360px]:flex">
+    // Mantém os anúncios fora da grelha principal e abaixo do cabeçalho.
+    <div className="pointer-events-none fixed left-0 right-0 top-24 z-[40] hidden justify-between min-[1360px]:flex">
       {/* LEFT */}
-      <div className="pointer-events-auto pl-1">
+      <div className="pointer-events-auto pl-2">
         <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
           <iframe
             src={cfg.src}
@@ -97,7 +96,7 @@ function BetanoSideRails() {
       </div>
 
       {/* RIGHT */}
-      <div className="pointer-events-auto pr-1">
+      <div className="pointer-events-auto pr-2">
         <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
           <iframe
             src={cfg.src}

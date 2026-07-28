@@ -41,7 +41,7 @@ export async function savePrediction({
     const txt = await res.text().catch(() => '');
     throw new Error(
       `Falha ao guardar palpite (${res.status}) ${res.statusText}${
-        txt ? ` — ${txt.slice(0, 140)}…` : ''
+        txt ? ` - ${txt.slice(0, 140)}…` : ''
       }`,
     );
   }

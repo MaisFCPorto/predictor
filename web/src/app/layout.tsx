@@ -278,7 +278,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   const baseNavLinks = [
     { href: '/jogos', label: 'Jogos' },
-    { href: '/ligas', label: 'Ligas (beta)' },
+    { href: '/ligas', label: 'Ligas' },
     { href: '/rankings', label: 'Rankings' },
     { href: '/premios', label: 'Prémios' },
     { href: '/regras', label: 'Regras' },
@@ -379,6 +379,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
                   {userMenuOpen && (
                     <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-2xl border border-white/10 bg-black/95 text-sm shadow-xl">
+                      <button
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-white/90 hover:bg-white/10"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          router.push('/profile');
+                        }}
+                      >
+                        Perfil
+                      </button>
                       <button
                         type="button"
                         className="block w-full px-3 py-2 text-left text-white/90 hover:bg-white/10"

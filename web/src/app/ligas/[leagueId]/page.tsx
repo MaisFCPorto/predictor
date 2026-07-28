@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabasePKCE } from '@/utils/supabase/client';
-import AdminGate from '../../admin/_components/AdminGate';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
@@ -271,6 +270,7 @@ function LeagueDetailInner() {
     detail && detail.currentUserRole === 'member' && !!userId;
 
   return (
+    
     <div className="py-6 space-y-6">
       <button
         type="button"
@@ -352,7 +352,7 @@ function LeagueDetailInner() {
                     className="rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm"
                   >
                     <option value="private">Privada</option>
-                    <option value="public">Pública (beta)</option>
+                    <option value="public">Pública</option>
                   </select>
                 </div>
 
@@ -508,9 +508,5 @@ function LeagueDetailInner() {
 }
 
 export default function LeagueDetailPage() {
-  return (
-    <AdminGate>
-      <LeagueDetailInner />
-    </AdminGate>
-  );
+  return <LeagueDetailInner />;
 }

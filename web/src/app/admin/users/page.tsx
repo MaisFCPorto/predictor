@@ -37,7 +37,7 @@ function errorMessage(err: unknown): string {
 }
 
 function formatDateTime(dateStr: string | null) {
-  if (!dateStr) return '—';
+  if (!dateStr) return '-';
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return dateStr;
   return d.toLocaleString('pt-PT', {
@@ -240,7 +240,7 @@ function AdminUsersInner() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Backoffice — Utilizadores</h1>
+          <h1 className="text-2xl font-semibold">Backoffice - Utilizadores</h1>
           <p className="text-sm text-white/60">
             Lista e gestão de contas (nome, email, role, últimos acessos).
           </p>

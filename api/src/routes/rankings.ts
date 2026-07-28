@@ -255,7 +255,7 @@ rankings.get('/', async (c) => {
 
     const acc = score[p.user_id];
 
-    // Pontos (UEFA) — sempre com base no resultado oficial do jogo
+    // Pontos (UEFA) - sempre com base no resultado oficial do jogo
     const s = scoreUEFA(p.home_goals, p.away_goals, p.home_score, p.away_score);
 
     let pts = s.points;

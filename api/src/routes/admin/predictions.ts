@@ -56,7 +56,7 @@ adminPredictions.get('/fixtures', async (c) => {
   const fixtures = (results ?? []).map((row) => {
     const d = new Date(row.kickoff_at);
     const dateLabel = d.toISOString().slice(0, 10); // YYYY-MM-DD
-    const label = `${dateLabel} — ${row.home_team_name} vs ${row.away_team_name}`;
+    const label = `${dateLabel} - ${row.home_team_name} vs ${row.away_team_name}`;
     return {
       id: row.id,
       label,

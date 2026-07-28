@@ -24,7 +24,7 @@ async function fetchJson(url: string) {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
-    throw new Error(`(${res.status}) ${res.statusText}${txt ? ` — ${txt.slice(0, 160)}…` : ''}`);
+    throw new Error(`(${res.status}) ${res.statusText}${txt ? ` - ${txt.slice(0, 160)}…` : ''}`);
   }
   const ct = res.headers.get('content-type') || '';
   if (!ct.includes('application/json')) {
@@ -126,8 +126,8 @@ function WinnersPageInner() {
       .finally(() => setLoadingMonthly(false));
   }, [ym]);
 
-  const gameTitle = useMemo(() => `Vencedores por Jogo — ${formatYmLabel(ym)}`, [ym]);
-  const monthlyTitle = useMemo(() => `Top 3 Mensal — ${formatYmLabel(ym)}`, [ym]);
+  const gameTitle = useMemo(() => `Vencedores por Jogo - ${formatYmLabel(ym)}`, [ym]);
+  const monthlyTitle = useMemo(() => `Top 3 Mensal - ${formatYmLabel(ym)}`, [ym]);
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -177,7 +177,7 @@ function WinnersPageInner() {
                     </div>
                     <div className="mt-2 rounded-2xl bg-white/[0.04] px-3 py-2">
                       <div className="text-sm font-semibold">{r.name}</div>
-                      <div className="mt-0.5 text-xs text-white/70">{r.email ?? '—'}</div>
+                      <div className="mt-0.5 text-xs text-white/70">{r.email ?? '-'}</div>
                     </div>
                   </li>
                 ))}
@@ -217,7 +217,7 @@ function WinnersPageInner() {
                           <div className="mt-0.5 text-xs text-white/60">{fmtLocalDT(r.kickoff_at)}</div>
                         </td>
                         <td className="px-5 py-3 font-medium">{r.name}</td>
-                        <td className="px-5 py-3 text-white/80">{r.email ?? '—'}</td>
+                        <td className="px-5 py-3 text-white/80">{r.email ?? '-'}</td>
                       </tr>
                     ))
                   )}
@@ -250,7 +250,7 @@ function WinnersPageInner() {
                   <li key={`${r.ym}-${r.user_id}`} className="px-5 py-4">
                     <div className="text-xs text-white/60">Posição {index + 1}.</div>
                     <div className="mt-1 font-semibold">{r.name}</div>
-                    <div className="mt-0.5 text-xs text-white/70">{r.email ?? '—'}</div>
+                    <div className="mt-0.5 text-xs text-white/70">{r.email ?? '-'}</div>
                   </li>
                 ))}
               </ul>
@@ -284,7 +284,7 @@ function WinnersPageInner() {
                       >
                         <td className="px-5 py-3 text-white/80">{index + 1}.</td>
                         <td className="px-5 py-3 font-medium">{r.name}</td>
-                        <td className="px-5 py-3 text-white/80">{r.email ?? '—'}</td>
+                        <td className="px-5 py-3 text-white/80">{r.email ?? '-'}</td>
                       </tr>
                     ))
                   )}

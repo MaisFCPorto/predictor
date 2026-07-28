@@ -116,7 +116,7 @@ function LeaguesInner() {
 
   return (
     <div className="py-6 space-y-6">
-      <h1 className="text-2xl font-bold mb-2">Ligas (beta – só admin)</h1>
+      <h1 className="text-2xl font-bold mb-2">Ligas</h1>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
         <h2 className="text-lg font-semibold">Criar nova liga</h2>

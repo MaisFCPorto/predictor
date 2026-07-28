@@ -2298,24 +2298,170 @@ admin.get("/fixtures/porto", requireAdminKey, async (c) => {
 // src/routes/admin/competitions.ts
 var adminCompetitions = new Hono2();
 adminCompetitions.use("*", requireAdminKey);
+var DEFAULT_ACCENT = "#1559E8";
+var DEFAULT_PILL = "#2878FF";
+var HEX_COLOR = /^#[0-9A-F]{6}$/;
+function normalizeColor(value, fallback) {
+  if (value == null || String(value).trim() === "") return fallback;
+  const normalized = String(value).trim().toUpperCase();
+  return HEX_COLOR.test(normalized) ? normalized : null;
+}
+__name(normalizeColor, "normalizeColor");
+function normalizeCode(value) {
+  return String(value ?? "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 20);
+}
+__name(normalizeCode, "normalizeCode");
+function normalizeWatermarkUrl(value) {
+  if (value == null || String(value).trim() === "") return null;
+  const url = String(value).trim();
+  if (url.length > 2048) return void 0;
+  if (url.startsWith("/")) return url;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? url : void 0;
+  } catch {
+    return void 0;
+  }
+}
+__name(normalizeWatermarkUrl, "normalizeWatermarkUrl");
 adminCompetitions.get("/", async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT id, code, name FROM competitions ORDER BY name`
+    `
+    SELECT id, code, name, accent_color, pill_color, watermark_url
+    FROM competitions
+    ORDER BY name COLLATE NOCASE
+    `
   ).all();
   return c.json(results ?? []);
+});
+adminCompetitions.post("/", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body) return c.json({ error: "invalid_json" }, 400);
+  const id = normalizeCode(body.id);
+  const code = normalizeCode(body.code || body.id);
+  const name = String(body.name ?? "").trim();
+  const accentColor = normalizeColor(body.accent_color, DEFAULT_ACCENT);
+  const pillColor = normalizeColor(body.pill_color, DEFAULT_PILL);
+  const watermarkUrl = normalizeWatermarkUrl(body.watermark_url);
+  if (!id || !code || !name) {
+    return c.json({ error: "missing_id_code_or_name" }, 400);
+  }
+  if (!accentColor || !pillColor) {
+    return c.json(
+      { error: "invalid_color", detail: "Usa cores HEX no formato #RRGGBB." },
+      400
+    );
+  }
+  if (watermarkUrl === void 0) {
+    return c.json(
+      {
+        error: "invalid_watermark_url",
+        detail: "Usa um URL http(s) ou um caminho iniciado por /."
+      },
+      400
+    );
+  }
+  try {
+    await c.env.DB.prepare(
+      `
+      INSERT INTO competitions (
+        id, code, name, accent_color, pill_color, watermark_url
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+      `
+    ).bind(id, code, name, accentColor, pillColor, watermarkUrl).run();
+    return c.json({ ok: true, id }, 201);
+  } catch (error) {
+    return c.json(
+      {
+        error: "create_failed",
+        detail: String(error?.message ?? error)
+      },
+      409
+    );
+  }
+});
+adminCompetitions.patch("/:id", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => null);
+  if (!id) return c.json({ error: "missing_id" }, 400);
+  if (!body) return c.json({ error: "invalid_json" }, 400);
+  const current = await c.env.DB.prepare(
+    `
+    SELECT id, code, name, accent_color, pill_color, watermark_url
+    FROM competitions
+    WHERE id = ?
+    LIMIT 1
+    `
+  ).bind(id).first();
+  if (!current) return c.json({ error: "competition_not_found" }, 404);
+  const code = body.code === void 0 ? current.code : normalizeCode(body.code);
+  const name = body.name === void 0 ? current.name : String(body.name).trim();
+  const accentColor = body.accent_color === void 0 ? current.accent_color : normalizeColor(body.accent_color, current.accent_color);
+  const pillColor = body.pill_color === void 0 ? current.pill_color : normalizeColor(body.pill_color, current.pill_color);
+  const watermarkUrl = body.watermark_url === void 0 ? current.watermark_url : normalizeWatermarkUrl(body.watermark_url);
+  if (!code || !name) return c.json({ error: "missing_code_or_name" }, 400);
+  if (!accentColor || !pillColor) {
+    return c.json(
+      { error: "invalid_color", detail: "Usa cores HEX no formato #RRGGBB." },
+      400
+    );
+  }
+  if (watermarkUrl === void 0) {
+    return c.json(
+      {
+        error: "invalid_watermark_url",
+        detail: "Usa um URL http(s) ou um caminho iniciado por /."
+      },
+      400
+    );
+  }
+  try {
+    await c.env.DB.prepare(
+      `
+      UPDATE competitions
+      SET code = ?, name = ?, accent_color = ?, pill_color = ?, watermark_url = ?
+      WHERE id = ?
+      `
+    ).bind(code, name, accentColor, pillColor, watermarkUrl, id).run();
+    return c.json({ ok: true });
+  } catch (error) {
+    return c.json(
+      {
+        error: "update_failed",
+        detail: String(error?.message ?? error)
+      },
+      409
+    );
+  }
 });
 
 // src/routes/admin/players.ts
 var adminPlayers = new Hono2();
 adminPlayers.use("*", requireAdminKey);
+var POSITIONS = /* @__PURE__ */ new Set(["GR", "D", "M", "A"]);
+function normalizePosition(value) {
+  const position = String(value ?? "").trim().toUpperCase();
+  return POSITIONS.has(position) ? position : null;
+}
+__name(normalizePosition, "normalizePosition");
+function activeValue(value, fallback = 1) {
+  if (value === void 0 || value === null) return fallback;
+  return value === false || value === 0 || value === "0" ? 0 : 1;
+}
+__name(activeValue, "activeValue");
 adminPlayers.get("/", async (c) => {
-  const teamId = c.req.query("team_id") ?? "fcp";
-  const stmt = c.env.DB.prepare(
-    `
-    SELECT id, team_id, name, position
+  const teamId = c.req.query("team_id")?.trim() || "fcp";
+  const includeInactive = ["1", "true", "yes"].includes(
+    (c.req.query("include_inactive") ?? "").toLowerCase()
+  );
+  const sql = `
+    SELECT id, team_id, name, position, is_active, created_at, updated_at
     FROM players
     WHERE team_id = ?
+      ${includeInactive ? "" : "AND is_active = 1"}
     ORDER BY
+      is_active DESC,
       CASE position
         WHEN 'GR' THEN 1
         WHEN 'D'  THEN 2
@@ -2323,11 +2469,82 @@ adminPlayers.get("/", async (c) => {
         WHEN 'A'  THEN 4
         ELSE 5
       END,
-      name
-  `
-  );
-  const rs = await stmt.bind(teamId).all();
-  return c.json(rs.results ?? []);
+      name COLLATE NOCASE
+  `;
+  const { results } = await c.env.DB.prepare(sql).bind(teamId).all();
+  return c.json(results ?? []);
+});
+adminPlayers.post("/", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body) return c.json({ error: "invalid_json" }, 400);
+  const teamId = String(body.team_id ?? "fcp").trim();
+  const name = String(body.name ?? "").trim();
+  const position = normalizePosition(body.position);
+  const isActive = activeValue(body.is_active, 1);
+  if (!teamId || !name || !position) {
+    return c.json({ error: "missing_or_invalid_fields" }, 400);
+  }
+  const duplicate = await c.env.DB.prepare(
+    `
+    SELECT id
+    FROM players
+    WHERE team_id = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+    LIMIT 1
+    `
+  ).bind(teamId, name).first();
+  if (duplicate) {
+    return c.json({ error: "player_already_exists", id: duplicate.id }, 409);
+  }
+  await c.env.DB.prepare(
+    `
+    INSERT INTO players (team_id, name, position, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `
+  ).bind(teamId, name, position, isActive).run();
+  return c.json({ ok: true }, 201);
+});
+adminPlayers.patch("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json().catch(() => null);
+  if (!Number.isInteger(id) || id <= 0) return c.json({ error: "invalid_id" }, 400);
+  if (!body) return c.json({ error: "invalid_json" }, 400);
+  const current = await c.env.DB.prepare(
+    `
+    SELECT id, team_id, name, position, is_active
+    FROM players
+    WHERE id = ?
+    LIMIT 1
+    `
+  ).bind(id).first();
+  if (!current) return c.json({ error: "player_not_found" }, 404);
+  const teamId = body.team_id === void 0 ? current.team_id : String(body.team_id).trim();
+  const name = body.name === void 0 ? current.name : String(body.name).trim();
+  const position = body.position === void 0 ? current.position : normalizePosition(body.position);
+  const isActive = activeValue(body.is_active, current.is_active);
+  if (!teamId || !name || !position) {
+    return c.json({ error: "missing_or_invalid_fields" }, 400);
+  }
+  const duplicate = await c.env.DB.prepare(
+    `
+    SELECT id
+    FROM players
+    WHERE team_id = ?
+      AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+      AND id <> ?
+    LIMIT 1
+    `
+  ).bind(teamId, name, id).first();
+  if (duplicate) {
+    return c.json({ error: "player_already_exists", id: duplicate.id }, 409);
+  }
+  await c.env.DB.prepare(
+    `
+    UPDATE players
+    SET team_id = ?, name = ?, position = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+    `
+  ).bind(teamId, name, position, isActive, id).run();
+  return c.json({ ok: true });
 });
 
 // src/routes/admin/fixture-scorers.ts
@@ -3931,7 +4148,7 @@ adminPredictions.get("/fixtures", async (c) => {
   const fixtures = (results ?? []).map((row) => {
     const d = new Date(row.kickoff_at);
     const dateLabel = d.toISOString().slice(0, 10);
-    const label = `${dateLabel} \u2014 ${row.home_team_name} vs ${row.away_team_name}`;
+    const label = `${dateLabel} - ${row.home_team_name} vs ${row.away_team_name}`;
     return {
       id: row.id,
       label
@@ -4557,7 +4774,10 @@ async function listFixtures(c, matchdayId) {
         f.leg AS leg,
         ht.name AS home_team_name, at.name AS away_team_name,
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
-        co.code AS competition_code, co.name AS competition_name
+        co.code AS competition_code, co.name AS competition_name,
+        co.accent_color AS competition_accent_color,
+        co.pill_color AS competition_pill_color,
+        co.watermark_url AS competition_watermark_url
       FROM fixtures f
       JOIN teams ht ON ht.id = f.home_team_id
       JOIN teams at ON at.id = f.away_team_id
@@ -4591,7 +4811,10 @@ app.get("/api/fixtures/open", async (c) => {
         f.leg AS leg,
         ht.name AS home_team_name, at.name AS away_team_name,
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
-        co.code AS competition_code, co.name AS competition_name
+        co.code AS competition_code, co.name AS competition_name,
+        co.accent_color AS competition_accent_color,
+        co.pill_color AS competition_pill_color,
+        co.watermark_url AS competition_watermark_url
       FROM fixtures f
       JOIN matchdays md ON md.id = f.matchday_id
       JOIN teams ht ON ht.id = f.home_team_id
@@ -4634,7 +4857,10 @@ app.get("/api/fixtures/finished", async (c) => {
         f.leg AS leg,
         ht.name AS home_team_name, at.name AS away_team_name,
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
-        co.code AS competition_code, co.name AS competition_name
+        co.code AS competition_code, co.name AS competition_name,
+        co.accent_color AS competition_accent_color,
+        co.pill_color AS competition_pill_color,
+        co.watermark_url AS competition_watermark_url
       FROM fixtures f
       JOIN matchdays md ON md.id = f.matchday_id
       JOIN teams ht ON ht.id = f.home_team_id
@@ -4673,6 +4899,9 @@ app.get("/api/fixtures/closed", async (c) => {
         at.crest_url  AS away_crest,
         co.code       AS competition_code,
         co.name       AS competition_name,
+        co.accent_color AS competition_accent_color,
+        co.pill_color AS competition_pill_color,
+        co.watermark_url AS competition_watermark_url,
         GROUP_CONCAT(p.name, ',') AS scorers_names
       FROM fixtures f
       JOIN matchdays md ON md.id = f.matchday_id
@@ -5345,7 +5574,7 @@ var jsonError2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError2;
 
-// .wrangler/tmp/bundle-055U0a/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-yyWipe/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -5377,7 +5606,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-055U0a/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-yyWipe/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

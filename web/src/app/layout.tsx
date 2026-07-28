@@ -278,7 +278,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   const baseNavLinks = [
     { href: '/jogos', label: 'Jogos' },
-    { href: '/ligas', label: 'Ligas (beta)' },
+    { href: '/ligas', label: 'Ligas' },
     { href: '/rankings', label: 'Rankings' },
     { href: '/premios', label: 'Prémios' },
     { href: '/regras', label: 'Regras' },

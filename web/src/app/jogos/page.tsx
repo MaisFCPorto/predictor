@@ -93,7 +93,7 @@ async function fetchJson(url: string) {
     const txt = await res.text().catch(() => '');
     throw new Error(
       `${url} → (${res.status}) ${res.statusText}${
-        txt ? ` — ${txt.slice(0, 140)}…` : ''
+        txt ? ` - ${txt.slice(0, 140)}…` : ''
       }`,
     );
   }
@@ -706,7 +706,7 @@ export default function JogosPage() {
                     <div className="metric-caption">{genPoints == null ? 'Sem pontuação' : `${genPoints} pontos`}</div>
                   </div>
                   <div className="metric-value">
-                    {genPos == null ? '—' : `#${genPos}`}
+                    {genPos == null ? '-' : `#${genPos}`}
                   </div>
                 </CardLink>
 
@@ -721,7 +721,7 @@ export default function JogosPage() {
                     </div>
                   </div>
                   <div className="metric-value">
-                    {monPos == null ? '—' : `#${monPos}`}
+                    {monPos == null ? '-' : `#${monPos}`}
                   </div>
                 </CardLink>
 
@@ -739,7 +739,7 @@ export default function JogosPage() {
                   </div>
                   <div className="metric-value">
                     {lastPoints == null || lastPoints.position == null
-                      ? '—'
+                      ? '-'
                       : `#${lastPoints.position}`}
                   </div>
                 </CardLink>

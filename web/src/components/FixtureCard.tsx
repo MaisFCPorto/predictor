@@ -567,10 +567,10 @@ export default function FixtureCard({
                 border: `1px solid ${accent}66`,
                 boxShadow: '0 0 0 1px rgba(0,0,0,0.15) inset',
               }}
-              title={comp + (rnd ? ` — ${rnd}` : '')}
+              title={comp + (rnd ? ` - ${rnd}` : '')}
             >
               {comp}
-              {rnd ? ` — ${rnd}` : ''}
+              {rnd ? ` - ${rnd}` : ''}
             </span>
           )}
         </div>

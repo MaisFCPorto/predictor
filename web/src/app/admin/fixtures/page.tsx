@@ -616,7 +616,7 @@ await loadFixtures();
     <AdminGate>
       <main className="max-w-6xl mx-auto p-6 space-y-4">
         <title>+Predictor - Admin Jogos</title>
-        <h1 className="text-2xl font-semibold">Backoffice — Jogos</h1>
+        <h1 className="text-2xl font-semibold">Backoffice - Jogos</h1>
 
         <datalist id="teams-list">
           {teams.map((t) => (
@@ -628,7 +628,7 @@ await loadFixtures();
         <div className="rounded-2xl border border-white/10 p-3 space-y-2 bg-black/30">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-medium">
-              Sugestões — Próximos jogos do FC Porto
+              Sugestões - Próximos jogos do FC Porto
             </h2>
             <button
               className="rounded-full bg-white/10 px-3 py-1 text-sm hover:bg-white/15"
@@ -701,7 +701,7 @@ await loadFixtures();
                 <option value="">Selecionar…</option>
                 {competitions.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.code} — {c.name}
+                    {c.code} - {c.name}
                   </option>
                 ))}
               </select>
@@ -738,7 +738,7 @@ await loadFixtures();
                   }))
                 }
               >
-                <option value="">—</option>
+                <option value="">-</option>
                 <option value="1">1ª mão</option>
                 <option value="2">2ª mão</option>
               </select>
@@ -990,7 +990,7 @@ await loadFixtures();
                             })
                           }
                         >
-                          <option value="">—</option>
+                          <option value="">-</option>
                           {competitions.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.code}
@@ -1035,7 +1035,7 @@ await loadFixtures();
                             });
                           }}
                         >
-                          <option value="">—</option>
+                          <option value="">-</option>
                           <option value="1">1</option>
                           <option value="2">2</option>
                         </select>

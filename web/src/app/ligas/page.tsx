@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { supabasePKCE } from '@/utils/supabase/client';
-import AdminGate from '../admin/_components/AdminGate';
 import Link from 'next/link';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
@@ -256,7 +255,7 @@ function LeaguesInner() {
 
   return (
     <div className="py-6 space-y-6">
-      <h1 className="mb-2 text-3xl font-bold text-gradient">Ligas (beta)</h1>
+      <h1 className="mb-2 text-3xl font-bold text-gradient">Ligas</h1>
       <p className="text-sm opacity-80">
         Aqui vais poder criar ligas privadas com amigos e ver um ranking só da
         tua liga. Esta área está em testes.
@@ -290,7 +289,7 @@ function LeaguesInner() {
               className="rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm"
             >
               <option value="private">Privada</option>
-              <option value="public">Pública (beta)</option>
+              <option value="public">Pública</option>
             </select>
           </div>
           <button
@@ -431,9 +430,5 @@ function LeaguesInner() {
 }
 
 export default function LeaguesPage() {
-  return (
-    <AdminGate>
-      <LeaguesInner />
-    </AdminGate>
-  );
+  return <LeaguesInner />;
 }

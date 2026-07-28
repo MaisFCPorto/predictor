@@ -32,7 +32,7 @@ async function fetchJson(url: string) {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
-    throw new Error(`(${res.status}) ${res.statusText}${txt ? ` — ${txt.slice(0, 160)}…` : ''}`);
+    throw new Error(`(${res.status}) ${res.statusText}${txt ? ` - ${txt.slice(0, 160)}…` : ''}`);
   }
   const ct = res.headers.get('content-type') || '';
   if (!ct.includes('application/json')) {
@@ -57,7 +57,7 @@ function formatYmLabel(ym: string) {
   return `${cap}'${yy}`;
 }
 function initials(name?: string | null) {
-  if (!name) return '—';
+  if (!name) return '-';
   return name
     .split(' ')
     .filter(Boolean)
@@ -79,7 +79,7 @@ function gameLabel(g: GameLite) {
   const when = fmtLocalDT(g.kickoff_at);
   const comp = g.competition_code ? ` • ${g.competition_code}` : '';
   const rnd  = g.round_label ? ` ${g.round_label}` : '';
-  return `${when} — ${g.home_team_name} vs ${g.away_team_name}${comp}${rnd}`;
+  return `${when} - ${g.home_team_name} vs ${g.away_team_name}${comp}${rnd}`;
 }
 function gameShort(g: GameLite) {
   const d = new Date(g.kickoff_at);
@@ -231,7 +231,7 @@ function RankingsPageInner() {
     if (mode === 'general') return 'Ranking Geral';
     if (mode === 'monthly') return `Ranking Mensal - ${formatYmLabel(ym)}`;
     const g = games.find((x) => x.id === fixtureId);
-    return g ? `Ranking Jogo — ${g.home_team_name} vs ${g.away_team_name}` : 'Ranking Jogo';
+    return g ? `Ranking Jogo - ${g.home_team_name} vs ${g.away_team_name}` : 'Ranking Jogo';
   }, [mode, ym, games, fixtureId]);
 
   const selectedGame = useMemo(
@@ -326,7 +326,7 @@ function RankingsPageInner() {
             <div className="hidden items-center gap-2 text-xs text-white/80 md:flex">
               <span className="opacity-70">Detalhes:</span>
               <span className="status-tag">
-                {selectedGame ? gameHeaderLabel(selectedGame) : '—'}
+                {selectedGame ? gameHeaderLabel(selectedGame) : '-'}
               </span>
             </div>
           )}

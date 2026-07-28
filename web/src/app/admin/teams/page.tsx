@@ -174,8 +174,8 @@ export default function AdminTeamsPage() {
   return (
     <AdminGate>
       <main className="mx-auto max-w-5xl space-y-4 p-6">
-        <title>+Predictor — Admin Equipas</title>
-        <h1 className="text-2xl font-semibold">Backoffice — Equipas</h1>
+        <title>+Predictor - Admin Equipas</title>
+        <h1 className="text-2xl font-semibold">Backoffice - Equipas</h1>
 
         {/* Card criação */}
         <section className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4">

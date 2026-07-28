@@ -182,8 +182,10 @@ export default function JogosPage() {
       } = await supabasePKCE.auth.getUser();
 
       if (user) {
+        const metadata = user.user_metadata ?? {};
         const friendly =
-          (user.user_metadata as any)?.name ||
+          (metadata as any)?.visible_name ||
+          (metadata as any)?.name ||
           user.email?.split('@')[0] ||
           'Jogador';
 
@@ -196,8 +198,9 @@ export default function JogosPage() {
           body: JSON.stringify({
             id: user.id,
             email: user.email ?? null,
+            // send chosen visible name as `name` to the sync endpoint
             name: friendly,
-            avatar_url: (user.user_metadata as any)?.avatar_url ?? null,
+            avatar_url: (metadata as any)?.avatar_url ?? null,
           }),
         }).catch(() => {});
       } else {

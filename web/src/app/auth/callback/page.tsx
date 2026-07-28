@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabasePKCE } from '@/utils/supabase/client';
+import { syncUserToD1 } from '@/utils/syncUser';
 
 export default function OAuthCallback() {
   const router = useRouter();
@@ -12,6 +13,12 @@ export default function OAuthCallback() {
     (async () => {
       // força um getSession (ajuda a propagar cookies + middleware)
       await supabasePKCE.auth.getSession();
+      try {
+        // ensure D1 has the latest visible name/avatar
+        await syncUserToD1(supabasePKCE as any);
+      } catch (e) {
+        // ignore sync errors — still redirect
+      }
       router.replace('/jogos');
     })();
   }, [router]);

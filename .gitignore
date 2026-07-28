@@ -9,3 +9,4 @@ web/.next/
 .DS_Store
 api/seeds.sql
 *.sqlite
+api/ppl_teams.json

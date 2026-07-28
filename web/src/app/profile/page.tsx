@@ -28,7 +28,8 @@ export default function ProfilePage() {
         }
         setUser(data.user);
         setName(
-          (data.user.user_metadata?.name as string | undefined) ??
+          (data.user.user_metadata?.visible_name as string | undefined) ??
+            (data.user.user_metadata?.name as string | undefined) ??
             data.user.email?.split('@')[0] ??
             '',
         );
@@ -73,7 +74,7 @@ export default function ProfilePage() {
     setSaving(true);
     try {
       const { error: updateError } = await supabasePKCE.auth.updateUser({
-        data: { name: trimmedName },
+        data: { visible_name: trimmedName },
       });
       if (updateError) {
         throw updateError;

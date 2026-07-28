@@ -89,7 +89,7 @@ export default function AuthPage() {
           password,
           options: {
             data: {
-              name,
+              visible_name: name,
               accepted_rules_at: new Date().toISOString(),
             },
           },
@@ -208,6 +208,7 @@ export default function AuthPage() {
   // ------- Se JÁ estiver autenticado: bloquear form e mostrar ações -------
   if (user) {
     const displayName =
+      (user.user_metadata && user.user_metadata.visible_name) ||
       (user.user_metadata && user.user_metadata.name) ||
       user.email ||
       'Jogador';

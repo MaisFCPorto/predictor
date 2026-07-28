@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import axios, { AxiosError } from 'axios';
+import Link from 'next/link';
 import AdminGate from '../_components/AdminGate';
 import { adm } from '../_utils/adminClients';
-import Link from 'next/link';
-
 
 /* -------------------- Tipos -------------------- */
 type Team = { id: string; name: string };
@@ -44,17 +43,106 @@ type Player = {
   position: 'GR' | 'D' | 'M' | 'A' | string;
 };
 
+type Suggestion = {
+  utcDate: string;
+  home: string;
+  away: string;
+  comp?: string;
+  round?: string;
+};
+
+/* -------------------- Componentes de UI -------------------- */
+function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+}) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-white/55">
+        {label}
+      </span>
+      {children}
+      {hint ? <span className="block text-xs text-white/45">{hint}</span> : null}
+    </label>
+  );
+}
+
+function Drawer({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  footer,
+  widthClass = 'max-w-2xl',
+  zClass = 'z-[90]',
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  description?: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  widthClass?: string;
+  zClass?: string;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className={`fixed inset-0 ${zClass} flex justify-end`} role="dialog" aria-modal="true">
+      <button
+        type="button"
+        aria-label="Fechar painel"
+        className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <section
+        className={`relative flex h-full w-full ${widthClass} flex-col border-l border-white/10 bg-[#06102b] shadow-2xl`}
+      >
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-[#06102b]/95 px-4 py-4 backdrop-blur md:px-6">
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold text-white">{title}</h2>
+            {description ? (
+              <p className="mt-1 text-sm leading-5 text-white/55">{description}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/5 text-xl text-white/75 hover:bg-white/10"
+            aria-label="Fechar"
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">{children}</div>
+
+        {footer ? (
+          <footer className="sticky bottom-0 z-10 border-t border-white/10 bg-[#06102b]/95 px-4 py-3 backdrop-blur md:px-6">
+            {footer}
+          </footer>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
 /* -------------------- Utils datas -------------------- */
 function toLocalDTValue(isoOrSqlUTC: string) {
   if (!isoOrSqlUTC) return '';
 
   const asISO = isoOrSqlUTC.includes('T')
     ? isoOrSqlUTC
-    : isoOrSqlUTC.replace(' ', 'T'); // ❌ sem Z
+    : isoOrSqlUTC.replace(' ', 'T');
 
   const d = new Date(asISO);
-
-  const pad = (n: number) => (n < 10 ? '0' + n : String(n));
+  const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
 
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
     d.getDate(),
@@ -64,14 +152,11 @@ function toLocalDTValue(isoOrSqlUTC: string) {
 function fromLocalDTValue(localValue: string) {
   if (!localValue) return '';
 
-  // formato esperado: "YYYY-MM-DDTHH:mm"
   const [date, time] = localValue.split('T');
-
   if (!date || !time) return '';
 
   const [y, m, d] = date.split('-');
   const [hh, mi] = time.split(':');
-
   return `${y}-${m}-${d} ${hh}:${mi}:00`;
 }
 
@@ -86,7 +171,22 @@ function joinLocal(date: string, time: string) {
   return `${date}T${time}`;
 }
 
-/* -------------------- Utils mensagens/erros -------------------- */
+function fixtureDateLabel(value: string) {
+  if (!value) return 'Data por definir';
+  const d = new Date(value.includes('T') ? value : value.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return value;
+
+  return new Intl.DateTimeFormat('pt-PT', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(d)
+    .replace(',', ' ·');
+}
+
 function errorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const e = err as AxiosError<{ error?: string; message?: string }>;
@@ -94,6 +194,16 @@ function errorMessage(err: unknown): string {
   }
   if (err instanceof Error) return err.message;
   return 'Ocorreu um erro';
+}
+
+function statusLabel(status: string) {
+  return status === 'FINISHED' ? 'Terminado' : 'Agendado';
+}
+
+function statusClass(status: string) {
+  return status === 'FINISHED'
+    ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200'
+    : 'border-sky-400/25 bg-sky-400/10 text-sky-200';
 }
 
 /* =============================================================== */
@@ -105,22 +215,21 @@ export default function AdminFixtures() {
   const [fixtures, setFixtures] = useState<Fx[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
+
   const [query, setQuery] = useState('');
-  const [compFilter, setCompFilter] = useState<string>('');
-  const [sortField, setSortField] =
-    useState<'comp' | 'ronda' | 'kickoff' | ''>('');
+  const [compFilter, setCompFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [sortField, setSortField] = useState<'comp' | 'ronda' | 'kickoff' | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [statusFilter, setStatusFilter] = useState<string>('');
 
-  const [portoSuggest, setPortoSuggest] = useState<{
-    utcDate: string;
-    home: string;
-    away: string;
-    comp?: string;
-    round?: string;
-  }[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+  const [editingFixtureId, setEditingFixtureId] = useState<string | null>(null);
+
+  const [portoSuggest, setPortoSuggest] = useState<Suggestion[]>([]);
   const [loadingSuggest, setLoadingSuggest] = useState(false);
 
   const [creating, setCreating] = useState(false);
@@ -144,14 +253,17 @@ export default function AdminFixtures() {
 
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('21:00');
-
   const [homeSearch, setHomeSearch] = useState('');
   const [awaySearch, setAwaySearch] = useState('');
 
   const [players, setPlayers] = useState<Player[]>([]);
-  const [scorersByFixture, setScorersByFixture] = useState<
-    Record<string, string[]>
-  >({});
+  const [scorersByFixture, setScorersByFixture] = useState<Record<string, string[]>>({});
+  const [scorerTargetId, setScorerTargetId] = useState<string | null>(null);
+  const [scorerDraft, setScorerDraft] = useState<string[]>([]);
+  const [scorerSearch, setScorerSearch] = useState('');
+  const [scorerPosition, setScorerPosition] = useState('');
+  const [loadingScorers, setLoadingScorers] = useState(false);
+  const [savingScorers, setSavingScorers] = useState(false);
 
   useEffect(() => {
     const homeName = teams.find((t) => t.id === newFx.home_team_id)?.name ?? '';
@@ -176,6 +288,7 @@ export default function AdminFixtures() {
     errs.ko = newFx.kickoff_local ? null : 'Obrigatório';
     return errs;
   }, [newFx]);
+
   const hasCreateErrors = useMemo(
     () => Object.values(createErrors).some(Boolean),
     [createErrors],
@@ -194,13 +307,25 @@ export default function AdminFixtures() {
 
   useEffect(() => {
     if (!newDate || !newTime) return;
-    const local = joinLocal(newDate, newTime);
-    setNewFx((v) => ({ ...v, kickoff_local: local }));
+    setNewFx((v) => ({ ...v, kickoff_local: joinLocal(newDate, newTime) }));
   }, [newDate, newTime]);
+
+  useEffect(() => {
+    const modalOpen = Boolean(
+      showCreate || showFilters || editingFixtureId || scorerTargetId,
+    );
+    if (!modalOpen) return;
+
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [showCreate, showFilters, editingFixtureId, scorerTargetId]);
 
   const notify = (m: string) => {
     setMsg(m);
-    setTimeout(() => setMsg(null), 1500);
+    window.setTimeout(() => setMsg(null), 1800);
   };
 
   /* -------------------- Loaders -------------------- */
@@ -229,30 +354,30 @@ export default function AdminFixtures() {
         headers: { 'cache-control': 'no-store' },
       });
 
-      const arr: any[] = Array.isArray(data) ? data : [];
+      const arr: unknown[] = Array.isArray(data) ? data : [];
       if (!Array.isArray(data)) {
         console.warn('Expected array from /api/admin/fixtures, got:', data);
-        if (data?.error) throw new Error(data.error);
+        if ((data as { error?: string } | null)?.error) {
+          throw new Error((data as { error: string }).error);
+        }
       }
 
       const byCode = new Map(competitions.map((c) => [c.code, c.id]));
-
-      const list: Fx[] = arr.map((x: any) => ({
-        ...x,
-        competition_id:
-          x.competition_id ??
-          (x.competition_code ? byCode.get(x.competition_code) ?? null : null),
-        _hs: x.home_score ?? '',
-        _as: x.away_score ?? '',
-      }));
+      const list: Fx[] = arr.map((raw) => {
+        const x = raw as Fx;
+        return {
+          ...x,
+          competition_id:
+            x.competition_id ??
+            (x.competition_code ? byCode.get(x.competition_code) ?? null : null),
+          _hs: x.home_score ?? '',
+          _as: x.away_score ?? '',
+        };
+      });
 
       setFixtures(list);
-    } catch (e: any) {
-      const msg =
-        e?.response?.data?.error ||
-        e?.message ||
-        'Falha a carregar jogos (podes não ter permissões).';
-      alert(msg);
+    } catch (e: unknown) {
+      alert(errorMessage(e) || 'Falha a carregar jogos.');
       setFixtures([]);
     } finally {
       setLoading(false);
@@ -268,8 +393,8 @@ export default function AdminFixtures() {
       const matches: PortoAPIMatch[] = Array.isArray(data?.matches)
         ? data.matches
         : Array.isArray(data)
-        ? data
-        : [];
+          ? data
+          : [];
       const items = matches
         .map((m) => ({
           utcDate: m.utcDate || '',
@@ -304,47 +429,32 @@ export default function AdminFixtures() {
       const { data } = await adm.get<Player[]>('/api/admin/players', {
         headers: { 'cache-control': 'no-store' },
       });
-      setPlayers(data ?? []);
+      setPlayers(
+        (data ?? []).map((player) => ({
+          ...player,
+          id: String(player.id),
+        })),
+      );
     } catch {
       setPlayers([]);
     }
   }
 
-  async function loadFixtureScorers(fixtureId: string) {
+  async function loadFixtureScorers(fixtureId: string): Promise<string[]> {
     try {
       const { data } = await adm.get<{ player_id: string }[]>(
         `/api/admin/fixtures/${fixtureId}/scorers`,
         { headers: { 'cache-control': 'no-store' } },
       );
-      const ids = (Array.isArray(data) ? data : []).map((r) => r.player_id);
-      setScorersByFixture((prev) => ({ ...prev, [fixtureId]: ids }));
-    } catch {
-      setScorersByFixture((prev) => ({ ...prev, [fixtureId]: prev[fixtureId] ?? [] }));
-    }
-  }
-
-  function toggleScorer(fixtureId: string, playerId: string) {
-    setScorersByFixture((prev) => {
-      const current = prev[fixtureId] ?? [];
-      const exists = current.includes(playerId);
-      const next = exists
-        ? current.filter((id) => id !== playerId)
-        : [...current, playerId];
-      return { ...prev, [fixtureId]: next };
-    });
-  }
-
-  async function saveFixtureScorers(fixtureId: string) {
-    try {
-      const player_ids = scorersByFixture[fixtureId] ?? [];
-      await adm.put(
-        `/api/admin/fixtures/${fixtureId}/scorers`,
-        { player_ids },
-        { headers: { 'cache-control': 'no-store' } },
+      const ids = (Array.isArray(data) ? data : []).map((row) =>
+        String(row.player_id),
       );
-      notify('Marcadores atualizados ✅');
-    } catch (e) {
-      alert(errorMessage(e));
+      setScorersByFixture((prev) => ({ ...prev, [fixtureId]: ids }));
+      return ids;
+    } catch {
+      const current = scorersByFixture[fixtureId] ?? [];
+      setScorersByFixture((prev) => ({ ...prev, [fixtureId]: current }));
+      return current;
     }
   }
 
@@ -357,17 +467,13 @@ export default function AdminFixtures() {
     void loadFixtures();
     void loadPortoSuggestions();
     void loadPlayers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  /* -------------------- Porto em primeiro + defaults -------------------- */
 
   const portoTeam = useMemo(() => {
     const norm = (s: string) =>
       s.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-    return teams.find((t) => {
-      const n = norm(t.name);
-      return n.includes('porto'); // FC Porto, Futebol Clube do Porto, etc.
-    });
+    return teams.find((t) => norm(t.name).includes('porto'));
   }, [teams]);
 
   const orderedTeams = useMemo(() => {
@@ -375,12 +481,46 @@ export default function AdminFixtures() {
     return [portoTeam, ...teams.filter((t) => t.id !== portoTeam.id)];
   }, [teams, portoTeam]);
 
+  const competitionById = useMemo(
+    () => new Map(competitions.map((c) => [c.id, c])),
+    [competitions],
+  );
+
+  const competitionByCode = useMemo(
+    () => new Map(competitions.map((c) => [c.code, c])),
+    [competitions],
+  );
+
+  const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
+  const playerById = useMemo(
+    () => new Map(players.map((player) => [player.id, player])),
+    [players],
+  );
+
+  const editingFixture = useMemo(
+    () => fixtures.find((fixture) => fixture.id === editingFixtureId) ?? null,
+    [fixtures, editingFixtureId],
+  );
+
+  const scorerTargetFixture = useMemo(
+    () => fixtures.find((fixture) => fixture.id === scorerTargetId) ?? null,
+    [fixtures, scorerTargetId],
+  );
+
+  const filteredPlayers = useMemo(() => {
+    const q = scorerSearch.trim().toLowerCase();
+    return players.filter((player) => {
+      const matchesQuery = !q || player.name.toLowerCase().includes(q);
+      const matchesPosition = !scorerPosition || player.position === scorerPosition;
+      return matchesQuery && matchesPosition;
+    });
+  }, [players, scorerSearch, scorerPosition]);
 
   /* -------------------- Mutations -------------------- */
   async function updateField(id: string, patch: Partial<Fx>) {
     try {
       await adm.patch(`/api/admin/fixtures/${id}`, patch);
-      notify('Atualizado ✅');
+      notify('Alteração guardada');
       await loadFixtures();
     } catch (e) {
       alert(errorMessage(e));
@@ -393,7 +533,7 @@ export default function AdminFixtures() {
         home_score: Number(hs || 0),
         away_score: Number(as || 0),
       });
-      notify('Fechado ✅');
+      notify('Jogo terminado');
       await loadFixtures();
     } catch (e) {
       alert(errorMessage(e));
@@ -403,7 +543,7 @@ export default function AdminFixtures() {
   async function reopenFixture(id: string) {
     try {
       await adm.patch(`/api/admin/fixtures/${id}/reopen`, {});
-      notify('Reaberto ✅');
+      notify('Jogo reaberto');
       await loadFixtures();
     } catch (e) {
       alert(errorMessage(e));
@@ -415,7 +555,8 @@ export default function AdminFixtures() {
       const ok = prompt('Para confirmar a eliminação escreve: APAGAR');
       if (ok !== 'APAGAR') return;
       await adm.delete(`/api/admin/fixtures/${id}`);
-      notify('Apagado ✅');
+      setEditingFixtureId(null);
+      notify('Jogo apagado');
       await loadFixtures();
     } catch (e) {
       alert(errorMessage(e));
@@ -434,13 +575,10 @@ export default function AdminFixtures() {
         kickoff_local,
         status,
       } = newFx;
-      if (!home_team_id || !away_team_id)
-        throw new Error('Escolhe as duas equipas.');
-      if (home_team_id === away_team_id)
-        throw new Error('Equipas não podem ser iguais.');
-      if (!kickoff_local) throw new Error('Kickoff em falta.');
 
-      const kickoff_at = fromLocalDTValue(kickoff_local);
+      if (!home_team_id || !away_team_id) throw new Error('Escolhe as duas equipas.');
+      if (home_team_id === away_team_id) throw new Error('Equipas não podem ser iguais.');
+      if (!kickoff_local) throw new Error('Kickoff em falta.');
 
       await adm.post('/api/admin/fixtures', {
         competition_id: competition_id || null,
@@ -448,31 +586,30 @@ export default function AdminFixtures() {
         leg_number: leg_number ? Number(leg_number) : null,
         home_team_id,
         away_team_id,
-        kickoff_at,
+        kickoff_at: fromLocalDTValue(kickoff_local),
         status,
       });
 
-      notify('Criado ✅');
-
-      // Reset simples (sem Porto por defeito)
-setNewFx({
-  competition_id: '',
-  round_label: '',
-  leg_number: null,
-  home_team_id: '',
-  away_team_id: '',
-  kickoff_local: '',
-  status: 'SCHEDULED',
-});
-setHomeSearch('');
-setAwaySearch('');
-const now = new Date();
-const yyyy = now.getFullYear();
-const mm = String(now.getMonth() + 1).padStart(2, '0');
-const dd = String(now.getDate()).padStart(2, '0');
-setNewDate(`${yyyy}-${mm}-${dd}`);
-setNewTime('21:00');
-await loadFixtures();
+      notify('Jogo criado');
+      setShowCreate(false);
+      setNewFx({
+        competition_id: '',
+        round_label: '',
+        leg_number: null,
+        home_team_id: '',
+        away_team_id: '',
+        kickoff_local: '',
+        status: 'SCHEDULED',
+      });
+      setHomeSearch('');
+      setAwaySearch('');
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      setNewDate(`${yyyy}-${mm}-${dd}`);
+      setNewTime('21:00');
+      await loadFixtures();
     } catch (e: unknown) {
       alert(errorMessage(e) || 'Falha a criar jogo');
     } finally {
@@ -480,50 +617,88 @@ await loadFixtures();
     }
   }
 
+  function setLocalScore(id: string, key: '_hs' | '_as', raw: string) {
+    setFixtures((current) =>
+      current.map((fixture) =>
+        fixture.id === id
+          ? { ...fixture, [key]: raw === '' ? '' : Number(raw) }
+          : fixture,
+      ),
+    );
+  }
+
+  async function openFixtureEditor(fixtureId: string) {
+    setEditingFixtureId(fixtureId);
+    if (scorersByFixture[fixtureId] === undefined) {
+      await loadFixtureScorers(fixtureId);
+    }
+  }
+
+  async function openScorerEditor(fixtureId: string) {
+    setScorerTargetId(fixtureId);
+    setScorerSearch('');
+    setScorerPosition('');
+    setLoadingScorers(true);
+    const ids = await loadFixtureScorers(fixtureId);
+    setScorerDraft(ids);
+    setLoadingScorers(false);
+  }
+
+  function toggleDraftScorer(playerId: string) {
+    setScorerDraft((current) =>
+      current.includes(playerId)
+        ? current.filter((id) => id !== playerId)
+        : [...current, playerId],
+    );
+  }
+
+  async function saveScorerDraft() {
+    if (!scorerTargetId) return;
+    setSavingScorers(true);
+    try {
+      await adm.put(
+        `/api/admin/fixtures/${scorerTargetId}/scorers`,
+        { player_ids: scorerDraft },
+        { headers: { 'cache-control': 'no-store' } },
+      );
+      setScorersByFixture((prev) => ({ ...prev, [scorerTargetId]: scorerDraft }));
+      setScorerTargetId(null);
+      notify('Marcadores atualizados');
+    } catch (e) {
+      alert(errorMessage(e));
+    } finally {
+      setSavingScorers(false);
+    }
+  }
+
   /* -------------------- Filtro + Ordenação + Paginação -------------------- */
-
-  const totalCount = useMemo(() => {
+  const matchingFixtures = useMemo(() => {
     const q = query.trim().toLowerCase();
     const byIdToCode = new Map(competitions.map((c) => [c.id, c.code]));
-    return fixtures.filter((f) => {
-      const inQuery =
-        !q ||
-        (f.home_name ?? '').toLowerCase().includes(q) ||
-        (f.away_name ?? '').toLowerCase().includes(q) ||
-        f.id.toLowerCase().includes(q) ||
-        (f.round_label ?? '').toLowerCase().includes(q);
-      const fxCode =
-        f.competition_code ??
-        (f.competition_id ? byIdToCode.get(f.competition_id) ?? '' : '');
-      const inComp = !compFilter || fxCode === compFilter;
-      const inStatus =
-        !statusFilter || (f.status ?? '').toUpperCase() === statusFilter;
-      return inQuery && inComp && inStatus;
-    }).length;
-  }, [fixtures, competitions, query, compFilter, statusFilter]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const byIdToCode = new Map(competitions.map((c) => [c.id, c.code]));
-    const base = fixtures.filter((f) => {
+    return fixtures.filter((fixture) => {
       const inQuery =
         !q ||
-        (f.home_name ?? '').toLowerCase().includes(q) ||
-        (f.away_name ?? '').toLowerCase().includes(q) ||
-        f.id.toLowerCase().includes(q) ||
-        (f.round_label ?? '').toLowerCase().includes(q);
+        (fixture.home_name ?? '').toLowerCase().includes(q) ||
+        (fixture.away_name ?? '').toLowerCase().includes(q) ||
+        fixture.id.toLowerCase().includes(q) ||
+        (fixture.round_label ?? '').toLowerCase().includes(q);
       const fxCode =
-        f.competition_code ??
-        (f.competition_id ? byIdToCode.get(f.competition_id) ?? '' : '');
+        fixture.competition_code ??
+        (fixture.competition_id ? byIdToCode.get(fixture.competition_id) ?? '' : '');
       const inComp = !compFilter || fxCode === compFilter;
       const inStatus =
-        !statusFilter || (f.status ?? '').toUpperCase() === statusFilter;
+        !statusFilter || (fixture.status ?? '').toUpperCase() === statusFilter;
       return inQuery && inComp && inStatus;
     });
+  }, [fixtures, competitions, query, compFilter, statusFilter]);
 
-    const cmp = (a: Fx, b: Fx) => {
-      if (!sortField) return 0;
-      const dir = sortDir === 'asc' ? 1 : -1;
+  const sortedFixtures = useMemo(() => {
+    if (!sortField) return matchingFixtures;
+    const byIdToCode = new Map(competitions.map((c) => [c.id, c.code]));
+    const dir = sortDir === 'asc' ? 1 : -1;
+
+    return [...matchingFixtures].sort((a, b) => {
       if (sortField === 'comp') {
         const ac = (
           a.competition_code ??
@@ -535,43 +710,47 @@ await loadFixtures();
         ).toUpperCase();
         return ac.localeCompare(bc) * dir;
       }
+
       if (sortField === 'ronda') {
-        const norm = (s?: string | null) => (s ?? '').toUpperCase();
-        const ar = norm(a.round_label);
-        const br = norm(b.round_label);
+        const ar = (a.round_label ?? '').toUpperCase();
+        const br = (b.round_label ?? '').toUpperCase();
         const aj = /^J(\d+)$/i.exec(ar);
         const bj = /^J(\d+)$/i.exec(br);
         if (aj && bj) return (Number(aj[1]) - Number(bj[1])) * dir;
         return ar.localeCompare(br) * dir;
       }
-      if (sortField === 'kickoff') {
-        const at = new Date(a.kickoff_at).getTime();
-        const bt = new Date(b.kickoff_at).getTime();
-        return (at - bt) * dir;
-      }
-      return 0;
-    };
 
-    const sorted = sortField ? [...base].sort(cmp) : base;
+      return (
+        (new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime()) * dir
+      );
+    });
+  }, [matchingFixtures, competitions, sortField, sortDir]);
 
+  const totalCount = sortedFixtures.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const filtered = useMemo(() => {
     const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    return sorted.slice(start, end);
-  }, [
-    fixtures,
-    competitions,
-    query,
-    compFilter,
-    statusFilter,
-    sortField,
-    sortDir,
-    page,
-    pageSize,
-  ]);
+    return sortedFixtures.slice(start, start + pageSize);
+  }, [sortedFixtures, page, pageSize]);
 
   useEffect(() => {
     setPage(1);
   }, [query, compFilter, statusFilter, sortField, sortDir]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const activeFilterCount = Number(Boolean(compFilter)) + Number(Boolean(statusFilter)) + Number(Boolean(sortField));
+
+  function clearFilters() {
+    setQuery('');
+    setCompFilter('');
+    setStatusFilter('');
+    setSortField('');
+    setSortDir('asc');
+    setPage(1);
+  }
 
   function findTeamIdByName(name: string): string {
     const norm = (s: string) =>
@@ -579,770 +758,1009 @@ await loadFixtures();
     const n = norm(name);
     const exact = teams.find((t) => norm(t.name) === n)?.id;
     if (exact) return exact;
-    const contains = teams.find(
-      (t) => norm(t.name).includes(n) || n.includes(norm(t.name)),
-    )?.id;
-    return contains || '';
+    return (
+      teams.find((t) => norm(t.name).includes(n) || n.includes(norm(t.name)))?.id ||
+      ''
+    );
   }
 
-  function prefillFromSuggestion(s: {
-    utcDate: string;
-    home: string;
-    away: string;
-    comp?: string;
-    round?: string;
-  }) {
-    const home_team_id = findTeamIdByName(s.home);
-    const away_team_id = findTeamIdByName(s.away);
-    const kickoff_local_iso = toLocalDTValue(s.utcDate);
-    const { date, time } = splitLocal(kickoff_local_iso);
-    setNewFx((v) => ({
-      ...v,
-      competition_id: competitions.find((c) => c.code === 'LP')?.id || '',
-      round_label: s.round ? `J${String(s.round)}`.toUpperCase().slice(0, 3) : '',
+  function prefillFromSuggestion(suggestion: Suggestion) {
+    const kickoffLocal = toLocalDTValue(suggestion.utcDate);
+    const { date, time } = splitLocal(kickoffLocal);
+    const matchedCompetition =
+      competitionByCode.get(suggestion.comp ?? '') ?? competitionByCode.get('LP');
+
+    setNewFx((current) => ({
+      ...current,
+      competition_id: matchedCompetition?.id ?? '',
+      round_label: suggestion.round
+        ? `J${String(suggestion.round)}`.toUpperCase().slice(0, 3)
+        : '',
       leg_number: null,
-      home_team_id,
-      away_team_id,
-      kickoff_local: kickoff_local_iso,
+      home_team_id: findTeamIdByName(suggestion.home),
+      away_team_id: findTeamIdByName(suggestion.away),
+      kickoff_local: kickoffLocal,
       status: 'SCHEDULED',
     }));
-    setHomeSearch(s.home);
-    setAwaySearch(s.away);
+    setHomeSearch(suggestion.home);
+    setAwaySearch(suggestion.away);
     setNewDate(date);
     setNewTime(time || '21:00');
+    setShowCreate(true);
   }
+
+  const inputClass =
+    'w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-400/55 focus:ring-2 focus:ring-sky-400/10 disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
     <AdminGate>
-      <main className="max-w-6xl mx-auto p-6 space-y-4">
+      <main className="mx-auto max-w-6xl space-y-5 px-4 py-5 md:px-6 md:py-8">
         <title>+Predictor - Admin Jogos</title>
-        <h1 className="text-2xl font-semibold">Backoffice - Jogos</h1>
 
         <datalist id="teams-list">
-          {teams.map((t) => (
-            <option key={t.id} value={t.name} />
+          {teams.map((team) => (
+            <option key={team.id} value={team.name} />
           ))}
         </datalist>
 
-        {/* Sugestões */}
-        <div className="rounded-2xl border border-white/10 p-3 space-y-2 bg-black/30">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-medium">
-              Sugestões - Próximos jogos do FC Porto
-            </h2>
-            <button
-              className="rounded-full bg-white/10 px-3 py-1 text-sm hover:bg-white/15"
-              onClick={() => void loadPortoSuggestions()}
-              disabled={loadingSuggest}
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <Link
+              href="/admin"
+              className="mb-2 inline-flex items-center gap-1 text-sm text-sky-300 hover:text-sky-200"
             >
-              {loadingSuggest ? 'A atualizar…' : 'Atualizar'}
+              ← Backoffice
+            </Link>
+            <h1 className="text-3xl font-semibold tracking-tight text-white">Jogos</h1>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-white/55">
+              Gere calendário, resultados e marcadores sem abrir todos os jogos ao mesmo tempo.
+            </p>
+          </div>
+
+          <div className="flex w-full gap-2 sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setShowSuggestions((value) => !value)}
+              className="flex-1 rounded-xl border border-white/12 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 sm:flex-none"
+            >
+              Sugestões{portoSuggest.length ? ` · ${portoSuggest.length}` : ''}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="flex-1 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-sky-950/35 hover:bg-sky-400 sm:flex-none"
+            >
+              + Novo jogo
             </button>
           </div>
-          {portoSuggest.length === 0 ? (
-            <div className="opacity-70 text-sm">
-              Sem sugestões disponíveis no momento.
-            </div>
-          ) : (
-            <ul className="grid md:grid-cols-2 gap-2">
-              {portoSuggest.map((s, i) => {
-                const local = splitLocal(toLocalDTValue(s.utcDate));
-                return (
-                  <li
-                    key={i}
-                    className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3 py-2 gap-3"
-                  >
-                    <div className="space-y-0.5 text-sm">
-                      <div className="font-medium">
-                        {s.home} vs {s.away}
-                      </div>
-                      <div className="text-xs opacity-70">
-                        {local.date} · {local.time || '--:--'}{' '}
-                        {s.comp ? `· ${s.comp}` : ''}{' '}
-                        {s.round ? `· MD ${s.round}` : ''}
-                      </div>
-                    </div>
-                    <button
-                      className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/15 whitespace-nowrap"
-                      onClick={() => prefillFromSuggestion(s)}
-                    >
-                      Preencher
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+        </header>
 
-        {/* Criar novo jogo - card no estilo dos fixtures */}
-        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-medium">Criar novo jogo</h2>
-            {hasCreateErrors && (
-              <span className="text-xs text-amber-300">
-                Preenche os campos obrigatórios
-              </span>
+        {showSuggestions ? (
+          <section className="rounded-2xl border border-white/10 bg-black/20 p-3 md:p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-white">Próximos jogos do FC Porto</h2>
+                <p className="text-xs text-white/45">Usa uma sugestão para pré-preencher o novo jogo.</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70 hover:bg-white/10"
+                onClick={() => void loadPortoSuggestions()}
+                disabled={loadingSuggest}
+              >
+                {loadingSuggest ? 'A atualizar…' : 'Atualizar'}
+              </button>
+            </div>
+
+            {portoSuggest.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 px-4 py-5 text-sm text-white/50">
+                Sem sugestões disponíveis neste momento.
+              </div>
+            ) : (
+              <div className="flex snap-x gap-3 overflow-x-auto pb-1">
+                {portoSuggest.map((suggestion, index) => {
+                  const local = splitLocal(toLocalDTValue(suggestion.utcDate));
+                  return (
+                    <article
+                      key={`${suggestion.utcDate}-${index}`}
+                      className="min-w-[270px] snap-start rounded-xl border border-white/10 bg-white/[0.035] p-3 md:min-w-[320px]"
+                    >
+                      <div className="text-sm font-semibold text-white">
+                        {suggestion.home} vs {suggestion.away}
+                      </div>
+                      <div className="mt-1 text-xs text-white/50">
+                        {local.date} · {local.time || '--:--'}
+                        {suggestion.comp ? ` · ${suggestion.comp}` : ''}
+                        {suggestion.round ? ` · J${suggestion.round}` : ''}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => prefillFromSuggestion(suggestion)}
+                        className="mt-3 w-full rounded-lg bg-white/8 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/12"
+                      >
+                        Usar sugestão
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
             )}
+          </section>
+        ) : null}
+
+        <section className="space-y-3">
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
+              <span className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-white/35">⌕</span>
+              <input
+                className="w-full rounded-xl border border-white/10 bg-black/20 py-2.5 pl-9 pr-3 text-sm text-white outline-none focus:border-sky-400/45"
+                placeholder="Pesquisar equipa, ronda ou ID…"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowFilters(true)}
+              className="relative shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10"
+            >
+              Filtros
+              {activeFilterCount ? (
+                <span className="ml-2 inline-grid h-5 min-w-5 place-items-center rounded-full bg-sky-400 px-1 text-[11px] font-bold text-slate-950">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </button>
           </div>
 
-          {/* Linha 1: Comp / Ronda / Mão / Status */}
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,1fr)]">
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Comp *
-              </label>
-              <select
-                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
-                value={newFx.competition_id ?? ''}
-                onChange={(e) =>
-                  setNewFx((v) => ({ ...v, competition_id: e.target.value || '' }))
-                }
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-auto text-sm text-white/50">
+              {totalCount} {totalCount === 1 ? 'jogo' : 'jogos'}
+            </span>
+
+            {compFilter ? (
+              <button
+                type="button"
+                onClick={() => setCompFilter('')}
+                className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs text-sky-100"
               >
-                <option value="">Selecionar…</option>
-                {competitions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} - {c.name}
+                {compFilter} ×
+              </button>
+            ) : null}
+            {statusFilter ? (
+              <button
+                type="button"
+                onClick={() => setStatusFilter('')}
+                className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs text-sky-100"
+              >
+                {statusLabel(statusFilter)} ×
+              </button>
+            ) : null}
+            {sortField ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSortField('');
+                  setSortDir('asc');
+                }}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/65"
+              >
+                Ordenação ×
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        {loading ? (
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">
+            A carregar jogos…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/12 bg-black/15 px-5 py-10 text-center">
+            <div className="text-base font-semibold text-white">Sem jogos para mostrar</div>
+            <p className="mt-1 text-sm text-white/50">Altera os filtros ou cria um novo jogo.</p>
+          </div>
+        ) : (
+          <section className="space-y-2.5">
+            {filtered.map((fixture) => {
+              const competition = fixture.competition_id
+                ? competitionById.get(fixture.competition_id)
+                : fixture.competition_code
+                  ? competitionByCode.get(fixture.competition_code)
+                  : undefined;
+              const homeName = fixture.home_name ?? teamById.get(fixture.home_team_id)?.name ?? 'Casa';
+              const awayName = fixture.away_name ?? teamById.get(fixture.away_team_id)?.name ?? 'Visitante';
+              const isFinished = fixture.status === 'FINISHED';
+
+              return (
+                <article
+                  key={fixture.id}
+                  className="rounded-2xl border border-white/10 bg-black/20 p-3 transition hover:border-white/18 md:p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/75">
+                          {competition?.code ?? fixture.competition_code ?? '—'}
+                          {fixture.round_label ? ` · ${fixture.round_label}` : ''}
+                        </span>
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass(
+                            fixture.status,
+                          )}`}
+                        >
+                          {statusLabel(fixture.status)}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                        <div className="min-w-0 text-left">
+                          <div className="truncate text-sm font-semibold text-white md:text-base">{homeName}</div>
+                        </div>
+                        <div className="text-center">
+                          {isFinished ? (
+                            <div className="rounded-lg bg-white/5 px-3 py-1.5 text-base font-bold text-white">
+                              {fixture.home_score ?? 0}–{fixture.away_score ?? 0}
+                            </div>
+                          ) : (
+                            <span className="text-xs font-semibold uppercase tracking-wider text-white/35">vs</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 text-right">
+                          <div className="truncate text-sm font-semibold text-white md:text-base">{awayName}</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 text-xs text-white/50">
+                        {fixtureDateLabel(fixture.kickoff_at)}
+                        {fixture.leg_number ? ` · ${fixture.leg_number}.ª mão` : ''}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void openFixtureEditor(fixture.id)}
+                      className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+        )}
+
+        {totalCount > 0 ? (
+          <nav className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/15 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-sm text-white/50">
+              Página {page} de {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75 disabled:opacity-35 sm:flex-none"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page <= 1}
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75 disabled:opacity-35 sm:flex-none"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page >= totalPages}
+              >
+                Seguinte
+              </button>
+              <select
+                className="rounded-lg border border-white/10 bg-[#08132f] px-2 py-2 text-sm text-white/70"
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value) || 20);
+                  setPage(1);
+                }}
+              >
+                {[10, 20, 50, 100].map((size) => (
+                  <option key={size} value={size}>
+                    {size}/pág.
                   </option>
                 ))}
               </select>
             </div>
+          </nav>
+        ) : null}
 
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Ronda (ex: J11) *
-              </label>
-              <input
-                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm uppercase"
-                maxLength={3}
-                value={newFx.round_label ?? ''}
-                onChange={(e) =>
-                  setNewFx((v) => ({
-                    ...v,
-                    round_label: e.target.value.toUpperCase(),
-                  }))
-                }
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Mão
-              </label>
-              <select
-                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
-                value={newFx.leg_number ?? ''}
-                onChange={(e) =>
-                  setNewFx((v) => ({
-                    ...v,
-                    leg_number: e.target.value === '' ? null : Number(e.target.value),
-                  }))
-                }
+        {/* Criar jogo */}
+        <Drawer
+          open={showCreate}
+          onClose={() => setShowCreate(false)}
+          title="Novo jogo"
+          description="Preenche apenas os dados essenciais. O jogo fica imediatamente disponível no Backoffice."
+          footer={
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="flex-1 rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm font-medium text-white/75 hover:bg-white/10"
               >
-                <option value="">-</option>
-                <option value="1">1ª mão</option>
-                <option value="2">2ª mão</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Status
-              </label>
-              <select
-                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
-                value={newFx.status}
-                onChange={(e) =>
-                  setNewFx((v) => ({
-                    ...v,
-                    status: e.target.value as 'SCHEDULED' | 'FINISHED',
-                  }))
-                }
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void createFixture()}
+                disabled={creating || hasCreateErrors}
+                className="flex-[1.4] rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <option value="SCHEDULED">SCHEDULED</option>
-                <option value="FINISHED">FINISHED</option>
-              </select>
+                {creating ? 'A criar…' : 'Criar jogo'}
+              </button>
             </div>
-          </div>
-
-          {/* Linha 2: Equipas */}
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Equipa da casa *
-              </label>
-              <input
-                list="teams-list"
-                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
-                placeholder="Começa a escrever..."
-                value={homeSearch}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setHomeSearch(val);
-                  const t = teams.find(
-                    (tm) => tm.name.toLowerCase() === val.toLowerCase()
-                  );
-                  setNewFx((v) => ({ ...v, home_team_id: t?.id ?? '' }));
-                }}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Equipa visitante *
-              </label>
-              <input
-                list="teams-list"
-                className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm"
-                placeholder="Começa a escrever..."
-                value={awaySearch}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setAwaySearch(val);
-                  const t = teams.find(
-                    (tm) => tm.name.toLowerCase() === val.toLowerCase()
-                  );
-                  setNewFx((v) => ({ ...v, away_team_id: t?.id ?? '' }));
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Linha 3: Kickoff + botão */}
-          <div className="flex flex-wrap items-end gap-3 justify-between">
-            <div className="space-y-1">
-              <label className="text-xs uppercase tracking-wide opacity-70">
-                Kickoff (local) *
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  className="w-40 rounded-md border border-white/20 bg-white text-slate-900 px-2 py-1.5 text-sm"
-                  value={newDate}
-                  onChange={(e) => setNewDate(e.target.value)}
-                />
-                <input
-                  type="time"
-                  step={60}
-                  className="w-24 rounded-md border border-white/20 bg-white text-slate-900 px-2 py-1.5 text-sm"
-                  value={newTime}
-                  onChange={(e) => setNewTime(e.target.value)}
-                />
+          }
+        >
+          <div className="space-y-5">
+            {hasCreateErrors ? (
+              <div className="rounded-xl border border-amber-300/20 bg-amber-300/8 px-3 py-2 text-sm text-amber-100/80">
+                Preenche competição, ronda, equipas e kickoff.
               </div>
-            </div>
+            ) : null}
 
-            <button
-              onClick={() => void createFixture()}
-              disabled={creating || hasCreateErrors}
-              className="inline-flex items-center justify-center rounded-full bg-emerald-500/85 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-emerald-900/40 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-500"
-            >
-              {creating ? 'A criar…' : 'Criar jogo'}
-            </button>
-          </div>
-        </div>
-
-        {/* Filtros topo */}
-        <div className="flex flex-wrap items-center gap-2 bg-card/15 border border-white/10 rounded-2xl p-3">
-          <Link
-            href="/admin/teams"
-            className="rounded bg-white/10 px-3 py-2 hover:bg-white/15 text-sm"
-          >
-            Equipas
-          </Link>
-          <select
-            className="rounded border border-white/10 bg-black/20 px-2 py-1 text-sm"
-            value={compFilter}
-            onChange={(e) => setCompFilter(e.target.value)}
-            title="Filtrar por competição"
-          >
-            <option value="">Todas as competições</option>
-            {Array.from(new Set(competitions.map((c) => c.code))).map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </select>
-          <select
-            className="rounded border border-white/10 bg-black/20 px-2 py-1 text-sm"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value.toUpperCase())}
-            title="Filtrar por status"
-          >
-            <option value="">Todos os status</option>
-            <option value="SCHEDULED">SCHEDULED</option>
-            <option value="FINISHED">FINISHED</option>
-          </select>
-
-          {/* Controlo simples de ordenação */}
-          <div className="flex items-center gap-1 text-xs text-white/70 ml-1">
-            <span>Ordenar por:</span>
-            <button
-              type="button"
-              className={
-                'rounded-full px-2 py-1 hover:bg-white/10 ' +
-                (sortField === 'comp' ? 'bg-white/10' : '')
-              }
-              onClick={() => {
-                setSortField(() => 'comp');
-                setSortDir((d) =>
-                  sortField === 'comp' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
-                );
-              }}
-            >
-              Comp {sortField === 'comp' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-            </button>
-            <button
-              type="button"
-              className={
-                'rounded-full px-2 py-1 hover:bg-white/10 ' +
-                (sortField === 'ronda' ? 'bg-white/10' : '')
-              }
-              onClick={() => {
-                setSortField(() => 'ronda');
-                setSortDir((d) =>
-                  sortField === 'ronda' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
-                );
-              }}
-            >
-              Ronda {sortField === 'ronda' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-            </button>
-            <button
-              type="button"
-              className={
-                'rounded-full px-2 py-1 hover:bg-white/10 ' +
-                (sortField === 'kickoff' ? 'bg-white/10' : '')
-              }
-              onClick={() => {
-                setSortField(() => 'kickoff');
-                setSortDir((d) =>
-                  sortField === 'kickoff' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'
-                );
-              }}
-            >
-              Kickoff{' '}
-              {sortField === 'kickoff' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-            </button>
-          </div>
-
-          <div className="flex-1" />
-          <input
-            className="rounded border border-white/10 bg-black/20 px-3 py-2 w-full max-w-xs text-sm"
-            placeholder="Pesquisar equipa / id / ronda..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <button
-            className="rounded bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
-            onClick={() => {
-              setQuery('');
-              setCompFilter('');
-              setSortField('');
-              setSortDir('asc');
-              setPage(1);
-            }}
-            title="Limpar filtros"
-          >
-            Limpar filtros
-          </button>
-        </div>
-
-        {/* Lista de jogos em cards */}
-        {loading ? (
-          <div className="opacity-70">A carregar…</div>
-        ) : (
-          <div className="space-y-3">
-            {filtered.length === 0 && (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm opacity-70">
-                Sem jogos para mostrar.
-              </div>
-            )}
-
-            {filtered.map((f) => {
-              const isFinished = f.status === 'FINISHED';
-              const lockCls = isFinished ? 'opacity-60 cursor-not-allowed' : '';
-              const resultOK =
-                f._hs !== '' &&
-                f._as !== '' &&
-                !Number.isNaN(Number(f._hs)) &&
-                !Number.isNaN(Number(f._as));
-
-              const local = splitLocal(toLocalDTValue(f.kickoff_at));
-              const selectedScorers = scorersByFixture[f.id] ?? [];
-
-              return (
-                <div
-                  key={f.id}
-                  className="rounded-2xl border border-white/12 bg-black/25 p-4 space-y-3"
-                >
-                  {/* Linha 1 topo: comp / ronda / mão / status */}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex flex-wrap gap-2">
-                      {/* Comp */}
-                      <div className="space-y-1">
-                        <label className="text-[11px] uppercase tracking-wide opacity-70">
-                          Comp
-                        </label>
-                        <select
-                          className={`min-w-[72px] rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs ${lockCls}`}
-                          value={f.competition_id ?? ''}
-                          disabled={isFinished}
-                          onChange={(e) =>
-                            updateField(f.id, {
-                              competition_id: e.target.value || null,
-                            })
-                          }
-                        >
-                          <option value="">-</option>
-                          {competitions.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.code}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Ronda */}
-                      <div className="space-y-1">
-                        <label className="text-[11px] uppercase tracking-wide opacity-70">
-                          Ronda
-                        </label>
-                        <input
-                          className={`w-16 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs uppercase ${lockCls}`}
-                          defaultValue={f.round_label ?? ''}
-                          maxLength={3}
-                          disabled={isFinished}
-                          onBlur={(e) =>
-                            updateField(f.id, {
-                              round_label: e.target.value
-                                ? e.target.value.toUpperCase().slice(0, 3)
-                                : null,
-                            })
-                          }
-                        />
-                      </div>
-
-                      {/* Mão */}
-                      <div className="space-y-1">
-                        <label className="text-[11px] uppercase tracking-wide opacity-70">
-                          Mão
-                        </label>
-                        <select
-                          className={`w-16 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-center ${lockCls}`}
-                          value={f.leg_number ?? ''}
-                          disabled={isFinished}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            updateField(f.id, {
-                              leg_number: v === '' ? null : Number(v),
-                            });
-                          }}
-                        >
-                          <option value="">-</option>
-                          <option value="1">1</option>
-                          <option value="2">2</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex-1" />
-
-                    {/* Status + ações rápidas topo */}
-                    <div className="flex items-end gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[11px] uppercase tracking-wide opacity-70">
-                          Status
-                        </label>
-                        <select
-                          className={`min-w-[130px] rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs ${
-                            isFinished ? 'opacity-60 cursor-not-allowed' : ''
-                          }`}
-                          value={f.status}
-                          disabled={isFinished}
-                          onChange={async (e) => {
-                            const v = e.target.value as Fx['status'];
-                            if (v === 'FINISHED') {
-                              const hs = f._hs,
-                                as = f._as;
-                              if (!resultOK) {
-                                e.currentTarget.value = f.status;
-                                alert(
-                                  'Para fechar um jogo tens de preencher H e A.'
-                                );
-                                return;
-                              }
-                              await finishFixture(f.id, Number(hs), Number(as));
-                              return;
-                            }
-                            await updateField(f.id, { status: v });
-                          }}
-                        >
-                          <option value="SCHEDULED">SCHEDULED</option>
-                          <option value="FINISHED">FINISHED</option>
-                        </select>
-                      </div>
-
-                      {/* Botão reabrir + apagar */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          title="Reabrir"
-                          className={`rounded-full px-2 py-1 text-xs hover:bg-white/10 ${
-                            !isFinished ? 'opacity-40 cursor-not-allowed' : ''
-                          }`}
-                          disabled={!isFinished}
-                          onClick={() => reopenFixture(f.id)}
-                        >
-                          ↺
-                        </button>
-                        <button
-                          title="Apagar"
-                          className="rounded-full px-2 py-1 text-xs hover:bg-white/10"
-                          onClick={() => deleteFixture(f.id)}
-                        >
-                          🗑
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Linha 2: equipas */}
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-1">
-                      <label className="text-[11px] uppercase tracking-wide opacity-70">
-                        Equipa da casa
-                      </label>
-                      <select
-                        className={`w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm ${lockCls}`}
-                        value={f.home_team_id}
-                        disabled={isFinished}
-                        onChange={(e) =>
-                          updateField(f.id, { home_team_id: e.target.value })
-                        }
-                      >
-                        {teams.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] uppercase tracking-wide opacity-70">
-                        Equipa visitante
-                      </label>
-                      <select
-                        className={`w-full rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-sm ${lockCls}`}
-                        value={f.away_team_id}
-                        disabled={isFinished}
-                        onChange={(e) =>
-                          updateField(f.id, { away_team_id: e.target.value })
-                        }
-                      >
-                        {teams.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Linha 3: kickoff + resultado */}
-                  <div className="flex flex-wrap items-end gap-3 justify-between">
-                    {/* Kickoff */}
-                    <div className="space-y-1">
-                      <label className="text-[11px] uppercase tracking-wide opacity-70">
-                        Kickoff (local)
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="date"
-                          defaultValue={local.date}
-                          disabled={isFinished}
-                          className={`w-40 rounded-md border border-white/20 bg-white text-slate-900 px-2 py-1.5 text-sm ${lockCls}`}
-                          onBlur={(e) => {
-                            const date = e.currentTarget.value || local.date;
-                            const time =
-                              (
-                                e.currentTarget.parentElement?.querySelector(
-                                  'input[type="time"]'
-                                ) as HTMLInputElement
-                              )?.value || local.time;
-                            const localDT = joinLocal(date, time);
-                            const utc = fromLocalDTValue(localDT);
-                            if (utc && utc !== f.kickoff_at)
-                              updateField(f.id, { kickoff_at: utc });
-                          }}
-                        />
-                        <input
-                          type="time"
-                          step={60}
-                          defaultValue={local.time}
-                          disabled={isFinished}
-                          className={`w-24 rounded-md border border-white/20 bg-white text-slate-900 px-2 py-1.5 text-sm ${lockCls}`}
-                          onBlur={(e) => {
-                            const time = e.currentTarget.value || local.time;
-                            const date =
-                              (
-                                e.currentTarget.parentElement?.querySelector(
-                                  'input[type="date"]'
-                                ) as HTMLInputElement
-                              )?.value || local.date;
-                            const localDT = joinLocal(date, time);
-                            const utc = fromLocalDTValue(localDT);
-                            if (utc && utc !== f.kickoff_at)
-                              updateField(f.id, { kickoff_at: utc });
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Resultado */}
-                    <div className="space-y-1">
-                      <label className="text-[11px] uppercase tracking-wide opacity-70">
-                        Resultado
-                      </label>
-                      <div className="flex items-center gap-1">
-                        <input
-                          className={`w-14 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-center text-sm ${lockCls}`}
-                          placeholder="H"
-                          defaultValue={f._hs === '' ? '' : String(f._hs ?? '')}
-                          disabled={isFinished}
-                          onChange={(e) => {
-                            f._hs =
-                              e.target.value === '' ? '' : Number(e.target.value);
-                          }}
-                          onBlur={async (e) => {
-                            const v = e.target.value;
-                            const val = v === '' ? null : Number(v);
-                            if (val === null || Number.isNaN(val)) return;
-                            await updateField(f.id, { home_score: val });
-                          }}
-                        />
-                        <span className="opacity-60 text-sm px-1">–</span>
-                        <input
-                          className={`w-14 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-center text-sm ${lockCls}`}
-                          placeholder="A"
-                          defaultValue={f._as === '' ? '' : String(f._as ?? '')}
-                          disabled={isFinished}
-                          onChange={(e) => {
-                            f._as =
-                              e.target.value === '' ? '' : Number(e.target.value);
-                          }}
-                          onBlur={async (e) => {
-                            const v = e.target.value;
-                            const val = v === '' ? null : Number(v);
-                            if (val === null || Number.isNaN(val)) return;
-                            await updateField(f.id, { away_score: val });
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Linha 4: Marcadores FC Porto */}
-                  <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] uppercase tracking-wide opacity-70">
-                        Marcadores FC Porto
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className="rounded-full bg-white/5 px-3 py-1 text-[11px] hover:bg-white/10"
-                          onClick={() => void loadFixtureScorers(f.id)}
-                        >
-                          Carregar
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-full bg-emerald-500/80 px-3 py-1 text-[11px] hover:bg-emerald-500"
-                          onClick={() => void saveFixtureScorers(f.id)}
-                        >
-                          Guardar marcadores
-                        </button>
-                      </div>
-                    </div>
-
-                    {players.length === 0 ? (
-                      <div className="text-xs opacity-60">
-                        Sem jogadores configurados para o FC Porto.
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {players.map((p) => {
-                          const active = selectedScorers.includes(p.id);
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              className={
-                                'rounded-full border px-2 py-1 text-[11px] flex items-center gap-1 ' +
-                                (active
-                                  ? 'bg-sky-500/80 border-sky-500 text-white'
-                                  : 'bg-black/40 border-white/20 text-white/80 hover:bg-white/5')
-                              }
-                              onClick={() => toggleScorer(f.id, p.id)}
-                            >
-                              <span className="text-[9px] uppercase opacity-80">
-                                {p.position}
-                              </span>
-                              <span>{p.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Paginação */}
-            {filtered.length > 0 && (
-              <div className="flex items-center justify-end gap-2 mt-2">
-                <span className="opacity-70 text-sm">
-                  Página {page} de {Math.max(1, Math.ceil(totalCount / pageSize))}
-                </span>
-                <button
-                  className="rounded bg-white/10 px-3 py-1 text-sm hover:bg-white/15 disabled:opacity-50"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                >
-                  Anterior
-                </button>
-                <button
-                  className="rounded bg-white/10 px-3 py-1 text-sm hover:bg-white/15 disabled:opacity-50"
-                  onClick={() =>
-                    setPage((p) => (p * pageSize < totalCount ? p + 1 : p))
-                  }
-                  disabled={page * pageSize >= totalCount}
-                >
-                  Seguinte
-                </button>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Competição *">
                 <select
-                  className="rounded border border-white/10 bg-black/20 px-2 py-1 text-sm"
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value) || 20);
-                    setPage(1);
-                  }}
-                  title="Itens por página"
+                  className={inputClass}
+                  value={newFx.competition_id ?? ''}
+                  onChange={(event) =>
+                    setNewFx((current) => ({
+                      ...current,
+                      competition_id: event.target.value || '',
+                    }))
+                  }
                 >
-                  {[10, 20, 50, 100].map((n) => (
-                    <option key={n} value={n}>
-                      {n}/pág
+                  <option value="">Selecionar…</option>
+                  {competitions.map((competition) => (
+                    <option key={competition.id} value={competition.id}>
+                      {competition.code} — {competition.name}
                     </option>
                   ))}
                 </select>
+              </Field>
+
+              <Field label="Ronda *" hint="Ex.: J1, F, SF">
+                <input
+                  className={`${inputClass} uppercase`}
+                  maxLength={3}
+                  value={newFx.round_label ?? ''}
+                  onChange={(event) =>
+                    setNewFx((current) => ({
+                      ...current,
+                      round_label: event.target.value.toUpperCase(),
+                    }))
+                  }
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Equipa da casa *">
+                <input
+                  list="teams-list"
+                  className={inputClass}
+                  placeholder="Começa a escrever…"
+                  value={homeSearch}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setHomeSearch(value);
+                    const team = teams.find(
+                      (item) => item.name.toLowerCase() === value.toLowerCase(),
+                    );
+                    setNewFx((current) => ({
+                      ...current,
+                      home_team_id: team?.id ?? '',
+                    }));
+                  }}
+                />
+              </Field>
+
+              <Field label="Equipa visitante *">
+                <input
+                  list="teams-list"
+                  className={inputClass}
+                  placeholder="Começa a escrever…"
+                  value={awaySearch}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setAwaySearch(value);
+                    const team = teams.find(
+                      (item) => item.name.toLowerCase() === value.toLowerCase(),
+                    );
+                    setNewFx((current) => ({
+                      ...current,
+                      away_team_id: team?.id ?? '',
+                    }));
+                  }}
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Data *">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={newDate}
+                  onChange={(event) => setNewDate(event.target.value)}
+                />
+              </Field>
+              <Field label="Hora *">
+                <input
+                  type="time"
+                  step={60}
+                  className={inputClass}
+                  value={newTime}
+                  onChange={(event) => setNewTime(event.target.value)}
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Mão">
+                <select
+                  className={inputClass}
+                  value={newFx.leg_number ?? ''}
+                  onChange={(event) =>
+                    setNewFx((current) => ({
+                      ...current,
+                      leg_number:
+                        event.target.value === '' ? null : Number(event.target.value),
+                    }))
+                  }
+                >
+                  <option value="">Sem mão</option>
+                  <option value="1">1.ª mão</option>
+                  <option value="2">2.ª mão</option>
+                </select>
+              </Field>
+              <Field label="Estado">
+                <select
+                  className={inputClass}
+                  value={newFx.status}
+                  onChange={(event) =>
+                    setNewFx((current) => ({
+                      ...current,
+                      status: event.target.value as 'SCHEDULED' | 'FINISHED',
+                    }))
+                  }
+                >
+                  <option value="SCHEDULED">Agendado</option>
+                  <option value="FINISHED">Terminado</option>
+                </select>
+              </Field>
+            </div>
+          </div>
+        </Drawer>
+
+        {/* Filtros */}
+        <Drawer
+          open={showFilters}
+          onClose={() => setShowFilters(false)}
+          title="Filtros"
+          description="Refina a lista sem ocupar espaço no ecrã principal."
+          widthClass="max-w-md"
+          footer={
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="flex-1 rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm text-white/75"
+              >
+                Limpar
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFilters(false)}
+                className="flex-1 rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white"
+              >
+                Ver {totalCount} {totalCount === 1 ? 'jogo' : 'jogos'}
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-5">
+            <Field label="Competição">
+              <select
+                className={inputClass}
+                value={compFilter}
+                onChange={(event) => setCompFilter(event.target.value)}
+              >
+                <option value="">Todas as competições</option>
+                {competitions.map((competition) => (
+                  <option key={competition.id} value={competition.code}>
+                    {competition.code} — {competition.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Estado">
+              <select
+                className={inputClass}
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="">Todos os estados</option>
+                <option value="SCHEDULED">Agendados</option>
+                <option value="FINISHED">Terminados</option>
+              </select>
+            </Field>
+
+            <Field label="Ordenação">
+              <select
+                className={inputClass}
+                value={sortField ? `${sortField}:${sortDir}` : ''}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (!value) {
+                    setSortField('');
+                    setSortDir('asc');
+                    return;
+                  }
+                  const [field, direction] = value.split(':') as [
+                    'comp' | 'ronda' | 'kickoff',
+                    'asc' | 'desc',
+                  ];
+                  setSortField(field);
+                  setSortDir(direction);
+                }}
+              >
+                <option value="">Ordem atual</option>
+                <option value="kickoff:asc">Kickoff — mais próximo</option>
+                <option value="kickoff:desc">Kickoff — mais distante</option>
+                <option value="comp:asc">Competição — A a Z</option>
+                <option value="ronda:asc">Ronda — crescente</option>
+                <option value="ronda:desc">Ronda — decrescente</option>
+              </select>
+            </Field>
+
+            <Link
+              href="/admin/teams"
+              className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/75 hover:bg-white/10"
+            >
+              Gerir equipas <span>→</span>
+            </Link>
+          </div>
+        </Drawer>
+
+        {/* Editar jogo */}
+        <Drawer
+          open={Boolean(editingFixture)}
+          onClose={() => setEditingFixtureId(null)}
+          title={
+            editingFixture
+              ? `${editingFixture.home_name ?? teamById.get(editingFixture.home_team_id)?.name ?? 'Casa'} vs ${editingFixture.away_name ?? teamById.get(editingFixture.away_team_id)?.name ?? 'Visitante'}`
+              : 'Editar jogo'
+          }
+          description={editingFixture ? `${fixtureDateLabel(editingFixture.kickoff_at)} · As alterações são guardadas automaticamente.` : undefined}
+          footer={
+            <button
+              type="button"
+              onClick={() => setEditingFixtureId(null)}
+              className="w-full rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white"
+            >
+              Concluir edição
+            </button>
+          }
+        >
+          {editingFixture ? (() => {
+            const fixture = editingFixture;
+            const isFinished = fixture.status === 'FINISHED';
+            const lockClass = isFinished ? 'opacity-55' : '';
+            const resultOK =
+              fixture._hs !== '' &&
+              fixture._as !== '' &&
+              !Number.isNaN(Number(fixture._hs)) &&
+              !Number.isNaN(Number(fixture._as));
+            const local = splitLocal(toLocalDTValue(fixture.kickoff_at));
+            const selectedScorers = scorersByFixture[fixture.id] ?? [];
+            const selectedNames = selectedScorers
+              .map((id) => playerById.get(id)?.name)
+              .filter((name): name is string => Boolean(name));
+
+            return (
+              <div className="space-y-5">
+                <section className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <h3 className="font-semibold text-white">Informação do jogo</h3>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass(fixture.status)}`}>
+                      {statusLabel(fixture.status)}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Field label="Competição">
+                      <select
+                        className={`${inputClass} ${lockClass}`}
+                        value={fixture.competition_id ?? ''}
+                        disabled={isFinished}
+                        onChange={(event) =>
+                          void updateField(fixture.id, {
+                            competition_id: event.target.value || null,
+                          })
+                        }
+                      >
+                        <option value="">Sem competição</option>
+                        {competitions.map((competition) => (
+                          <option key={competition.id} value={competition.id}>
+                            {competition.code} — {competition.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    <Field label="Ronda">
+                      <input
+                        className={`${inputClass} uppercase ${lockClass}`}
+                        defaultValue={fixture.round_label ?? ''}
+                        maxLength={3}
+                        disabled={isFinished}
+                        onBlur={(event) =>
+                          void updateField(fixture.id, {
+                            round_label: event.target.value
+                              ? event.target.value.toUpperCase().slice(0, 3)
+                              : null,
+                          })
+                        }
+                      />
+                    </Field>
+
+                    <Field label="Mão">
+                      <select
+                        className={`${inputClass} ${lockClass}`}
+                        value={fixture.leg_number ?? ''}
+                        disabled={isFinished}
+                        onChange={(event) =>
+                          void updateField(fixture.id, {
+                            leg_number:
+                              event.target.value === '' ? null : Number(event.target.value),
+                          })
+                        }
+                      >
+                        <option value="">Sem mão</option>
+                        <option value="1">1.ª mão</option>
+                        <option value="2">2.ª mão</option>
+                      </select>
+                    </Field>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <Field label="Equipa da casa">
+                      <select
+                        className={`${inputClass} ${lockClass}`}
+                        value={fixture.home_team_id}
+                        disabled={isFinished}
+                        onChange={(event) =>
+                          void updateField(fixture.id, {
+                            home_team_id: event.target.value,
+                          })
+                        }
+                      >
+                        {orderedTeams.map((team) => (
+                          <option key={team.id} value={team.id}>
+                            {team.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    <Field label="Equipa visitante">
+                      <select
+                        className={`${inputClass} ${lockClass}`}
+                        value={fixture.away_team_id}
+                        disabled={isFinished}
+                        onChange={(event) =>
+                          void updateField(fixture.id, {
+                            away_team_id: event.target.value,
+                          })
+                        }
+                      >
+                        {orderedTeams.map((team) => (
+                          <option key={team.id} value={team.id}>
+                            {team.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <Field label="Data">
+                      <input
+                        key={`date-${fixture.id}-${fixture.kickoff_at}`}
+                        type="date"
+                        defaultValue={local.date}
+                        disabled={isFinished}
+                        className={`${inputClass} ${lockClass}`}
+                        onBlur={(event) => {
+                          const date = event.currentTarget.value || local.date;
+                          const time =
+                            (
+                              event.currentTarget
+                                .closest('section')
+                                ?.querySelector(`input[data-time-for="${fixture.id}"]`) as HTMLInputElement | null
+                            )?.value || local.time;
+                          const kickoffAt = fromLocalDTValue(joinLocal(date, time));
+                          if (kickoffAt && kickoffAt !== fixture.kickoff_at) {
+                            void updateField(fixture.id, { kickoff_at: kickoffAt });
+                          }
+                        }}
+                      />
+                    </Field>
+                    <Field label="Hora">
+                      <input
+                        key={`time-${fixture.id}-${fixture.kickoff_at}`}
+                        data-time-for={fixture.id}
+                        type="time"
+                        step={60}
+                        defaultValue={local.time}
+                        disabled={isFinished}
+                        className={`${inputClass} ${lockClass}`}
+                        onBlur={(event) => {
+                          const time = event.currentTarget.value || local.time;
+                          const date =
+                            (
+                              event.currentTarget
+                                .closest('section')
+                                ?.querySelector('input[type="date"]') as HTMLInputElement | null
+                            )?.value || local.date;
+                          const kickoffAt = fromLocalDTValue(joinLocal(date, time));
+                          if (kickoffAt && kickoffAt !== fixture.kickoff_at) {
+                            void updateField(fixture.id, { kickoff_at: kickoffAt });
+                          }
+                        }}
+                      />
+                    </Field>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-4">
+                    <h3 className="font-semibold text-white">Resultado</h3>
+                    <p className="mt-1 text-xs text-white/45">
+                      Preenche o resultado e termina o jogo quando estiver confirmado.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-3">
+                    <input
+                      inputMode="numeric"
+                      className="h-14 w-20 rounded-xl border border-white/15 bg-black/30 text-center text-2xl font-bold text-white outline-none focus:border-sky-400/55 disabled:opacity-55"
+                      placeholder="H"
+                      value={fixture._hs === '' ? '' : String(fixture._hs ?? '')}
+                      disabled={isFinished}
+                      onChange={(event) => setLocalScore(fixture.id, '_hs', event.target.value)}
+                      onBlur={(event) => {
+                        const value = event.target.value;
+                        if (value === '' || Number.isNaN(Number(value))) return;
+                        void updateField(fixture.id, { home_score: Number(value) });
+                      }}
+                    />
+                    <span className="text-xl text-white/35">–</span>
+                    <input
+                      inputMode="numeric"
+                      className="h-14 w-20 rounded-xl border border-white/15 bg-black/30 text-center text-2xl font-bold text-white outline-none focus:border-sky-400/55 disabled:opacity-55"
+                      placeholder="A"
+                      value={fixture._as === '' ? '' : String(fixture._as ?? '')}
+                      disabled={isFinished}
+                      onChange={(event) => setLocalScore(fixture.id, '_as', event.target.value)}
+                      onBlur={(event) => {
+                        const value = event.target.value;
+                        if (value === '' || Number.isNaN(Number(value))) return;
+                        void updateField(fixture.id, { away_score: Number(value) });
+                      }}
+                    />
+                  </div>
+
+                  <div className="mt-4">
+                    {isFinished ? (
+                      <button
+                        type="button"
+                        onClick={() => void reopenFixture(fixture.id)}
+                        className="w-full rounded-xl border border-amber-300/20 bg-amber-300/8 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-300/12"
+                      >
+                        Reabrir jogo
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!resultOK}
+                        onClick={() =>
+                          void finishFixture(
+                            fixture.id,
+                            Number(fixture._hs),
+                            Number(fixture._as),
+                          )
+                        }
+                        className="w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-35"
+                      >
+                        Marcar como terminado
+                      </button>
+                    )}
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-white">Marcadores do FC Porto</h3>
+                      {selectedNames.length ? (
+                        <p className="mt-1 text-sm leading-5 text-white/55">
+                          {selectedNames.join(', ')}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-sm text-white/45">Nenhum marcador selecionado.</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void openScorerEditor(fixture.id)}
+                      className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75 hover:bg-white/10"
+                    >
+                      Alterar
+                    </button>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-red-400/15 bg-red-400/[0.035] p-4">
+                  <h3 className="font-semibold text-white">Zona de risco</h3>
+                  <p className="mt-1 text-xs leading-5 text-white/45">
+                    A eliminação do jogo pode remover previsões e dados relacionados.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void deleteFixture(fixture.id)}
+                    className="mt-3 rounded-xl border border-red-300/20 bg-red-300/8 px-4 py-2.5 text-sm font-semibold text-red-100 hover:bg-red-300/12"
+                  >
+                    Apagar jogo
+                  </button>
+                </section>
+              </div>
+            );
+          })() : null}
+        </Drawer>
+
+        {/* Selecionar marcadores */}
+        <Drawer
+          open={Boolean(scorerTargetId)}
+          onClose={() => setScorerTargetId(null)}
+          title="Marcadores"
+          description={
+            scorerTargetFixture
+              ? `${scorerTargetFixture.home_name ?? teamById.get(scorerTargetFixture.home_team_id)?.name ?? 'Casa'} vs ${scorerTargetFixture.away_name ?? teamById.get(scorerTargetFixture.away_team_id)?.name ?? 'Visitante'}`
+              : undefined
+          }
+          widthClass="max-w-xl"
+          zClass="z-[110]"
+          footer={
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setScorerTargetId(null)}
+                className="flex-1 rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-sm text-white/75"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveScorerDraft()}
+                disabled={savingScorers}
+                className="flex-[1.4] rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-45"
+              >
+                {savingScorers
+                  ? 'A guardar…'
+                  : scorerDraft.length
+                    ? `Guardar ${scorerDraft.length} marcador${scorerDraft.length === 1 ? '' : 'es'}`
+                    : 'Guardar sem marcadores'}
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <input
+              className={inputClass}
+              placeholder="Pesquisar jogador…"
+              value={scorerSearch}
+              onChange={(event) => setScorerSearch(event.target.value)}
+            />
+
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {[
+                ['', 'Todos'],
+                ['GR', 'GR'],
+                ['D', 'Defesas'],
+                ['M', 'Médios'],
+                ['A', 'Avançados'],
+              ].map(([value, label]) => (
+                <button
+                  key={value || 'all'}
+                  type="button"
+                  onClick={() => setScorerPosition(value)}
+                  className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium ${
+                    scorerPosition === value
+                      ? 'border-sky-400/30 bg-sky-400/15 text-sky-100'
+                      : 'border-white/10 bg-white/5 text-white/60'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {scorerDraft.length ? (
+              <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[0.045] p-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-100/65">
+                  Selecionados · {scorerDraft.length}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {scorerDraft.map((id) => {
+                    const player = playerById.get(id);
+                    if (!player) return null;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => toggleDraftScorer(id)}
+                        className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs text-emerald-50"
+                      >
+                        {player.name} ×
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {loadingScorers ? (
+              <div className="py-8 text-center text-sm text-white/50">A carregar…</div>
+            ) : filteredPlayers.length === 0 ? (
+              <div className="py-8 text-center text-sm text-white/50">Sem jogadores encontrados.</div>
+            ) : (
+              <div className="divide-y divide-white/8 overflow-hidden rounded-2xl border border-white/10">
+                {filteredPlayers.map((player) => {
+                  const selected = scorerDraft.includes(player.id);
+                  return (
+                    <button
+                      key={player.id}
+                      type="button"
+                      onClick={() => toggleDraftScorer(player.id)}
+                      className={`flex w-full items-center gap-3 px-3 py-3 text-left transition ${
+                        selected ? 'bg-sky-400/10' : 'bg-black/15 hover:bg-white/[0.035]'
+                      }`}
+                    >
+                      <span
+                        className={`grid h-5 w-5 shrink-0 place-items-center rounded border text-xs ${
+                          selected
+                            ? 'border-sky-400 bg-sky-400 text-slate-950'
+                            : 'border-white/20 text-transparent'
+                        }`}
+                      >
+                        ✓
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-white">{player.name}</span>
+                        <span className="text-xs text-white/45">{player.position}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
-        )}
+        </Drawer>
 
-        {/* Toast simples */}
-        {msg && (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-sm shadow-lg">
+        {msg ? (
+          <div className="fixed bottom-5 left-1/2 z-[130] -translate-x-1/2 rounded-full border border-white/10 bg-slate-900/95 px-4 py-2 text-sm text-white shadow-xl backdrop-blur">
             {msg}
           </div>
-        )}
+        ) : null}
       </main>
     </AdminGate>
   );

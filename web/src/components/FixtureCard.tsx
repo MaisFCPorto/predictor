@@ -473,11 +473,8 @@ export default function FixtureCard({
   return (
     <div
       className={clsx(
-        'group relative w-full',
-        'rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8 pb-8',
-        'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden',
+        'fixture-card group w-full p-4 pb-7 sm:p-6 sm:pb-7 md:p-8 md:pb-8',
         'transition-colors duration-200',
-        'hover:border-white/20 hover:bg-white/[0.03]',
       )}
     >
       {/* Watermark */}
@@ -522,7 +519,7 @@ export default function FixtureCard({
         <div className="absolute right-0 top-1/2 -translate-y-1/2 pr-1">
           <span
             className={clsx(
-              'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] leading-none',
+              'status-tag',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
                 : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
@@ -556,7 +553,7 @@ export default function FixtureCard({
         <div className="min-w-0 justify-self-start">
           {comp && (
             <span
-              className="inline-flex max-w-full items-center justify-center text-center gap-2 rounded-full px-3.5 py-1 text-[12px] font-medium leading-none"
+              className="comp-tag max-w-full justify-center gap-2 text-center"
               style={{
                 background:
                   subtle === 'transparent'
@@ -584,7 +581,7 @@ export default function FixtureCard({
         <div className="justify-self-end hidden md:block">
           <span
             className={clsx(
-              'rounded-full px-3 py-1 text-[12px] leading-none',
+              'status-tag',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
                 : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
@@ -711,7 +708,7 @@ export default function FixtureCard({
           type="button"
           disabled={!pickerEnabled}
           className={clsx(
-            'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs sm:text-sm border',
+            'inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-xs sm:text-sm border',
             pickerEnabled
               ? 'border-white/20 bg-white/5 hover:bg-white/10'
               : 'border-white/10 bg-white/5 text-white/50 cursor-not-allowed',
@@ -848,7 +845,7 @@ export default function FixtureCard({
           <button
             disabled={!canSave || !!saving || nowLocked || !canEdit}
             className={clsx(
-              'rounded-full px-4 py-2 text-sm font-medium',
+              'min-h-10 rounded-xl px-5 py-2 text-sm font-semibold',
               !canSave || saving || nowLocked || !canEdit
                 ? 'bg-white/5 text-white/50 cursor-not-allowed'
                 : 'bg-white/10 hover:bg-white/15 text-white',
@@ -1060,7 +1057,7 @@ function ScoreBox({
         }
       }}
       className={clsx(
-        'no-spinner text-center tabular-nums rounded-2xl border placeholder:text-white/70',
+        'score-input no-spinner text-center tabular-nums border placeholder:text-white/70',
         'h-12 w-12 text-xl sm:h-14 sm:w-14 sm:text-2xl md:h-16 md:w-16 md:text-3xl',
         disabled
           ? 'border-white/10 bg-white/[0.09] text-white/40'

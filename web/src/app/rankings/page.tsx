@@ -110,9 +110,10 @@ function gameHeaderLabel(g: GameLite) {
 export default function RankingsPage() {
   return (
     <Suspense fallback={
-      <main className="mx-auto max-w-6xl p-6">
+      <main className="page-shell">
         <title>+Predictor - Rankings</title>
-        <h1 className="text-3xl font-bold tracking-tight">Rankings</h1>
+        <p className="eyebrow">Classificações</p>
+        <h1 className="display-title">Rankings</h1>
         <div className="mt-4 text-sm text-white/70">A carregar…</div>
       </main>
     }>
@@ -247,43 +248,32 @@ function RankingsPageInner() {
   const totalPages = rows.length === 0 ? 1 : Math.ceil(rows.length / pageSize);
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
+    <main className="page-shell">
       <title>+Predictor - Rankings</title>
-      <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
+      <header className="page-header">
+        <p className="eyebrow">Época atual</p>
+        <h1 className="display-title">{pageTitle}</h1>
+        <p className="page-copy">Compara pontos, acertos e marcadores sem perderes de vista a tua posição.</p>
+      </header>
 
       {/* Tabs + filtros */}
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] p-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="segmented-control">
           <button
             onClick={() => setMode('general')}
-            className={
-              'rounded-full px-4 py-1.5 text-sm transition ' +
-              (mode === 'general'
-                ? 'bg-white/15 text-white'
-                : 'text-white/80 hover:bg-white/10')
-            }
+            data-active={mode === 'general'}
           >
             Geral
           </button>
           <button
             onClick={() => setMode('monthly')}
-            className={
-              'rounded-full px-4 py-1.5 text-sm transition ' +
-              (mode === 'monthly'
-                ? 'bg-white/15 text-white'
-                : 'text-white/80 hover:bg-white/10')
-            }
+            data-active={mode === 'monthly'}
           >
             Mensal
           </button>
           <button
             onClick={() => setMode('bygame')}
-            className={
-              'rounded-full px-4 py-1.5 text-sm transition ' +
-              (mode === 'bygame'
-                ? 'bg-white/15 text-white'
-                : 'text-white/80 hover:bg-white/10')
-            }
+            data-active={mode === 'bygame'}
           >
             Jogo
           </button>
@@ -293,7 +283,7 @@ function RankingsPageInner() {
           <label className="ml-1 inline-flex items-center gap-2 text-sm text-white/70">
             <span>Mês</span>
             <select
-              className="rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-white/90 outline-none focus:ring-2 focus:ring-white/20"
+              className="surface min-h-10 bg-black/20 px-3 py-2 text-white/90 outline-none"
               value={ym}
               onChange={(e) => setYm(e.target.value)}
             >
@@ -310,7 +300,7 @@ function RankingsPageInner() {
           <label className="ml-1 inline-flex min-w-[280px] items-center gap-2 text-sm text-white/70">
             <span>Jogo</span>
             <select
-              className="w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-white/90 outline-none focus:ring-2 focus:ring-white/20"
+              className="surface min-h-10 w-full bg-black/20 px-3 py-2 text-white/90 outline-none"
               value={fixtureId}
               onChange={(e) => setFixtureId(e.target.value)}
             >
@@ -325,17 +315,17 @@ function RankingsPageInner() {
       </div>
 
       {/* Card principal */}
-      <section className="relative mt-6 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] shadow-[0_10px_50px_rgba(0,0,0,0.35)]">
+      <section className="surface-strong relative mt-6 overflow-hidden">
         {/* Cabeçalho */}
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
+          <span className="comp-tag">
             {cardTitle}
           </span>
 
           {mode === 'bygame' && fixtureId && (
             <div className="hidden items-center gap-2 text-xs text-white/80 md:flex">
               <span className="opacity-70">Detalhes:</span>
-              <span className="rounded-full bg-white/10 px-2 py-0.5">
+              <span className="status-tag">
                 {selectedGame ? gameHeaderLabel(selectedGame) : '—'}
               </span>
             </div>
@@ -352,8 +342,11 @@ function RankingsPageInner() {
         {!loading && !err && (
           <div className="block sm:hidden">
             {rows.length === 0 ? (
-              <div className="px-5 py-8 text-center text-white/60">
-                Sem resultados para mostrar.
+              <div className="empty-state m-4">
+                <div>
+                  <strong>A classificação ainda está por estrear.</strong>
+                  <span>Os participantes aparecem depois de existirem jogos terminados nesta época.</span>
+                </div>
               </div>
             ) : (
               <ul className="divide-y divide-white/10">

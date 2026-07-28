@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import axios, { AxiosError } from 'axios';
 import AdminGate from '../_components/AdminGate';
 import { adm } from '../_utils/adminClients';
@@ -99,6 +99,7 @@ function errorMessage(err: unknown): string {
 /* =============================================================== */
 
 export default function AdminFixtures() {
+  const initialLoadStarted = useRef(false);
   const [teams, setTeams] = useState<Team[]>([]);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [fixtures, setFixtures] = useState<Fx[]>([]);
@@ -348,6 +349,9 @@ export default function AdminFixtures() {
   }
 
   useEffect(() => {
+    if (initialLoadStarted.current) return;
+    initialLoadStarted.current = true;
+
     void loadTeams();
     void loadCompetitions();
     void loadFixtures();

@@ -615,17 +615,17 @@ export default function FixtureCard({
       </div>
 
       {/* Layout principal */}
-      <div className="mt-6 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap mb-4">
+      <div className="mt-6 mb-4 flex items-start gap-2 sm:items-center sm:gap-4 md:gap-6">
         {/* HOME */}
-        <div className="flex flex-col items-center w-[25%] min-w-[60px]">
+        <div className="flex min-w-0 flex-1 basis-0 flex-col items-center">
           <Crest src={home_crest} alt={home_team_name} />
-          <div className="truncate text-center text-[14px] sm:text-base font-medium mt-1">
+          <div className="mt-1 w-full break-words text-center text-xs font-medium leading-tight sm:truncate sm:text-base">
             {home_team_name}
           </div>
         </div>
 
         {/* SCORE */}
-        <div className="flex items-center justify-center w-[45%]">
+        <div className="flex shrink-0 items-center justify-center">
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
             <ScoreBox
               disabled={nowLocked || !canEdit}
@@ -697,9 +697,9 @@ export default function FixtureCard({
         </div>
 
         {/* AWAY */}
-        <div className="flex flex-col items-center w-[25%] min-w-[60px]">
+        <div className="flex min-w-0 flex-1 basis-0 flex-col items-center">
           <Crest src={away_crest} alt={away_team_name} />
-          <div className="truncate text-center text-[14px] sm:text-base font-medium mt-1">
+          <div className="mt-1 w-full break-words text-center text-xs font-medium leading-tight sm:truncate sm:text-base">
             {away_team_name}
           </div>
         </div>

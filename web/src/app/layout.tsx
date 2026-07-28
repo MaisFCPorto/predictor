@@ -281,6 +281,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   const baseNavLinks = [
     { href: '/jogos', label: 'Jogos' },
+    { href: '/ligas', label: 'Ligas (beta)' },
     { href: '/rankings', label: 'Rankings' },
     { href: '/premios', label: 'Prémios' },
     { href: '/regras', label: 'Regras' },
@@ -289,7 +290,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // Links que só admin vê
   const navLinks = user?.isAdmin
     ? [
-        { href: '/ligas', label: 'Ligas (beta)' },
         { href: '/shop', label: 'Loja' },
         ...baseNavLinks
       ]

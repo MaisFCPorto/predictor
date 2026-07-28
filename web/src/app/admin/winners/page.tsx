@@ -246,9 +246,9 @@ function WinnersPageInner() {
               <div className="px-5 py-8 text-center text-white/60">Sem resultados para mostrar.</div>
             ) : (
               <ul className="divide-y divide-white/10">
-                {monthlyRows.map((r) => (
+                {monthlyRows.map((r, index) => (
                   <li key={`${r.ym}-${r.user_id}`} className="px-5 py-4">
-                    <div className="text-xs text-white/60">{formatYmLabel(r.ym)}</div>
+                    <div className="text-xs text-white/60">Posição {index + 1}.</div>
                     <div className="mt-1 font-semibold">{r.name}</div>
                     <div className="mt-0.5 text-xs text-white/70">{r.email ?? '—'}</div>
                   </li>
@@ -264,7 +264,7 @@ function WinnersPageInner() {
               <table className="w-full table-auto text-sm">
                 <thead>
                   <tr className="bg-white/[0.05] text-left">
-                    <th className="px-5 py-3 whitespace-nowrap">Mês</th>
+                    <th className="px-5 py-3 whitespace-nowrap">Posição</th>
                     <th className="px-5 py-3 whitespace-nowrap">User</th>
                     <th className="px-5 py-3 whitespace-nowrap">Email</th>
                   </tr>
@@ -277,12 +277,12 @@ function WinnersPageInner() {
                       </td>
                     </tr>
                   ) : (
-                    monthlyRows.map((r) => (
+                    monthlyRows.map((r, index) => (
                       <tr
                         key={`${r.ym}-${r.user_id}`}
                         className="border-t border-white/10 odd:bg-white/[0.02] hover:bg-white/[0.05] transition"
                       >
-                        <td className="px-5 py-3 text-white/80">{formatYmLabel(r.ym)}</td>
+                        <td className="px-5 py-3 text-white/80">{index + 1}.</td>
                         <td className="px-5 py-3 font-medium">{r.name}</td>
                         <td className="px-5 py-3 text-white/80">{r.email ?? '—'}</td>
                       </tr>

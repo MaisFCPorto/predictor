@@ -10,7 +10,10 @@ export async function middleware(req: NextRequest) {
   const supabase = createServerClient(
     // usa também as variáveis sem NEXT_ se existirem (Vercel às vezes só injeta essas no edge)
     process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
-    process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+    process.env.SUPABASE_ANON_KEY ??
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+      '',
     {
       cookies: {
         get(name: string) {

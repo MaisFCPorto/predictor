@@ -148,6 +148,14 @@ export async function recomputePointsForFixture(
 export const requireAdminKey: import('hono').MiddlewareHandler<{
   Bindings: Env;
 }> = async (c, next) => {
+  const requiredKey = c.env.ADMIN_KEY?.trim();
+  // Local development intentionally has no admin key configured. In that
+  // case, let the route run instead of rejecting every proxied request.
+  if (!requiredKey) {
+    await next();
+    return;
+  }
+
   const key = c.req.header('x-admin-key')?.trim() || '';
   const origin = c.req.header('origin') || '';
 
@@ -156,7 +164,7 @@ export const requireAdminKey: import('hono').MiddlewareHandler<{
     origin.startsWith('http://localhost:3000');
 
   // Se não vier de origem "de confiança", obriga à admin key
-  if (!trustedOrigin && (!key || key !== c.env.ADMIN_KEY)) {
+  if (!trustedOrigin && (!key || key !== requiredKey)) {
     return c.json({ error: 'forbidden' }, 403);
   }
 

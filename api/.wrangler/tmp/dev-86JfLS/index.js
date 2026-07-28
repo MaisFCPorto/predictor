@@ -2102,19 +2102,6 @@ winners.get("/monthly", async (c) => {
   return c.json(top3, 200);
 });
 
-// src/routes/admin/competitions.ts
-var adminCompetitions = new Hono2();
-adminCompetitions.get("/", async (c) => {
-  const key = c.req.header("x-admin-key");
-  if (!key || key !== c.env.ADMIN_KEY) {
-    return c.json({ error: "forbidden" }, 403);
-  }
-  const { results } = await c.env.DB.prepare(
-    `SELECT id, code, name FROM competitions ORDER BY name`
-  ).all();
-  return c.json(results ?? []);
-});
-
 // src/routes/admin.ts
 var SCORER_BONUS_BY_POS3 = {
   GR: 10,
@@ -2201,10 +2188,15 @@ async function recomputePointsForFixture(DB, fixtureId) {
 }
 __name(recomputePointsForFixture, "recomputePointsForFixture");
 var requireAdminKey = /* @__PURE__ */ __name(async (c, next) => {
+  const requiredKey = c.env.ADMIN_KEY?.trim();
+  if (!requiredKey) {
+    await next();
+    return;
+  }
   const key = c.req.header("x-admin-key")?.trim() || "";
   const origin = c.req.header("origin") || "";
   const trustedOrigin = origin.startsWith("https://maispredictor.app") || origin.startsWith("http://localhost:3000");
-  if (!trustedOrigin && (!key || key !== c.env.ADMIN_KEY)) {
+  if (!trustedOrigin && (!key || key !== requiredKey)) {
     return c.json({ error: "forbidden" }, 403);
   }
   await next();
@@ -2257,6 +2249,16 @@ admin.get("/fixtures/porto", requireAdminKey, async (c) => {
   }
   const data = await res.json();
   return c.json(data);
+});
+
+// src/routes/admin/competitions.ts
+var adminCompetitions = new Hono2();
+adminCompetitions.use("*", requireAdminKey);
+adminCompetitions.get("/", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, code, name FROM competitions ORDER BY name`
+  ).all();
+  return c.json(results ?? []);
 });
 
 // src/routes/admin/players.ts
@@ -3997,13 +3999,20 @@ fixtureTrends.get("/fixtures/:fixtureId/trends", async (c) => {
 
 // src/routes/admin/leagues.ts
 var adminLeagues = new Hono2();
-adminLeagues.use("/*", async (c, next) => {
+var requireLeagueAdminKey = /* @__PURE__ */ __name(async (c, next) => {
+  const requiredKey = c.env.ADMIN_KEY?.trim();
+  if (!requiredKey) {
+    await next();
+    return;
+  }
   const sent = c.req.header("x-admin-key") || "";
-  if (!sent || sent !== c.env.ADMIN_KEY) {
+  if (!sent || sent !== requiredKey) {
     return c.json({ error: "unauthorized" }, 401);
   }
   await next();
-});
+}, "requireLeagueAdminKey");
+adminLeagues.use("/leagues", requireLeagueAdminKey);
+adminLeagues.use("/leagues/*", requireLeagueAdminKey);
 adminLeagues.get("/leagues", async (c) => {
   const db = c.env.DB;
   const rows = await db.prepare(
@@ -5221,7 +5230,7 @@ app.get("/api/users/:id/last-points", async (c) => {
 });
 var src_default = app;
 
-// C:/Users/Ricardo/AppData/Roaming/npm/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
+// C:/Users/Ricardo/AppData/Local/npm-cache/_npx/4f73f6464c1d135c/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
 var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
   try {
     return await middlewareCtx.next(request, env);
@@ -5239,7 +5248,7 @@ var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
 
-// C:/Users/Ricardo/AppData/Roaming/npm/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
+// C:/Users/Ricardo/AppData/Local/npm-cache/_npx/4f73f6464c1d135c/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
 function reduceError(e) {
   return {
     name: e?.name,
@@ -5262,14 +5271,14 @@ var jsonError2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError2;
 
-// .wrangler/tmp/bundle-RN8JS6/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-VG95dp/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
 ];
 var middleware_insertion_facade_default = src_default;
 
-// C:/Users/Ricardo/AppData/Roaming/npm/node_modules/wrangler/templates/middleware/common.ts
+// C:/Users/Ricardo/AppData/Local/npm-cache/_npx/4f73f6464c1d135c/node_modules/wrangler/templates/middleware/common.ts
 var __facade_middleware__ = [];
 function __facade_register__(...args) {
   __facade_middleware__.push(...args.flat());
@@ -5294,7 +5303,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-RN8JS6/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-VG95dp/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

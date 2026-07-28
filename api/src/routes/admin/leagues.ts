@@ -9,14 +9,28 @@ type Env = {
 
 export const adminLeagues = new Hono<{ Bindings: Env }>();
 
-// Middleware simples para validar ADMIN_KEY (mesmo que uses noutros admin routers)
-adminLeagues.use('/*', async (c, next) => {
+// This router is mounted at /api/admin, so only guard its own /leagues
+// routes. A /* middleware here would also intercept /api/admin/users,
+// /api/admin/fixtures, and every other admin router.
+const requireLeagueAdminKey = async (
+  c: Context<{ Bindings: Env }>,
+  next: () => Promise<void>,
+) => {
+  const requiredKey = c.env.ADMIN_KEY?.trim();
+  if (!requiredKey) {
+    await next();
+    return;
+  }
+
   const sent = c.req.header('x-admin-key') || '';
-  if (!sent || sent !== c.env.ADMIN_KEY) {
+  if (!sent || sent !== requiredKey) {
     return c.json({ error: 'unauthorized' }, 401);
   }
   await next();
-});
+};
+
+adminLeagues.use('/leagues', requireLeagueAdminKey);
+adminLeagues.use('/leagues/*', requireLeagueAdminKey);
 
 // GET /api/admin/leagues -> lista básica com contagem de membros
 adminLeagues.get('/leagues', async (c) => {

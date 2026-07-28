@@ -259,8 +259,7 @@ function LeaguesInner() {
       <h1 className="mb-2 text-3xl font-bold text-gradient">Ligas (beta)</h1>
       <p className="text-sm opacity-80">
         Aqui vais poder criar ligas privadas com amigos e ver um ranking só da
-        tua liga. Por agora esta área está em testes e apenas disponível para
-        admin.
+        tua liga. Esta área está em testes.
       </p>
 
       {err && (

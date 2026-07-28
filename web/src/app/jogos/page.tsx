@@ -152,7 +152,6 @@ export default function JogosPage() {
   const [monPos, setMonPos] = useState<number | null>(null);
 
   const [lastPoints, setLastPoints] = useState<LastPoints>(null);
-  const [summaryErr, setSummaryErr] = useState<string | null>(null);
   const [lastGameLabel, setLastGameLabel] = useState<string | null>(null);
 
   // --- predictions for current user (by fixture id) ---
@@ -398,8 +397,6 @@ export default function JogosPage() {
     let abort = false;
     (async () => {
       try {
-        setSummaryErr(null);
-
         if (!userId) {
           if (!abort) {
             setGenPos(null);
@@ -452,7 +449,9 @@ export default function JogosPage() {
           }
         }
       } catch (e: any) {
-        if (!abort) setSummaryErr(e?.message ?? 'Erro a carregar resumo');
+        if (!abort) {
+          // Ignore summary fetch failures in the UI
+        }
       }
     })();
     return () => {
@@ -742,11 +741,6 @@ export default function JogosPage() {
                 </CardLink>
               </div>
 
-              {summaryErr && (
-                <div className="rounded border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm">
-                  {summaryErr}
-                </div>
-              )}
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-6">

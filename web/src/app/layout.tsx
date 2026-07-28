@@ -552,7 +552,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
           <div className="border-t border-white/[0.06]">
             <div className="app-container py-4 text-[11px] leading-relaxed text-white/40">
-              © {new Date().getFullYear()} +FCPorto Predictor. Prémios e campanhas sujeitos às condições aplicáveis.
+              © {new Date().getFullYear()} +FCPorto Predictor. As marcas, nomes e logótipos do +FCPorto e da Betano são propriedade dos respetivos titulares e estão protegidos por direitos de autor e/ou marcas registadas. Não é permitida a utilização para fins comerciais sem autorização.
+A utilização deste site implica a aceitação dos {' '}
+                <a
+                  href="/regras"           
+                  rel="noreferrer"
+                  className="text-white underline decoration-white/30"
+                >
+                  Termos e Condições
+                </a> deste projeto
             </div>
           </div>
         </footer>

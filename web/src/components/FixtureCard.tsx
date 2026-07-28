@@ -785,7 +785,9 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Estado persistente do palpite */}
+      </div>
+
+      {/* Estado persistente do palpite, numa linha própria */}
       {!pointsBadge && lastPredText && (
         <div
           className={clsx(
@@ -803,15 +805,13 @@ export default function FixtureCard({
             <strong>
               {predictionChanged ? 'Alterações por guardar' : 'Palpite guardado'}
             </strong>
-            <span className="ml-2 text-white/60">
+            <span className="prediction-status-detail">
               {lastPredText}
               {lastPredScorerLabel && ` · ${lastPredScorerLabel}`}
             </span>
           </div>
         </div>
       )}
-
-      </div>
 
       {/* Tendência da comunidade, separada da área de edição */}
       {variant !== 'past' && showTrends && trends && (

@@ -384,6 +384,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                         className="block w-full px-3 py-2 text-left text-white/90 hover:bg-white/10"
                         onClick={() => {
                           setUserMenuOpen(false);
+                          router.push('/profile');
+                        }}
+                      >
+                        Perfil
+                      </button>
+                      <button
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-white/90 hover:bg-white/10"
+                        onClick={() => {
+                          setUserMenuOpen(false);
                           handleLogout();
                         }}
                       >

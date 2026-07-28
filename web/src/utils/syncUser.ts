@@ -13,10 +13,10 @@ export async function syncUserToD1(supa: SupabaseClient) {
     user.user_metadata?.user_name ??
     (user.email ? user.email.split('@')[0] : null);
 
-  const avatar_url =
-    user.user_metadata?.avatar_url ??
-    user.user_metadata?.picture ??
-    null;
+  const metadata = user.user_metadata ?? {};
+  const avatar_url = Object.prototype.hasOwnProperty.call(metadata, 'avatar_url')
+    ? metadata.avatar_url ?? null
+    : metadata.picture ?? null;
 
   await fetch(`${API_BASE}/api/users/sync`, {
     method: 'POST',

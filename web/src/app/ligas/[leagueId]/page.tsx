@@ -270,6 +270,7 @@ function LeagueDetailInner() {
     detail && detail.currentUserRole === 'member' && !!userId;
 
   return (
+    
     <div className="py-6 space-y-6">
       <button
         type="button"

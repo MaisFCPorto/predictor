@@ -255,6 +255,7 @@ function LeaguesInner() {
 
   return (
     <div className="py-6 space-y-6">
+      <title>+Predictor - Ligas</title>
       <h1 className="mb-2 text-3xl font-bold text-gradient">Ligas</h1>
       <p className="text-sm opacity-80">
         Aqui vais poder criar ligas privadas com amigos e ver um ranking só da

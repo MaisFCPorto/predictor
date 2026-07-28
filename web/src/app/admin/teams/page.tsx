@@ -1,10 +1,8 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import axios from 'axios';
 import AdminGate from '../_components/AdminGate';
-
-const API = process.env.NEXT_PUBLIC_API_BASE!;
+import { adm } from '../_utils/adminClients';
 
 type Team = {
   id: string;
@@ -50,7 +48,7 @@ export default function AdminTeamsPage() {
     setLoading(true);
     setErr(null);
     try {
-      const { data } = await axios.get<any[]>(`${API}/api/admin/teams`, {
+      const { data } = await adm.get<any[]>('/api/admin/teams', {
         headers: { 'cache-control': 'no-store' },
       });
 
@@ -93,8 +91,8 @@ export default function AdminTeamsPage() {
         return;
       }
       setNewTeam((v) => ({ ...v, creating: true }));
-      await axios.post(
-        `${API}/api/admin/teams`,
+      await adm.post(
+        `/api/admin/teams`,
         {
           id: newTeam.id.trim(),
           name: newTeam.name.trim(),
@@ -118,8 +116,8 @@ export default function AdminTeamsPage() {
       setTeams((list) =>
         list.map((x) => (x.id === t.id ? { ...x, saving: true } : x)),
       );
-      await axios.patch(
-        `${API}/api/admin/teams/${t.id}`,
+      await adm.patch(
+        `/api/admin/teams/${t.id}`,
         {
           name: t._name.trim() || t.name,
           short_name: t._short.trim() || null,
@@ -144,7 +142,7 @@ export default function AdminTeamsPage() {
     if (ok !== 'APAGAR') return;
 
     try {
-      await axios.delete(`${API}/api/admin/teams/${id}`, {
+      await adm.delete(`/api/admin/teams/${id}`, {
         headers: { 'cache-control': 'no-store' },
       });
       notify('Equipa apagada ✅');

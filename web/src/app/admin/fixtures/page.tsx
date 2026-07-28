@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import axios, { AxiosError } from 'axios';
 import Link from 'next/link';
 import AdminGate from '../_components/AdminGate';
@@ -429,7 +429,12 @@ export default function AdminFixtures() {
       const { data } = await adm.get<Player[]>('/api/admin/players', {
         headers: { 'cache-control': 'no-store' },
       });
-      setPlayers(data ?? []);
+      setPlayers(
+        (data ?? []).map((player) => ({
+          ...player,
+          id: String(player.id),
+        })),
+      );
     } catch {
       setPlayers([]);
     }
@@ -441,7 +446,9 @@ export default function AdminFixtures() {
         `/api/admin/fixtures/${fixtureId}/scorers`,
         { headers: { 'cache-control': 'no-store' } },
       );
-      const ids = (Array.isArray(data) ? data : []).map((r) => r.player_id);
+      const ids = (Array.isArray(data) ? data : []).map((row) =>
+        String(row.player_id),
+      );
       setScorersByFixture((prev) => ({ ...prev, [fixtureId]: ids }));
       return ids;
     } catch {

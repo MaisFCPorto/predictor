@@ -126,7 +126,10 @@ async function listFixtures(c: Context<{ Bindings: Env }>, matchdayId: string) {
         f.leg AS leg,
         ht.name AS home_team_name, at.name AS away_team_name,
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
-        co.code AS competition_code, co.name AS competition_name
+        co.code AS competition_code, co.name AS competition_name,
+        co.accent_color AS competition_accent_color,
+        co.pill_color AS competition_pill_color,
+        co.watermark_url AS competition_watermark_url
       FROM fixtures f
       JOIN teams ht ON ht.id = f.home_team_id
       JOIN teams at ON at.id = f.away_team_id
@@ -148,6 +151,9 @@ async function listFixtures(c: Context<{ Bindings: Env }>, matchdayId: string) {
       competition_id: string | null;
       competition_code: string | null;
       competition_name: string | null;
+      competition_accent_color: string | null;
+      competition_pill_color: string | null;
+      competition_watermark_url: string | null;
       round_label: string | null;
       leg: number | null;
       home_score: number | null;
@@ -181,7 +187,10 @@ app.get('/api/fixtures/open', async (c) => {
         f.leg AS leg,
         ht.name AS home_team_name, at.name AS away_team_name,
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
-        co.code AS competition_code, co.name AS competition_name
+        co.code AS competition_code, co.name AS competition_name,
+        co.accent_color AS competition_accent_color,
+        co.pill_color AS competition_pill_color,
+        co.watermark_url AS competition_watermark_url
       FROM fixtures f
       JOIN matchdays md ON md.id = f.matchday_id
       JOIN teams ht ON ht.id = f.home_team_id
@@ -204,6 +213,9 @@ app.get('/api/fixtures/open', async (c) => {
       competition_id: string | null;
       competition_code: string | null;
       competition_name: string | null;
+      competition_accent_color: string | null;
+      competition_pill_color: string | null;
+      competition_watermark_url: string | null;
       round_label: string | null;
       leg: number | null;
       home_score: number | null;
@@ -250,7 +262,10 @@ app.get('/api/fixtures/finished', async (c) => {
         f.leg AS leg,
         ht.name AS home_team_name, at.name AS away_team_name,
         ht.crest_url AS home_crest, at.crest_url AS away_crest,
-        co.code AS competition_code, co.name AS competition_name
+        co.code AS competition_code, co.name AS competition_name,
+        co.accent_color AS competition_accent_color,
+        co.pill_color AS competition_pill_color,
+        co.watermark_url AS competition_watermark_url
       FROM fixtures f
       JOIN matchdays md ON md.id = f.matchday_id
       JOIN teams ht ON ht.id = f.home_team_id
@@ -274,6 +289,9 @@ app.get('/api/fixtures/finished', async (c) => {
       competition_id: string | null;
       competition_code: string | null;
       competition_name: string | null;
+      competition_accent_color: string | null;
+      competition_pill_color: string | null;
+      competition_watermark_url: string | null;
       round_label: string | null;
       leg: number | null;
       home_score: number | null;
@@ -315,6 +333,9 @@ app.get('/api/fixtures/closed', async (c) => {
         at.crest_url  AS away_crest,
         co.code       AS competition_code,
         co.name       AS competition_name,
+        co.accent_color AS competition_accent_color,
+        co.pill_color AS competition_pill_color,
+        co.watermark_url AS competition_watermark_url,
         GROUP_CONCAT(p.name, ',') AS scorers_names
       FROM fixtures f
       JOIN matchdays md ON md.id = f.matchday_id
@@ -345,6 +366,9 @@ app.get('/api/fixtures/closed', async (c) => {
       competition_id: string | null;
       competition_code: string | null;
       competition_name: string | null;
+      competition_accent_color: string | null;
+      competition_pill_color: string | null;
+      competition_watermark_url: string | null;
       round_label: string | null;
       leg: number | null;
       home_score: number | null;

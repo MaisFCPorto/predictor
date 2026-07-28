@@ -19,6 +19,10 @@ type FixtureDTO = {
   away_crest: string | null;
   competition_id: string | null;
   competition_code: string | null; // LP/LE/TP/TL…
+  competition_name?: string | null;
+  competition_accent_color?: string | null;
+  competition_pill_color?: string | null;
+  competition_watermark_url?: string | null;
   round_label: string | null; // J1, QF, SF, F, M1…
   leg: number | null;
   is_locked: boolean;
@@ -797,6 +801,10 @@ export default function JogosPage() {
                     home_crest={f.home_crest}
                     away_crest={f.away_crest}
                     competition_code={f.competition_code}
+                    competition_name={f.competition_name}
+                    competition_accent_color={f.competition_accent_color}
+                    competition_pill_color={f.competition_pill_color}
+                    competition_watermark_url={f.competition_watermark_url}
                     round_label={f.round_label}
                     leg={f.leg}
                     is_locked={f.is_locked}
@@ -854,6 +862,10 @@ export default function JogosPage() {
                     home_crest={f.home_crest}
                     away_crest={f.away_crest}
                     competition_code={f.competition_code}
+                    competition_name={f.competition_name}
+                    competition_accent_color={f.competition_accent_color}
+                    competition_pill_color={f.competition_pill_color}
+                    competition_watermark_url={f.competition_watermark_url}
                     round_label={f.round_label}
                     leg={f.leg}
                     is_locked={true}

@@ -192,8 +192,8 @@ export default function AuthPage() {
   // Enquanto verifica sessão, mostra só o card "carregar"
   if (checkingSession) {
     return (
-      <main className="mx-auto max-w-lg px-6 py-10 md:py-16">
-        <div className="relative rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8 shadow-[0_8px_40px_rgba(0,0,0,0.35)]">
+      <main className="page-shell mx-auto max-w-lg">
+        <div className="surface-strong relative p-6 md:p-8">
           <div className="mb-6 text-center">
             <img src="/logobranco.png" className="h-14 mx-auto mb-2" />
             <p className="mt-1 text-sm text-white/70">
@@ -213,8 +213,8 @@ export default function AuthPage() {
       'Jogador';
 
     return (
-      <main className="mx-auto max-w-lg px-6 py-10 md:py-16">
-        <div className="relative rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8 shadow-[0_8px_40px_rgba(0,0,0,0.35)]">
+      <main className="page-shell mx-auto max-w-lg">
+        <div className="surface-strong relative p-6 md:p-8">
           <div className="mb-6 text-center">
             <img src="/logobranco.png" className="h-14 mx-auto mb-2" />
             <p className="mt-1 text-sm text-white/70">
@@ -254,8 +254,8 @@ export default function AuthPage() {
 
   // ------- NÃO autenticado: formulário normal -------
   return (
-    <main className="mx-auto max-w-lg px-6 py-10 md:py-16">
-      <div className="relative rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8 shadow-[0_8px_40px_rgba(0,0,0,0.35)]">
+    <main className="page-shell mx-auto max-w-lg">
+      <div className="surface-strong relative p-6 md:p-8">
         {/* Logo e descrição */}
         <div className="mb-6 text-center">
           <img src="/logobranco.png" className="h-14 mx-auto mb-2" />

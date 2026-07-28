@@ -14,7 +14,7 @@ export default function AdminIndex() {
             Backoffice
           </h1>
           <p className="text-sm text-white/70 max-w-2xl">
-            Gere utilizadores, equipas, jornadas, jogos e previsões numa vista
+            Gere utilizadores, equipas, jogos e previsões numa vista
             centralizada. Estas ferramentas afetam diretamente a experiência
             no +Predictor.
           </p>
@@ -31,11 +31,6 @@ export default function AdminIndex() {
             href="/admin/teams"
             title="Equipas"
             description="Configurar equipas."
-          />
-          <AdminCard
-            href="/admin/matchdays"
-            title="Competições / Jornadas"
-            description="Definir competições, jornadas e janelas temporais."
           />
           <AdminCard
             href="/admin/fixtures"

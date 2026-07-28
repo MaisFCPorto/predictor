@@ -1,5 +1,6 @@
 // apps/api/src/routes/rankings.ts
 import { Hono } from 'hono';
+import { getActiveSeasonId } from '../app-settings';
 
 type Env = { DB: D1Database };
 export const rankings = new Hono<{ Bindings: Env }>();
@@ -118,8 +119,9 @@ rankings.get('/', async (c) => {
 
   // 1) Buscar todas as predictions JOIN fixtures FINISHED,
   //    filtrando por kickoff_at quando ym estiver presente
-  const params: unknown[] = [];
-  let where = `f.status = 'FINISHED'`;
+  const activeSeasonId = await getActiveSeasonId(c.env.DB);
+  const params: unknown[] = [activeSeasonId];
+  let where = `f.status = 'FINISHED' AND md.season_id = ?`;
   if (ym) {
     where += ` AND strftime('%Y-%m', f.kickoff_at) = ?`;
     params.push(ym);
@@ -140,6 +142,7 @@ rankings.get('/', async (c) => {
         f.kickoff_at
       FROM predictions p
       JOIN fixtures f ON f.id = p.fixture_id
+      JOIN matchdays md ON md.id = f.matchday_id
       WHERE ${where}
     `,
     )
@@ -172,6 +175,7 @@ rankings.get('/', async (c) => {
       FROM fixture_scorers fs
       LEFT JOIN players p ON p.id = fs.player_id
       JOIN fixtures f ON f.id = fs.fixture_id
+      JOIN matchdays md ON md.id = f.matchday_id
       WHERE ${where}
     `,
     )
@@ -293,13 +297,18 @@ rankings.get('/', async (c) => {
    (baseado em kickoff_at, como queres)
 ====================================================== */
 rankings.get('/months', async (c) => {
+  const activeSeasonId = await getActiveSeasonId(c.env.DB);
+
   const { results } = await c.env.DB
     .prepare(`
-      SELECT DISTINCT strftime('%Y-%m', kickoff_at) AS ym
-      FROM fixtures
-      WHERE status='FINISHED'
+      SELECT DISTINCT strftime('%Y-%m', f.kickoff_at) AS ym
+      FROM fixtures f
+      JOIN matchdays md ON md.id = f.matchday_id
+      WHERE f.status = 'FINISHED'
+        AND md.season_id = ?
       ORDER BY ym DESC
     `)
+    .bind(activeSeasonId)
     .all<{ ym: string }>();
 
   return c.json((results ?? []).map(r => r.ym), 200);
@@ -309,6 +318,8 @@ rankings.get('/months', async (c) => {
    /api/rankings/games  -> lista de jogos recentes
 ====================================================== */
 rankings.get('/games', async (c) => {
+  const activeSeasonId = await getActiveSeasonId(c.env.DB);
+
   const { results } = await c.env.DB
     .prepare(`
       SELECT
@@ -319,12 +330,15 @@ rankings.get('/games', async (c) => {
         co.code AS competition_code,
         f.round_label
       FROM fixtures f
+      JOIN matchdays md ON md.id = f.matchday_id
       JOIN teams ht ON ht.id = f.home_team_id
       JOIN teams at ON at.id = f.away_team_id
       LEFT JOIN competitions co ON co.id = f.competition_id
+      WHERE md.season_id = ?
       ORDER BY f.kickoff_at DESC
       LIMIT 300
     `)
+    .bind(activeSeasonId)
     .all<{
       id: string;
       kickoff_at: string;

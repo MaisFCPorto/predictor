@@ -8,8 +8,6 @@ import { useEffect, useRef, useState } from 'react';
 import { supabasePKCE } from '@/utils/supabase/client';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from "@vercel/speed-insights/next"
-import { CartProvider } from '@/components/CartContext';
-
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || '').trim();
 
 type UserInfo = {
@@ -55,10 +53,9 @@ const RAIL_CONFIG: Record<
 };
 
 function pickVariant(width: number): RailVariant {
-  // podes afinar estes valores se quiseres
-  if (width >= 1900) return '300'; // écrans bem largos → 300x600
-  if (width >= 1500) return '160'; // intermédio → 160x600
-  return '120';                    // mais justo → 120x600
+  if (width >= 2200) return '300';
+  if (width >= 1680) return '160';
+  return '120';
 }
 
 function BetanoSideRails() {
@@ -79,10 +76,10 @@ function BetanoSideRails() {
   const cfg = RAIL_CONFIG[variant];
 
   return (
-    // só mostra em >= 1280px (xl) para não esmagar layout em portáteis pequenos
-    <div className="pointer-events-none fixed inset-y-0 left-0 right-0 z-[40] hidden items-center justify-between xl:flex">
+    // Mantém os anúncios fora da grelha principal e abaixo do cabeçalho.
+    <div className="pointer-events-none fixed left-0 right-0 top-24 z-[40] hidden justify-between min-[1360px]:flex">
       {/* LEFT */}
-      <div className="pointer-events-auto pl-3">
+      <div className="pointer-events-auto pl-2">
         <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
           <iframe
             src={cfg.src}
@@ -99,7 +96,7 @@ function BetanoSideRails() {
       </div>
 
       {/* RIGHT */}
-      <div className="pointer-events-auto pr-3">
+      <div className="pointer-events-auto pr-2">
         <div className="overflow-hidden rounded-xl bg-black/40 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
           <iframe
             src={cfg.src}
@@ -129,7 +126,7 @@ function BetanoMobileBanner() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[60] flex justify-center px-3 pb-3 md:hidden">
+    <div className="fixed inset-x-0 bottom-16 z-[60] flex justify-center px-3 pb-3 md:hidden">
       <div className="relative w-full max-w-xs overflow-hidden rounded-2xl bg-black/45 shadow-[0_18px_40px_rgba(0,0,0,0.7)] backdrop-blur-md">
         <button
           type="button"
@@ -299,6 +296,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     ? [{ href: '/admin', label: 'Backoffice' }, ...navLinks]
     : navLinks;
 
+  const mobilePrimaryLinks = baseNavLinks;
+
   const isActive = (href: string) =>
     pathname === href ||
     (href !== '/jogos' && pathname?.startsWith(href ?? ''));
@@ -328,14 +327,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="pt">
-      <body className="min-h-screen bg-[#0a1e7a] bg-no-repeat bg-cover bg-fixed bg-center text-white">
+      <body className="app-body text-white">
         {/* BANNERS BETANO */}
         <BetanoSideRails />
         <BetanoMobileBanner />
 
         {/* NAVBAR */}
-        <header className="nav-glass sticky top-0 z-50">
-          <div className="relative mx-auto flex h-14 w-full max-w-6xl items-center px-4">
+        <header className="site-header sticky top-0 z-50">
+          <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center px-4">
             {/* LOGO – centrado em mobile, à esquerda em desktop */}
             <Link
               href="/jogos"
@@ -357,20 +356,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={
-                    'relative pb-0.5 transition-colors group ' +
-                    (isActive(link.href)
-                      ? 'text-white font-medium'
-                      : 'text-white/75 hover:text-white')
-                  }
+                  className="nav-link"
+                  data-active={isActive(link.href)}
                 >
                   {link.label}
-                  <span
-                    className={
-                      'pointer-events-none absolute left-0 right-0 -bottom-0.5 h-[2px] origin-center scale-x-0 rounded-full bg-white/70 transition-transform duration-200 ' +
-                      (isActive(link.href) ? 'scale-x-100' : 'group-hover:scale-x-100')
-                    }
-                  />
                 </Link>
               ))}
 
@@ -379,7 +368,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <button
                     type="button"
                     onClick={() => setUserMenuOpen((open) => !open)}
-                    className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] hover:bg-white/10"
+                    className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-white/80 hover:border-white/20 hover:bg-white/[0.07]"
                   >
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-[11px] font-semibold">
                       {initials}
@@ -514,75 +503,72 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
 
         {/* CONTEÚDO */}
-        <main className="mx-auto w-full max-w-6xl px-4">
-          <CartProvider>{children}</CartProvider>
+        <main className="app-container">
+          {children}
         </main>
 
         {/* FOOTER */}
-        <footer className="mt-10 border-t border-white/10">
-          <div className="mt-3 flex flex-col items-center gap-2 text-[15px] text-white/75">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 hover:bg-white/10"
-              onClick={() => setReportOpen((v) => !v)}
-            >
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-red-500/20 text-[10px] text-red-200">
-                🐞
-              </span>
-              <span>Encontraste um erro? Reporta aqui</span>
-            </button>
+        <footer className="site-footer">
+          <div className="app-container flex flex-col gap-4 py-7 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="font-semibold text-white/90">+FCPorto Predictor</div>
+              <div className="mt-1 text-xs">Palpites, ranking e prémios para a comunidade portista.</div>
+            </div>
 
-            {reportOpen && (
-              <div className="mt-1 w-full max-w-xs rounded-2xl border border-white/15 bg-black/70 px-3 py-2 text-left text-[11px] leading-relaxed shadow-lg">
-                <div className="font-medium text-white/90 mb-1">
-                  Contactos para feedback/bugs
-                </div>
-                <div>
-                  Email:{' '}
-                  <a
-                    href="mailto:geral@maisfcporto.com"
-                    className="underline decoration-white/40 hover:decoration-white"
-                  >
-                    geral@maisfcporto.com
-                  </a>
-                </div>
-                <div className="mt-1">
-                  Instagram:{' '}
-                  <a
-                    href="https://www.instagram.com/maisfcporto"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline decoration-white/40 hover:decoration-white"
-                  >
-                    @maisfcporto
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="mx-auto w-full max-w-6xl px-4 py-6 text-center text-xs leading-relaxed text-white/70">
-            <div className="opacity-80">
-              © {new Date().getFullYear()} +FCPorto Predictor. Todos os direitos
-              reservados.
-            </div>
-            <div className="mt-1">
-              As marcas, nomes e logótipos do +FCPorto e da Betano são
-              propriedade dos respetivos titulares e estão protegidos por
-              direitos de autor e/ou marcas registadas. Não é permitida a
-              utilização para fins comerciais sem autorização.
-            </div>
-            <div className="mt-1">
-              A utilização deste site implica a aceitação dos{' '}
-              <Link
-                href="/regras"
-                className="underline underline-offset-2 hover:text-white/90"
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+              <Link href="/jogos" className="hover:text-white">Jogos</Link>
+              <Link href="/rankings" className="hover:text-white">Rankings</Link>
+              <Link href="/premios" className="hover:text-white">Prémios</Link>
+              <Link href="/regras" className="hover:text-white">Regras</Link>
+              <button
+                type="button"
+                className="hover:text-white"
+                onClick={() => setReportOpen((v) => !v)}
               >
-                Termos e Condições
-              </Link>{' '}
-              deste projeto.
+                Reportar erro
+              </button>
+            </div>
+          </div>
+
+          {reportOpen && (
+            <div className="app-container pb-6">
+              <div className="surface max-w-md px-4 py-3 text-xs leading-relaxed text-white/70">
+                Envia o detalhe para{' '}
+                <a href="mailto:geral@maisfcporto.com" className="text-white underline decoration-white/30">
+                  geral@maisfcporto.com
+                </a>{' '}
+                ou por mensagem para{' '}
+                <a
+                  href="https://www.instagram.com/maisfcporto"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-white underline decoration-white/30"
+                >
+                  @maisfcporto
+                </a>.
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-white/[0.06]">
+            <div className="app-container py-4 text-[11px] leading-relaxed text-white/40">
+              © {new Date().getFullYear()} +FCPorto Predictor. Prémios e campanhas sujeitos às condições aplicáveis.
             </div>
           </div>
         </footer>
+
+        <nav className="mobile-bottom-nav" aria-label="Navegação principal">
+          {mobilePrimaryLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              data-active={isActive(link.href)}
+              onClick={() => setMobileOpen(false)}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
         <Analytics />
         <SpeedInsights/>
       </body>

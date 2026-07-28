@@ -1,151 +1,139 @@
-// apps/web/app/premios/page.tsx
 'use client';
 
 import Link from 'next/link';
-import clsx from 'clsx';
 
 export default function PremiosPage() {
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10 md:py-14">
+    <main className="page-shell">
       <title>+Predictor - Prémios</title>
-      <header className="mb-8">
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-white/40">
-          O que podes ganhar com o +Predictor
-        </p>
-        <h1 className="mb-3 text-3xl font-bold md:text-4xl">Prémios</h1>
-        <p className="max-w-2xl text-sm text-white/70 md:text-base">
-          Consulta os principais prémios do +Predictor: ranking geral, ranking mensal, melhores
-          palpites por jogo e experiências especiais em parceria com a Betano.
+
+      <header className="page-header">
+        <p className="eyebrow">Em jogo esta época</p>
+        <h1 className="display-title">Prémios que dão ainda mais peso a cada palpite.</h1>
+        <p className="page-copy">
+          Da camisola oficial às experiências no Dragão, cada ranking tem uma recompensa clara.
         </p>
       </header>
 
-      {/* Destaques principais */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card
-          title="Ranking Geral — Camisola Oficial do FC Porto"
-          imageSrc="/win-icons-01.svg"
-          imageAlt="Camisola de futebol azul e branca em destaque"
-          imageClassName="h-60 w-auto object-contain md:h-76"
-        >
-          <p className="text-white/80">
-            O vencedor do <span className="font-medium">ranking geral</span> recebe uma{' '}
-            <span className="font-semibold">camisola oficial do FC Porto</span> (época atual), tamanho
-            e personalização a combinar mediante disponibilidade.
-          </p>
-        </Card>
+      <section className="surface-strong relative overflow-hidden p-6 md:p-9">
+        <div className="relative z-10 grid items-center gap-7 md:grid-cols-[1.2fr_.8fr]">
+          <div>
+            <p className="eyebrow">Prémio da época</p>
+            <h2 className="section-title max-w-xl text-[2.25rem] md:text-[3.25rem]">
+              Camisola oficial do FC Porto
+            </h2>
+            <p className="page-copy mt-4">
+              O primeiro classificado do ranking geral recebe a camisola oficial da época atual.
+              Tamanho e personalização ficam sujeitos a disponibilidade.
+            </p>
+            <Link href="/rankings" className="action-button mt-6">
+              Ver ranking geral
+            </Link>
+          </div>
 
-        <Card
-          title="Ranking Mensal — Freebets 30€ / 20€ / 10€"
-          imageSrc="/win-icons-03.svg"
-          imageAlt="Freebets Betano"
-        >
-          <p className="text-white/80">
-            Todos os meses premiamos o pódio do ranking mensal com{' '}
-            <span className="font-semibold">freebets</span>:
-          </p>
-          <ul className="mt-4 grid grid-cols-3 gap-3 text-center">
-            <PrizePill label="1.º" value="30€" />
-            <PrizePill label="2.º" value="20€" />
-            <PrizePill label="3.º" value="10€" />
-          </ul>
-          <p className="mt-4 text-xs text-white/60">
-            Freebets atribuídas via parceiro Betano, sujeitas a conta ativa e verificada.
-          </p>
-        </Card>
+          <div className="relative flex min-h-64 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#06102b]/70">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(40,120,255,.25),transparent_62%)]" />
+            <img
+              src="/win-icons-01.svg"
+              alt="Camisola oficial do FC Porto"
+              className="relative z-10 h-56 w-auto object-contain md:h-72"
+            />
+          </div>
+        </div>
+      </section>
 
-        <Card
-          title="Vencedor da Jornada Europeia — Experiência Betano"
-          imageSrc="/win-icons-04.svg"
-          imageAlt="Experiência Betano"
-        >
-          <p className="text-white/80">
-            Em cada jornada da <span className="font-medium">Europa League</span>, o participante com a
-            <span className="font-semibold"> maior pontuação</span> ganha uma{' '}
-            <span className="font-semibold">Experiência Betano</span>:
-            <span className="font-semibold"> bilhete duplo para jogo no Dragão</span>.
-          </p>
-        </Card>
+      <section className="mt-8">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Consistência premiada</p>
+            <h2 className="section-title">Pódio mensal</h2>
+          </div>
+          <span className="section-meta">Freebets Betano</span>
+        </div>
 
-        <Card
-          title="Vencedor por Jogo — Freebet 10€"
-          imageSrc="/win-icons-02.svg"
-          imageAlt="Freebets Betano"
-        >
-          <p className="text-white/80">
-            Em cada jogo, o melhor palpite (maior pontuação) ganha uma{' '}
-            <span className="font-semibold">freebet de 10€</span>.
-          </p>
-          <br />
-        </Card>
+        <div className="grid gap-3 md:grid-cols-3">
+          <MonthlyPrize place="1.º" value="30€" note="Liderança mensal" featured />
+          <MonthlyPrize place="2.º" value="20€" note="Segundo classificado" />
+          <MonthlyPrize place="3.º" value="10€" note="Terceiro classificado" />
+        </div>
+      </section>
 
-        {/* <Card title="Sorteios — 🎟️ Bilhetes, Freebets & Experiências">
-          <p className="text-white/80">
-            Ao longo da temporada, realizaremos <span className="font-semibold">sorteios</span> para a
-            comunidade: bilhetes de jogo, freebets e experiências exclusivas.
-          </p>
-          <ul className="mt-4 space-y-2 text-white/70 text-sm">
-            <li>• Elegibilidade definida em cada campanha.</li>
-            <li>• Comunicação no Instagram do MaisFCPorto e dentro da app.</li>
-          </ul>
-        </Card> */}
-      </div>
+      <section className="mt-8 grid gap-4 md:grid-cols-2">
+        <PrizeStory
+          eyebrow="Jornada europeia"
+          title="Bilhete duplo para o Dragão"
+          copy="O melhor participante de cada jornada europeia ganha uma Experiência Betano com bilhete duplo."
+          image="/win-icons-04.svg"
+        />
+        <PrizeStory
+          eyebrow="Cada jogo conta"
+          title="Freebet de 10€"
+          copy="O palpite com maior pontuação em cada jogo recebe uma freebet de 10€ na Betano."
+          image="/win-icons-02.svg"
+        />
+      </section>
 
-      {/* Nota legal curta */}
-      <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/70">
-        <p className="leading-relaxed">
-          <span className="font-medium">Notas:</span> os prémios podem estar sujeitos a
-          disponibilidade, validações de conta e termos do parceiro. Freebets são atribuídas a
-          contas Betano válidas e verificadas. Reservamo-nos o direito de ajustar as condições
-          dos prémios por razões operacionais ou legais.
-          <br />
-          Em caso de empate, são aplicados os critérios de desempate em{' '}
-              <Link href="/regras" className="underline decoration-white/30 hover:decoration-white">
-                Regras
-              </Link>
-        </p>
-      </div>
+      <aside className="surface mt-8 px-5 py-4 text-sm leading-relaxed text-white/60">
+        Os prémios dependem de disponibilidade, validação da conta e condições do parceiro.
+        Em caso de empate aplicam-se os critérios descritos nas{' '}
+        <Link href="/regras" className="text-white underline decoration-white/30 underline-offset-4">
+          regras do +Predictor
+        </Link>.
+      </aside>
     </main>
   );
 }
 
-/* ---------- UI helpers ---------- */
-
-function Card({
-  title,
-  imageSrc,
-  imageAlt,
-  imageClassName,
-  children,
+function MonthlyPrize({
+  place,
+  value,
+  note,
+  featured = false,
 }: {
-  title: string;
-  imageSrc?: string;
-  imageAlt?: string;
-  imageClassName?: string;
-  children: React.ReactNode;
+  place: string;
+  value: string;
+  note: string;
+  featured?: boolean;
 }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.015] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] md:p-6">
-      <h2 className="mb-3 text-base font-semibold tracking-tight md:text-lg">{title}</h2>
-      {children}
-      {imageSrc ? (
-        <div className="mt-4 overflow-hidden rounded-2xl bg-black/10 flex items-center justify-center p-3 md:p-4">
-          <img
-            src={imageSrc}
-            alt={imageAlt ?? title}
-            className={clsx('h-44 w-auto object-contain md:h-52', imageClassName)}
-            loading="lazy"
-          />
-        </div>
-      ) : null}
-    </section>
+    <article
+      className={
+        featured
+          ? 'surface-strong relative min-h-44 overflow-hidden p-5'
+          : 'surface relative min-h-44 overflow-hidden p-5'
+      }
+    >
+      <div className="metric-label">{place} lugar</div>
+      <div className="metric-value mt-5">{value}</div>
+      <div className="metric-caption">{note}</div>
+      {featured && (
+        <div className="absolute -bottom-12 -right-10 h-36 w-36 rounded-full bg-blue-500/20 blur-2xl" />
+      )}
+    </article>
   );
 }
 
-function PrizePill({ label, value }: { label: string; value: string }) {
+function PrizeStory({
+  eyebrow,
+  title,
+  copy,
+  image,
+}: {
+  eyebrow: string;
+  title: string;
+  copy: string;
+  image: string;
+}) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-      <div className="text-xs text-white/60">{label}</div>
-      <div className="text-xl font-semibold">{value}</div>
-    </div>
+    <article className="surface grid min-h-64 grid-cols-[1fr_130px] gap-4 overflow-hidden p-5 md:grid-cols-[1fr_170px] md:p-6">
+      <div className="self-center">
+        <p className="eyebrow">{eyebrow}</p>
+        <h2 className="section-title text-[1.75rem]">{title}</h2>
+        <p className="mt-3 text-sm leading-relaxed text-white/65">{copy}</p>
+      </div>
+      <div className="flex items-center justify-center bg-white/[0.025]">
+        <img src={image} alt="" className="max-h-44 w-full object-contain p-3" />
+      </div>
+    </article>
   );
 }

@@ -473,11 +473,8 @@ export default function FixtureCard({
   return (
     <div
       className={clsx(
-        'group relative w-full',
-        'rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8 pb-8',
-        'shadow-[0_10px_50px_rgba(0,0,0,0.35)] overflow-hidden',
+        'fixture-card group w-full',
         'transition-colors duration-200',
-        'hover:border-white/20 hover:bg-white/[0.03]',
       )}
     >
       {/* Watermark */}
@@ -494,6 +491,7 @@ export default function FixtureCard({
         />
       )}
 
+      <div className="fixture-match-zone">
       {/* Cabeçalho mobile */}
       <div className="md:hidden relative flex items-center justify-center">
         <div className="absolute left-0 top-1/2 -translate-y-1/2 pl-1">
@@ -522,7 +520,8 @@ export default function FixtureCard({
         <div className="absolute right-0 top-1/2 -translate-y-1/2 pr-1">
           <span
             className={clsx(
-              'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] leading-none',
+              'status-tag',
+              !headerStatusLabel && 'deadline-tag',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
                 : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
@@ -556,7 +555,7 @@ export default function FixtureCard({
         <div className="min-w-0 justify-self-start">
           {comp && (
             <span
-              className="inline-flex max-w-full items-center justify-center text-center gap-2 rounded-full px-3.5 py-1 text-[12px] font-medium leading-none"
+              className="comp-tag max-w-full justify-center gap-2 text-center"
               style={{
                 background:
                   subtle === 'transparent'
@@ -584,7 +583,8 @@ export default function FixtureCard({
         <div className="justify-self-end hidden md:block">
           <span
             className={clsx(
-              'rounded-full px-3 py-1 text-[12px] leading-none',
+              'status-tag',
+              !headerStatusLabel && 'deadline-tag',
               headerStatusLabel
                 ? 'bg-white/5 text-gray-200'
                 : urgencyClass(remainMs ?? Number.MAX_SAFE_INTEGER),
@@ -615,7 +615,7 @@ export default function FixtureCard({
       </div>
 
       {/* Layout principal */}
-      <div className="mt-6 mb-4 flex items-start gap-2 sm:items-center sm:gap-4 md:gap-6">
+      <div className="mt-4 flex items-center justify-between gap-2 sm:gap-4 md:gap-6 flex-nowrap mb-2">
         {/* HOME */}
         <div className="flex min-w-0 flex-1 basis-0 flex-col items-center">
           <Crest src={home_crest} alt={home_team_name} />
@@ -705,13 +705,21 @@ export default function FixtureCard({
         </div>
       </div>
 
+      </div>
+
+      <div className="fixture-prediction-zone">
+        {variant !== 'past' && (
+          <div className="prediction-zone-kicker">O teu palpite</div>
+        )}
+
+      <div className="prediction-action-row">
       {/* Marcador (palpite) */}
-      <div className="mt-2 flex flex-col items-center gap-1">
+      <div className="prediction-editor">
         <button
           type="button"
           disabled={!pickerEnabled}
           className={clsx(
-            'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs sm:text-sm border',
+            'inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-xs sm:text-sm border',
             pickerEnabled
               ? 'border-white/20 bg-white/5 hover:bg-white/10'
               : 'border-white/10 bg-white/5 text-white/50 cursor-not-allowed',
@@ -777,70 +785,71 @@ export default function FixtureCard({
         </div>
       )}
 
-      {/* Pill "Última previsão" para jogos em aberto */}
+      </div>
+
+      {/* Estado persistente do palpite, numa linha própria */}
       {!pointsBadge && lastPredText && (
-        <div className="flex justify-center mt-2">
-          <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium leading-none bg-white/5 text-gray-200">
-            Última previsão: {lastPredText}
-            {lastPredScorerLabel && ` | Marcador: ${lastPredScorerLabel}`}
+        <div
+          className={clsx(
+            'prediction-status',
+            predictionChanged
+              ? 'prediction-status--pending'
+              : 'prediction-status--saved',
+          )}
+          role="status"
+        >
+          <span aria-hidden className="text-sm">
+            {predictionChanged ? '•' : '✓'}
           </span>
+          <div>
+            <strong>
+              {predictionChanged ? 'Alterações por guardar' : 'Palpite guardado'}
+            </strong>
+            <span className="prediction-status-detail">
+              {lastPredText}
+              {lastPredScorerLabel && ` · ${lastPredScorerLabel}`}
+            </span>
+          </div>
         </div>
       )}
 
-      {/* Tendência da comunidade (resultado + marcador mais comuns) */}
-{variant !== 'past' && showTrends && trends && (
-  <div className="mt-2 flex flex-col items-center gap-1">
-    {trends.total_predictions === 0 ? (
-      <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] sm:text-[12px] leading-none bg-white/5 text-white/70">
-        Tendência da comunidade: ainda sem dados suficientes
-      </span>
-    ) : (
-      <>
-        <span className="text-[11px] sm:text-[12px] text-white/70">
-          Tendência da comunidade
-        </span>
+      {/* Tendência da comunidade, separada da área de edição */}
+      {variant !== 'past' && showTrends && trends && (
+        <div className="community-trends">
+          {!hasRealTrends ? (
+            <div className="trend-row">
+              <span className="trend-label">Comunidade</span>
+              <span className="trend-value">Ainda sem dados suficientes</span>
+            </div>
+          ) : (
+            <>
+              <div className="trend-row">
+                <span className="trend-label">Resultados mais escolhidos</span>
+                <div className="trend-values">
+                  {trends.scores.slice(0, 3).map((score) => (
+                    <span className="trend-value" key={`${score.home}-${score.away}`}>
+                      {score.home}–{score.away} <span>{score.pct}%</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
 
-        {/* Resultados mais comuns */}
-        {trends.scores && trends.scores.length > 0 ? (
-          <div className="flex flex-wrap justify-center gap-1">
-            {trends.scores.slice(0, 3).map((s) => (
-              <span
-                key={`${s.home}-${s.away}`}
-                className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90"
-              >
-                {s.home}–{s.away}{' '}
-                <span className="opacity-75">
-                  ({s.pct}%)
-                </span>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div className="text-[11px] text-white/60">
-            Sem tendência de resultado ainda.
-          </div>
-        )}
-
-        {/* Marcadores mais escolhidos */}
-        {trends.scorers && trends.scorers.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-1 mt-1">
-            {trends.scorers.slice(0, 3).map((sc) => (
-              <span
-                key={sc.player_id}
-                className="rounded-full bg-white/8 px-2.5 py-0.5 text-[11px] sm:text-[12px] leading-none text-white/90"
-              >
-                {sc.name}{' '}
-                <span className="opacity-75">
-                  ({sc.pct}%)
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
-      </>
-    )}
-  </div>
-)}
+              {trends.scorers.length > 0 && (
+                <div className="trend-row">
+                  <span className="trend-label">Marcadores mais escolhidos</span>
+                  <div className="trend-values">
+                    {trends.scorers.slice(0, 3).map((scorer) => (
+                      <span className="trend-value" key={scorer.player_id}>
+                        {scorer.name} <span>{scorer.pct}%</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Botão mobile Guardar */}
       {variant !== 'past' && (
@@ -848,7 +857,7 @@ export default function FixtureCard({
           <button
             disabled={!canSave || !!saving || nowLocked || !canEdit}
             className={clsx(
-              'rounded-full px-4 py-2 text-sm font-medium',
+              'min-h-10 rounded-xl px-5 py-2 text-sm font-semibold',
               !canSave || saving || nowLocked || !canEdit
                 ? 'bg-white/5 text-white/50 cursor-not-allowed'
                 : 'bg-white/10 hover:bg-white/15 text-white',
@@ -859,6 +868,8 @@ export default function FixtureCard({
           </button>
         </div>
       )}
+
+      </div>
 
       {/* Modal simples de escolha de jogador */}
       {pickerOpen && pickerEnabled && (
@@ -1060,7 +1071,7 @@ function ScoreBox({
         }
       }}
       className={clsx(
-        'no-spinner text-center tabular-nums rounded-2xl border placeholder:text-white/70',
+        'score-input no-spinner text-center tabular-nums border placeholder:text-white/70',
         'h-12 w-12 text-xl sm:h-14 sm:w-14 sm:text-2xl md:h-16 md:w-16 md:text-3xl',
         disabled
           ? 'border-white/10 bg-white/[0.09] text-white/40'

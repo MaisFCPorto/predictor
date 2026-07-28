@@ -33,6 +33,16 @@ export default function AdminIndex() {
             description="Configurar equipas."
           />
           <AdminCard
+            href="/admin/players"
+            title="Jogadores"
+            description="Gerir o plantel e disponibilidade no seletor de marcadores."
+          />
+          <AdminCard
+            href="/admin/competitions"
+            title="Competições"
+            description="Criar competições e definir a respetiva identidade visual."
+          />
+          <AdminCard
             href="/admin/fixtures"
             title="Jogos"
             description="Gerir calendário, resultados finais e estado dos jogos."
@@ -84,6 +94,23 @@ function AdminIcon({ title }: { title: string }) {
       >
         <path d="M12 3l7 2v6c0 4.2-2.7 8-7 10-4.3-2-7-5.8-7-10V5l7-2z" />
         <path d="M9 9h6" />
+      </svg>
+    );
+  }
+
+  if (t.includes('jogador') || t.includes('plantel')) {
+    return (
+      <svg
+        className="h-3.5 w-3.5 text-white/80"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <circle cx="12" cy="7" r="3" />
+        <path d="M7 21l1.5-7 3.5-2 3.5 2L17 21" />
+        <path d="M9 16l-3 2" />
+        <path d="M15 16l3 2" />
       </svg>
     );
   }

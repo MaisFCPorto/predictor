@@ -41,8 +41,8 @@ adminFixtureScorers.put('/:id/scorers', async (c) => {
   const ids = [
     ...new Set(
       (body.player_ids ?? [])
-        .map((value) => String(value).trim())
-        .filter(Boolean),
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0),
     ),
   ];
 
@@ -63,7 +63,7 @@ adminFixtureScorers.put('/:id/scorers', async (c) => {
             created_at
           )
           VALUES (
-            lower(hex(randomblob(16))),
+            abs(random()),
             ?,
             ?,
             datetime('now')

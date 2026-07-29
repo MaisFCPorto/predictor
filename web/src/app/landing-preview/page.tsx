@@ -158,16 +158,14 @@ export default function LandingPreviewPage() {
       <section className="border-b border-white/[0.08]">
         <div className="mx-auto grid w-[calc(100%_-_2rem)] max-w-[1120px] gap-12 py-12 md:grid-cols-[0.9fr_1.1fr] md:items-center md:py-20 lg:gap-16">
           <div className="max-w-xl">
-            <p className="text-xs font-extrabold uppercase tracking-[0.13em] text-sky-300/75">
-              Mini-liga da comunidade +FCPorto
-            </p>
-
-            <h1 className="mt-5 text-[clamp(2.7rem,5.8vw,4.9rem)] font-black leading-[0.96] tracking-[-0.052em]">
-              Faz o teu palpite para o próximo jogo.
+            <h1 className="text-[clamp(2.65rem,5vw,4.25rem)] font-black leading-[0.98] tracking-[-0.045em]">
+              {nextFixture
+                ? `Qual é o teu palpite para ${nextFixture.home_team_name} x ${nextFixture.away_team_name}?`
+                : 'Qual é o teu palpite para o próximo jogo?'}
             </h1>
 
             <p className="mt-6 max-w-lg text-base leading-7 text-white/66 md:text-lg md:leading-8">
-              Prevê o resultado, escolhe um marcador e compete no ranking da comunidade ao longo de toda a época.
+              Prevê o resultado, escolhe um marcador e entra no ranking da comunidade +FCPorto.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -186,7 +184,6 @@ export default function LandingPreviewPage() {
               </Link>
             </div>
 
-            <p className="mt-6 text-sm text-white/42">Grátis, simples e aberto a toda a comunidade.</p>
           </div>
 
           <PublicFixtureCard
@@ -201,9 +198,9 @@ export default function LandingPreviewPage() {
       <section id="como-funciona" className="scroll-mt-24 py-16 md:py-20">
         <div className="mx-auto w-[calc(100%_-_2rem)] max-w-[1120px]">
           <div className="max-w-2xl">
-            <h2 className="text-3xl font-black tracking-[-0.035em] md:text-4xl">Como funciona</h2>
+            <h2 className="text-3xl font-black tracking-[-0.035em] md:text-4xl">Como se joga</h2>
             <p className="mt-3 text-base leading-7 text-white/58">
-              Um palpite demora menos de um minuto. O resto decide-se em campo.
+              Escolhes o resultado e um marcador antes de a bola começar a rolar.
             </p>
           </div>
 
@@ -271,9 +268,9 @@ export default function LandingPreviewPage() {
       <section id="ranking" className="scroll-mt-24 py-16 md:py-20">
         <div className="mx-auto grid w-[calc(100%_-_2rem)] max-w-[1120px] gap-10 lg:grid-cols-[0.7fr_1.3fr] lg:items-center">
           <div>
-            <h2 className="text-3xl font-black tracking-[-0.035em] md:text-4xl">A classificação está sempre a mexer</h2>
+            <h2 className="text-3xl font-black tracking-[-0.035em] md:text-4xl">Vê quem vai à frente</h2>
             <p className="mt-4 max-w-md text-base leading-7 text-white/58">
-              Cada jornada pode alterar o topo. Consulta os pontos, resultados exatos e posição de cada participante.
+              Acompanha os pontos, os resultados exatos e a tua posição ao longo da época.
             </p>
             <p className="mt-5 text-sm font-semibold text-white/40">{rankingCopy}</p>
           </div>
@@ -315,7 +312,7 @@ function PublicFixtureCard({
 }) {
   if (loading) {
     return (
-      <div className="min-h-[430px] animate-pulse rounded-2xl border border-white/10 bg-[#0a1733] p-6 md:p-7">
+      <div className="min-h-[430px] animate-pulse rounded-xl border border-white/10 bg-[#0a1733] p-6 md:p-7">
         <div className="h-4 w-28 rounded bg-white/10" />
         <div className="mt-12 h-36 rounded-xl bg-white/[0.05]" />
         <div className="mt-10 h-12 rounded-lg bg-white/10" />
@@ -325,7 +322,7 @@ function PublicFixtureCard({
 
   if (!fixture || !kickoff) {
     return (
-      <article className="flex min-h-[430px] flex-col justify-between rounded-2xl border border-white/10 bg-[#0a1733] p-6 md:p-7">
+      <article className="flex min-h-[430px] flex-col justify-between rounded-xl border border-white/10 bg-[#0a1733] p-6 md:p-7">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-white/42">Próximo jogo</p>
         </div>
@@ -349,22 +346,15 @@ function PublicFixtureCard({
   const competition = fixture.competition_name || fixture.competition_code || 'Próximo jogo';
 
   return (
-    <article className="rounded-2xl border border-white/12 bg-[#0a1733] p-6 md:p-7">
+    <article className="rounded-xl border border-white/12 bg-[#0a1733] p-6 md:p-7">
       <div className="flex items-start justify-between gap-5 border-b border-white/[0.08] pb-5">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-300/85">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-            Palpites abertos
-          </div>
-          <div className="mt-2 text-sm font-extrabold text-white">{competition}</div>
-          {fixture.round_label && <div className="mt-0.5 text-xs text-white/40">{fixture.round_label}</div>}
+          <div className="text-sm font-extrabold text-white">{competition}</div>
+          {fixture.round_label && <div className="mt-1 text-xs text-white/40">{fixture.round_label}</div>}
         </div>
-        {countdown && (
-          <div className="text-right text-xs text-white/45">
-            Fecha em
-            <div className="mt-1 font-extrabold text-white/82">{countdown}</div>
-          </div>
-        )}
+        <div className="max-w-[150px] text-right text-xs leading-5 text-white/45">
+          {countdown ? `Palpites fecham em ${countdown}` : 'Palpites abertos'}
+        </div>
       </div>
 
       <div className="pt-6 text-center">

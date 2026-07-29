@@ -372,12 +372,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="pt">
       <body className={`app-body text-white${isLandingPreview ? ' landing-preview-body' : ''}`}>
         {/* BANNERS BETANO */}
-        {!isLandingPreview && (
-          <>
-            <BetanoSideRails />
-            <BetanoMobileBanner />
-          </>
-        )}
+        <BetanoSideRails />
+        <BetanoMobileBanner />
 
         {/* NAVBAR */}
         {isLandingPreview ? (

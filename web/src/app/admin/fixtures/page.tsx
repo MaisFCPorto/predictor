@@ -43,6 +43,13 @@ type Player = {
   position: 'GR' | 'D' | 'M' | 'A' | string;
 };
 
+type FixtureScorerSummary = {
+  fixture_id: string;
+  player_id: string | number;
+  name: string;
+  position?: string | null;
+};
+
 type Suggestion = {
   utcDate: string;
   home: string;
@@ -270,6 +277,7 @@ export default function AdminFixtures() {
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [scorersByFixture, setScorersByFixture] = useState<Record<string, string[]>>({});
+  const [scorerNamesByFixture, setScorerNamesByFixture] = useState<Record<string, string[]>>({});
   const [scorerTargetId, setScorerTargetId] = useState<string | null>(null);
   const [scorerDraft, setScorerDraft] = useState<string[]>([]);
   const [scorerSearch, setScorerSearch] = useState('');
@@ -454,19 +462,58 @@ export default function AdminFixtures() {
 
   async function loadFixtureScorers(fixtureId: string): Promise<string[]> {
     try {
-      const { data } = await adm.get<{ player_id: string }[]>(
+      const { data } = await adm.get<
+        { player_id: string | number; name?: string | null }[]
+      >(
         `/api/admin/fixtures/${fixtureId}/scorers`,
         { headers: { 'cache-control': 'no-store' } },
       );
-      const ids = normalizePlayerIds(
-        (Array.isArray(data) ? data : []).map((row) => row.player_id),
-      );
+      const rows = Array.isArray(data) ? data : [];
+      const ids = normalizePlayerIds(rows.map((row) => row.player_id));
+      const names = [
+        ...new Set(
+          rows
+            .map((row) => row.name?.trim())
+            .filter((name): name is string => Boolean(name)),
+        ),
+      ];
       setScorersByFixture((prev) => ({ ...prev, [fixtureId]: ids }));
+      setScorerNamesByFixture((prev) => ({ ...prev, [fixtureId]: names }));
       return ids;
     } catch {
       const current = scorersByFixture[fixtureId] ?? [];
       setScorersByFixture((prev) => ({ ...prev, [fixtureId]: current }));
       return current;
+    }
+  }
+
+  async function loadFixtureScorerSummaries(fixtureIds: string[]) {
+    const ids = [...new Set(fixtureIds.map((id) => id.trim()).filter(Boolean))];
+    if (ids.length === 0) return;
+
+    try {
+      const { data } = await adm.get<FixtureScorerSummary[]>(
+        '/api/admin/fixtures/scorers-summary',
+        {
+          params: { fixture_ids: ids.join(',') },
+          headers: { 'cache-control': 'no-store' },
+        },
+      );
+
+      const next: Record<string, string[]> = Object.fromEntries(
+        ids.map((id) => [id, []]),
+      );
+
+      for (const row of Array.isArray(data) ? data : []) {
+        const fixtureId = String(row.fixture_id ?? '').trim();
+        const name = row.name?.trim();
+        if (!fixtureId || !name || !(fixtureId in next)) continue;
+        if (!next[fixtureId].includes(name)) next[fixtureId].push(name);
+      }
+
+      setScorerNamesByFixture((prev) => ({ ...prev, ...next }));
+    } catch {
+      // A lista de jogos continua utilizável mesmo que este resumo falhe.
     }
   }
 
@@ -768,6 +815,11 @@ export default function AdminFixtures() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  useEffect(() => {
+    void loadFixtureScorerSummaries(filtered.map((fixture) => fixture.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered]);
+
   const activeFilterCount = Number(Boolean(compFilter)) + Number(Boolean(statusFilter)) + Number(Boolean(sortField));
 
   function clearFilters() {
@@ -998,6 +1050,13 @@ export default function AdminFixtures() {
               const homeName = fixture.home_name ?? teamById.get(fixture.home_team_id)?.name ?? 'Casa';
               const awayName = fixture.away_name ?? teamById.get(fixture.away_team_id)?.name ?? 'Visitante';
               const isFinished = fixture.status === 'FINISHED';
+              const scorerNames = scorerNamesByFixture[fixture.id];
+              const scorerLabel =
+                scorerNames === undefined
+                  ? '—'
+                  : scorerNames.length > 0
+                    ? scorerNames.join(', ')
+                    : 'nenhum';
 
               return (
                 <article
@@ -1041,6 +1100,12 @@ export default function AdminFixtures() {
                       <div className="mt-2 text-xs text-white/50">
                         {fixtureDateLabel(fixture.kickoff_at)}
                         {fixture.leg_number ? ` · ${fixture.leg_number}.ª mão` : ''}
+                      </div>
+                      <div
+                        className="mt-1 truncate text-[11px] text-white/35"
+                        title={`Marcadores: ${scorerLabel}`}
+                      >
+                        Marcadores: {scorerLabel}
                       </div>
                     </div>
 

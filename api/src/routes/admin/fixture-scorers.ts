@@ -8,6 +8,42 @@ export const adminFixtureScorers = new Hono<{ Bindings: Env }>();
 // Middleware admin em todas as rotas deste router
 adminFixtureScorers.use('*', requireAdminKey);
 
+// GET /api/admin/fixtures/scorers-summary?fixture_ids=id1,id2
+// Devolve os nomes dos marcadores para vários jogos numa única chamada.
+adminFixtureScorers.get('/scorers-summary', async (c) => {
+  const fixtureIds = [
+    ...new Set(
+      (c.req.query('fixture_ids') ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, 100);
+
+  if (fixtureIds.length === 0) return c.json([]);
+
+  const placeholders = fixtureIds.map(() => '?').join(', ');
+  const { results } = await c.env.DB
+    .prepare(
+      `
+      SELECT fs.fixture_id, fs.player_id, p.name, p.position
+      FROM fixture_scorers fs
+      JOIN players p ON p.id = fs.player_id
+      WHERE fs.fixture_id IN (${placeholders})
+      ORDER BY fs.fixture_id, p.name
+    `,
+    )
+    .bind(...fixtureIds)
+    .all<{
+      fixture_id: string;
+      player_id: number;
+      name: string;
+      position: string | null;
+    }>();
+
+  return c.json(results ?? []);
+});
+
 // GET /api/admin/fixtures/:id/scorers
 adminFixtureScorers.get('/:id/scorers', async (c) => {
   const fixtureId = c.req.param('id');

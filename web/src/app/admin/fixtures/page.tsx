@@ -206,6 +206,18 @@ function statusClass(status: string) {
     : 'border-sky-400/25 bg-sky-400/10 text-sky-200';
 }
 
+function normalizePlayerId(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+
+  const numeric = Number(raw);
+  return Number.isInteger(numeric) && numeric >= 0 ? String(numeric) : raw;
+}
+
+function normalizePlayerIds(values: unknown[]): string[] {
+  return [...new Set(values.map(normalizePlayerId).filter(Boolean))];
+}
+
 /* =============================================================== */
 
 export default function AdminFixtures() {
@@ -432,7 +444,7 @@ export default function AdminFixtures() {
       setPlayers(
         (data ?? []).map((player) => ({
           ...player,
-          id: String(player.id),
+          id: normalizePlayerId(player.id),
         })),
       );
     } catch {
@@ -446,8 +458,8 @@ export default function AdminFixtures() {
         `/api/admin/fixtures/${fixtureId}/scorers`,
         { headers: { 'cache-control': 'no-store' } },
       );
-      const ids = (Array.isArray(data) ? data : []).map((row) =>
-        String(row.player_id),
+      const ids = normalizePlayerIds(
+        (Array.isArray(data) ? data : []).map((row) => row.player_id),
       );
       setScorersByFixture((prev) => ({ ...prev, [fixtureId]: ids }));
       return ids;
@@ -645,23 +657,38 @@ export default function AdminFixtures() {
   }
 
   function toggleDraftScorer(playerId: string) {
-    setScorerDraft((current) =>
-      current.includes(playerId)
-        ? current.filter((id) => id !== playerId)
-        : [...current, playerId],
-    );
+    const normalizedId = normalizePlayerId(playerId);
+    if (!normalizedId) return;
+
+    setScorerDraft((current) => {
+      const normalizedCurrent = normalizePlayerIds(current);
+      return normalizedCurrent.includes(normalizedId)
+        ? normalizedCurrent.filter((id) => id !== normalizedId)
+        : [...normalizedCurrent, normalizedId];
+    });
   }
 
   async function saveScorerDraft() {
     if (!scorerTargetId) return;
+
+    const fixtureId = scorerTargetId;
+    const idsToSave = normalizePlayerIds(scorerDraft);
+
     setSavingScorers(true);
     try {
-      await adm.put(
-        `/api/admin/fixtures/${scorerTargetId}/scorers`,
-        { player_ids: scorerDraft },
+      const { data } = await adm.put<{ player_ids?: unknown[] }>(
+        `/api/admin/fixtures/${fixtureId}/scorers`,
+        { player_ids: idsToSave.map(Number) },
         { headers: { 'cache-control': 'no-store' } },
       );
-      setScorersByFixture((prev) => ({ ...prev, [scorerTargetId]: scorerDraft }));
+
+      const savedIds = normalizePlayerIds(data?.player_ids ?? idsToSave);
+      setScorersByFixture((prev) => ({ ...prev, [fixtureId]: savedIds }));
+      setScorerDraft(savedIds);
+
+      // Confirma o estado real guardado na D1 antes de fechar o painel.
+      await loadFixtureScorers(fixtureId);
+
       setScorerTargetId(null);
       notify('Marcadores atualizados');
     } catch (e) {

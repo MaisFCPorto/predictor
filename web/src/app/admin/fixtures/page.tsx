@@ -5,6 +5,7 @@ import axios, { AxiosError } from 'axios';
 import Link from 'next/link';
 import AdminGate from '../_components/AdminGate';
 import { adm } from '../_utils/adminClients';
+import { localDateTimeToUtcIso } from '@/utils/dates';
 
 /* -------------------- Tipos -------------------- */
 type Team = { id: string; name: string };
@@ -157,14 +158,7 @@ function toLocalDTValue(isoOrSqlUTC: string) {
 }
 
 function fromLocalDTValue(localValue: string) {
-  if (!localValue) return '';
-
-  const [date, time] = localValue.split('T');
-  if (!date || !time) return '';
-
-  const [y, m, d] = date.split('-');
-  const [hh, mi] = time.split(':');
-  return `${y}-${m}-${d} ${hh}:${mi}:00`;
+  return localDateTimeToUtcIso(localValue);
 }
 
 function splitLocal(dt: string | undefined) {

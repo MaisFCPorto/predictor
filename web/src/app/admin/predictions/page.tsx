@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios, { AxiosError } from 'axios';
 import AdminGate from '../_components/AdminGate';
+import { formatDbDateTimePT } from '@/utils/dates';
 
 const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || '';
 
@@ -56,15 +57,7 @@ function errorMessage(err: unknown): string {
 }
 
 function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('pt-PT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatDbDateTimePT(iso);
 }
 
 /* =============================================================== */

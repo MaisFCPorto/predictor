@@ -23,6 +23,14 @@ type LocalParts = {
 };
 
 const LISBON_TIME_ZONE = 'Europe/Lisbon';
+const SEASON_START_LOCAL: LocalParts = {
+  year: 2026,
+  month: 7,
+  day: 28,
+  hour: 0,
+  minute: 0,
+  second: 0,
+};
 const lisbonFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: LISBON_TIME_ZONE,
   year: 'numeric',
@@ -129,9 +137,9 @@ function parseDbDate(value: string): Date {
   return new Date(hasTimezone ? normalized : `${normalized}Z`);
 }
 
-function safeRate(participants: number, eligibleUsers: number): number {
-  if (eligibleUsers <= 0) return 0;
-  return (participants / eligibleUsers) * 100;
+function safeRate(predictions: number, registeredUsers: number): number {
+  if (registeredUsers <= 0) return 0;
+  return (predictions / registeredUsers) * 100;
 }
 
 async function countUsersBetween(
@@ -171,29 +179,22 @@ async function countUsersUntil(db: D1Database, end: Date): Promise<number> {
   return Number(row?.total ?? 0);
 }
 
-async function countPredictionsUntil(
+async function countPredictions(
   db: D1Database,
   fixtureId: string,
-  end: Date,
-): Promise<{ predictions: number; participants: number }> {
+): Promise<number> {
   const row = await db
     .prepare(
       `
-      SELECT
-        COUNT(*) AS predictions,
-        COUNT(DISTINCT user_id) AS participants
+      SELECT COUNT(*) AS total
       FROM predictions
       WHERE fixture_id = ?
-        AND datetime(created_at) <= datetime(?)
     `,
     )
-    .bind(fixtureId, toSqlUtc(end))
-    .first<{ predictions: number; participants: number }>();
+    .bind(fixtureId)
+    .first<{ total: number }>();
 
-  return {
-    predictions: Number(row?.predictions ?? 0),
-    participants: Number(row?.participants ?? 0),
-  };
+  return Number(row?.total ?? 0);
 }
 
 adminDashboard.get('/dashboard/trends', async (c) => {
@@ -201,36 +202,20 @@ adminDashboard.get('/dashboard/trends', async (c) => {
   const now = new Date();
   const localNow = getLisbonParts(now);
 
-  const localDate = new Date(
-    Date.UTC(localNow.year, localNow.month - 1, localNow.day),
-  );
-  const daysSinceMonday = (localDate.getUTCDay() + 6) % 7;
-
-  const currentWeekStart = localDateTimeToUtc(
-    startOfLocalDay(shiftLocalDate(localNow, -daysSinceMonday)),
-  );
-  const previousWeekStart = localDateTimeToUtc(
-    startOfLocalDay(shiftLocalDate(localNow, -daysSinceMonday - 7)),
-  );
-  const previousWeekEnd = new Date(
-    previousWeekStart.getTime() + (now.getTime() - currentWeekStart.getTime()),
-  );
-
+  const seasonStart = localDateTimeToUtc(SEASON_START_LOCAL);
   const todayStart = localDateTimeToUtc(startOfLocalDay(localNow));
   const previousDayStart = localDateTimeToUtc(
-    startOfLocalDay(shiftLocalDate(localNow, -7)),
+    startOfLocalDay(shiftLocalDate(localNow, -1)),
   );
   const previousDayEnd = new Date(
     previousDayStart.getTime() + (now.getTime() - todayStart.getTime()),
   );
 
-  const [weekCurrent, weekPrevious, todayCurrent, todayPrevious] =
-    await Promise.all([
-      countUsersBetween(db, currentWeekStart, now),
-      countUsersBetween(db, previousWeekStart, previousWeekEnd),
-      countUsersBetween(db, todayStart, now),
-      countUsersBetween(db, previousDayStart, previousDayEnd),
-    ]);
+  const [seasonRegistrations, todayCurrent, todayPrevious] = await Promise.all([
+    countUsersBetween(db, seasonStart, now),
+    countUsersBetween(db, todayStart, now),
+    countUsersBetween(db, previousDayStart, previousDayEnd),
+  ]);
 
   const lockMinutesRaw = Number(c.env.LOCK_MINUTES_BEFORE ?? '0');
   const lockMinutes = Number.isFinite(lockMinutesRaw)
@@ -263,7 +248,6 @@ adminDashboard.get('/dashboard/trends', async (c) => {
   let previousPredictions = 0;
   let currentParticipationRate = 0;
   let previousParticipationRate = 0;
-  let comparisonAt: string | null = null;
 
   if (currentFixture) {
     previousFixture = await db
@@ -278,6 +262,7 @@ adminDashboard.get('/dashboard/trends', async (c) => {
         JOIN teams ht ON ht.id = f.home_team_id
         JOIN teams at ON at.id = f.away_team_id
         WHERE f.id <> ?
+          AND f.status = 'FINISHED'
           AND datetime(f.kickoff_at) < datetime(?)
         ORDER BY datetime(f.kickoff_at) DESC
         LIMIT 1
@@ -286,24 +271,15 @@ adminDashboard.get('/dashboard/trends', async (c) => {
       .bind(currentFixture.id, currentFixture.kickoff_at)
       .first<FixtureSummary>();
 
-    const currentKickoff = parseDbDate(currentFixture.kickoff_at);
-    const currentLockAt = new Date(
-      currentKickoff.getTime() - lockMinutes * 60_000,
-    );
-    const remainingUntilLock = Math.max(
-      0,
-      currentLockAt.getTime() - now.getTime(),
-    );
-
-    const [currentCounts, currentEligibleUsers] = await Promise.all([
-      countPredictionsUntil(db, currentFixture.id, now),
+    const [currentPredictionCount, currentRegisteredUsers] = await Promise.all([
+      countPredictions(db, currentFixture.id),
       countUsersUntil(db, now),
     ]);
 
-    currentPredictions = currentCounts.predictions;
+    currentPredictions = currentPredictionCount;
     currentParticipationRate = safeRate(
-      currentCounts.participants,
-      currentEligibleUsers,
+      currentPredictions,
+      currentRegisteredUsers,
     );
 
     if (previousFixture) {
@@ -311,33 +287,26 @@ adminDashboard.get('/dashboard/trends', async (c) => {
       const previousLockAt = new Date(
         previousKickoff.getTime() - lockMinutes * 60_000,
       );
-      const previousComparisonAt = new Date(
-        previousLockAt.getTime() - remainingUntilLock,
-      );
-      comparisonAt = previousComparisonAt.toISOString();
 
-      const [previousCounts, previousEligibleUsers] = await Promise.all([
-        countPredictionsUntil(
-          db,
-          previousFixture.id,
-          previousComparisonAt,
-        ),
-        countUsersUntil(db, previousComparisonAt),
-      ]);
+      const [previousPredictionCount, previousRegisteredUsers] =
+        await Promise.all([
+          countPredictions(db, previousFixture.id),
+          countUsersUntil(db, previousLockAt),
+        ]);
 
-      previousPredictions = previousCounts.predictions;
+      previousPredictions = previousPredictionCount;
       previousParticipationRate = safeRate(
-        previousCounts.participants,
-        previousEligibleUsers,
+        previousPredictions,
+        previousRegisteredUsers,
       );
     }
   }
 
   return c.json({
     registrations: {
-      week: {
-        current: weekCurrent,
-        previous: weekPrevious,
+      season: {
+        current: seasonRegistrations,
+        start_date: '2026-07-28',
       },
       today: {
         current: todayCurrent,
@@ -364,6 +333,5 @@ adminDashboard.get('/dashboard/trends', async (c) => {
           label: `${previousFixture.home_team_name} x ${previousFixture.away_team_name}`,
         }
       : null,
-    comparison_at: comparisonAt,
   });
 });

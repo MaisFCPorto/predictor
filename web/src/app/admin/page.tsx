@@ -11,7 +11,10 @@ type TrendPair = {
 
 type DashboardTrends = {
   registrations: {
-    week: TrendPair;
+    season: {
+      current: number;
+      start_date: string;
+    };
     today: TrendPair;
   };
   predictions: TrendPair;
@@ -37,6 +40,7 @@ type TrendCardProps = {
   detail?: string | null;
   mode?: 'percent' | 'percentage-points';
   loading?: boolean;
+  showTrend?: boolean;
 };
 
 function trendPresentation(
@@ -84,6 +88,7 @@ function TrendCard({
   detail,
   mode = 'percent',
   loading = false,
+  showTrend = true,
 }: TrendCardProps) {
   const trend = trendPresentation(current, previous, mode);
   const trendClass =
@@ -102,7 +107,7 @@ function TrendCard({
         <strong className="text-2xl font-semibold leading-none text-white">
           {loading ? '—' : value}
         </strong>
-        {!loading && (
+        {!loading && showTrend && (
           <span className={`shrink-0 text-xs font-semibold ${trendClass}`}>
             {arrow} {trend.label}
           </span>
@@ -149,6 +154,7 @@ export default function AdminIndex() {
   }, []);
 
   const currentFixtureLabel = trends?.current_fixture?.label ?? null;
+  const previousFixtureLabel = trends?.previous_fixture?.label ?? null;
 
   return (
     <RequireAuth>
@@ -167,19 +173,20 @@ export default function AdminIndex() {
         <div className="-mx-6 overflow-x-auto px-6 pb-1">
           <section className="grid min-w-[780px] grid-cols-4 gap-3 lg:min-w-0">
             <TrendCard
-              label="Novos registos"
-              value={(trends?.registrations.week.current ?? 0).toLocaleString('pt-PT')}
-              current={trends?.registrations.week.current ?? 0}
-              previous={trends?.registrations.week.previous ?? 0}
-              comparison="vs semana anterior"
+              label="Registos na época"
+              value={(trends?.registrations.season.current ?? 0).toLocaleString('pt-PT')}
+              current={trends?.registrations.season.current ?? 0}
+              previous={0}
+              comparison="desde 28 de julho"
               loading={loadingTrends}
+              showTrend={false}
             />
             <TrendCard
               label="Registos hoje"
               value={(trends?.registrations.today.current ?? 0).toLocaleString('pt-PT')}
               current={trends?.registrations.today.current ?? 0}
               previous={trends?.registrations.today.previous ?? 0}
-              comparison="vs mesmo período há 7 dias"
+              comparison="vs ontem até esta hora"
               loading={loadingTrends}
             />
             <TrendCard
@@ -187,8 +194,12 @@ export default function AdminIndex() {
               value={(trends?.predictions.current ?? 0).toLocaleString('pt-PT')}
               current={trends?.predictions.current ?? 0}
               previous={trends?.predictions.previous ?? 0}
-              comparison="vs último jogo · mesmo momento"
-              detail={currentFixtureLabel}
+              comparison="vs último jogo"
+              detail={
+                currentFixtureLabel
+                  ? `${currentFixtureLabel} · vs ${previousFixtureLabel ?? 'último jogo'}`
+                  : 'Sem jogo aberto'
+              }
               loading={loadingTrends}
             />
             <TrendCard
@@ -199,7 +210,7 @@ export default function AdminIndex() {
               })}%`}
               current={trends?.participation.current ?? 0}
               previous={trends?.participation.previous ?? 0}
-              comparison="vs último jogo · mesmo momento"
+              comparison="palpites ÷ utilizadores · vs último jogo"
               mode="percentage-points"
               loading={loadingTrends}
             />

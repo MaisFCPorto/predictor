@@ -153,11 +153,11 @@ function BetanoMobileBanner() {
   );
 }
 
-function LandingPreviewHeader() {
+function PublicLandingHeader() {
   return (
     <header className="site-header sticky top-0 z-50">
       <div className="mx-auto flex h-16 w-[calc(100%_-_2rem)] max-w-[1120px] items-center gap-4">
-        <Link href="/landing-preview" className="flex items-center">
+        <Link href="/" className="flex items-center">
           <Image
             src="/logos/predictor-03.svg"
             alt="+FCP Predictor"
@@ -200,7 +200,7 @@ function LandingPreviewHeader() {
 export default function RootLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isLandingPreview = pathname === '/landing-preview';
+  const isPublicLanding = pathname === '/' || pathname === '/landing-preview';
 
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -327,19 +327,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     { href: '/regras', label: 'Regras' },
   ];
 
-  // Links que só admin vê
-  const navLinks = user?.isAdmin
-    ? [
-        { href: '/shop', label: 'Loja' },
-        ...baseNavLinks
-      ]
-    : baseNavLinks;
+  const navLinks = baseNavLinks;
 
   const fullNavLinks = user?.isAdmin
     ? [{ href: '/admin', label: 'Backoffice' }, ...navLinks]
     : navLinks;
 
-  const mobilePrimaryLinks = baseNavLinks;
 
   const isActive = (href: string) =>
     pathname === href ||
@@ -370,14 +363,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
   return (
     <html lang="pt">
-      <body className={`app-body text-white${isLandingPreview ? ' landing-preview-body' : ''}`}>
+      <body className={`app-body text-white${isPublicLanding ? ' public-landing-body' : ''}`}>
         {/* BANNERS BETANO */}
         <BetanoSideRails />
         <BetanoMobileBanner />
 
         {/* NAVBAR */}
-        {isLandingPreview ? (
-          <LandingPreviewHeader />
+        {isPublicLanding ? (
+          <PublicLandingHeader />
         ) : (
         <header className="site-header sticky top-0 z-50">
           <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center px-4">
@@ -560,7 +553,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         )}
 
         {/* CONTEÚDO */}
-        <main className={isLandingPreview ? 'w-full' : 'app-container'}>
+        <main className={isPublicLanding ? 'w-full' : 'app-container'}>
           {children}
         </main>
 
@@ -622,20 +615,6 @@ A utilização deste site implica a aceitação dos {' '}
           </div>
         </footer>
 
-        {!isLandingPreview && (
-          <nav className="mobile-bottom-nav" aria-label="Navegação principal">
-            {mobilePrimaryLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                data-active={isActive(link.href)}
-                onClick={() => setMobileOpen(false)}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-        )}
         <Analytics />
         <SpeedInsights/>
       </body>

@@ -286,19 +286,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     { href: '/regras', label: 'Regras' },
   ];
 
-  // Links que só admin vê
-  const navLinks = user?.isAdmin
-    ? [
-        { href: '/shop', label: 'Loja' },
-        ...baseNavLinks
-      ]
-    : baseNavLinks;
+  const navLinks = baseNavLinks;
 
   const fullNavLinks = user?.isAdmin
     ? [{ href: '/admin', label: 'Backoffice' }, ...navLinks]
     : navLinks;
-
-  const mobilePrimaryLinks = baseNavLinks;
 
   const isActive = (href: string) =>
     pathname === href ||
@@ -577,18 +569,6 @@ A utilização deste site implica a aceitação dos {' '}
           </div>
         </footer>
 
-        <nav className="mobile-bottom-nav" aria-label="Navegação principal">
-          {mobilePrimaryLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              data-active={isActive(link.href)}
-              onClick={() => setMobileOpen(false)}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
         <Analytics />
         <SpeedInsights/>
       </body>

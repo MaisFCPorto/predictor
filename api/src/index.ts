@@ -17,6 +17,7 @@ import { admin, recomputePointsForFixture } from './routes/admin';
 import { adminPredictions } from './routes/admin/predictions';
 import { fixtureTrends } from './routes/fixtures-trends';
 import { adminLeagues } from './routes/admin/leagues';
+import { adminDashboard } from './routes/admin/dashboard';
 import { leagues } from './routes/leagues';
 
 // ----------------------------------------------------
@@ -85,6 +86,7 @@ app.get('/routes', (c) =>
       '/api/admin/players',
       '/api/admin/predictions',
       '/api/admin/users',
+      '/api/admin/dashboard/trends',
 
     ],
   }),
@@ -104,6 +106,7 @@ app.route('/api/admin/teams', adminTeams);
 app.route('/api/admin/predictions', adminPredictions);
 app.route('/api', fixtureTrends);
 app.route('/api/admin', adminLeagues);
+app.route('/api/admin', adminDashboard);
 app.route('/api', leagues);
 
 

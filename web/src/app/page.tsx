@@ -1,43 +1,43 @@
-// web/src/app/page.tsx
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import PublicLanding from '@/components/PublicLanding';
 import { supabasePKCE } from '@/utils/supabase/client';
 
 export default function Home() {
   const router = useRouter();
+  const [showLanding, setShowLanding] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    const checkSession = async () => {
+    async function resolveHome() {
       try {
-        const { data } = await supabasePKCE.auth.getSession();
-        const hasSession = !!data.session;
-
+        const { data } = await supabasePKCE.auth.getUser();
         if (cancelled) return;
 
-        if (hasSession) {
-          router.replace('/jogos');    // 👉 landing para utilizadores logados
-        } else {
-          router.replace('/auth');     // 👉 convidados vão para login/registo
+        if (data.user) {
+          router.replace('/jogos');
+          return;
         }
-      } catch (err) {
-        console.error('Erro a verificar sessão Supabase:', err);
-        if (!cancelled) {
-          router.replace('/auth');
-        }
+      } catch (error) {
+        console.error('Erro a verificar sessão Supabase:', error);
       }
-    };
 
-    void checkSession();
+      if (!cancelled) setShowLanding(true);
+    }
+
+    void resolveHome();
 
     return () => {
       cancelled = true;
     };
   }, [router]);
 
-  // não precisa renderizar nada
-  return null;
+  if (!showLanding) {
+    return <div className="min-h-screen bg-[#061026]" aria-busy="true" />;
+  }
+
+  return <PublicLanding />;
 }

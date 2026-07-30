@@ -4,7 +4,7 @@ import './globals.css';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { supabasePKCE } from '@/utils/supabase/client';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from "@vercel/speed-insights/next"
@@ -153,13 +153,54 @@ function BetanoMobileBanner() {
   );
 }
 
+function PublicLandingHeader() {
+  return (
+    <header className="site-header sticky top-0 z-50">
+      <div className="mx-auto flex h-16 w-[calc(100%_-_2rem)] max-w-[1120px] items-center gap-4">
+        <Link href="/" className="flex items-center">
+          <Image
+            src="/logos/predictor-03.svg"
+            alt="+FCP Predictor"
+            width={160}
+            height={40}
+            priority
+            className="h-7 w-auto sm:h-8"
+          />
+        </Link>
+
+        <nav className="ml-auto hidden items-center gap-6 text-sm md:flex">
+          <a href="#como-funciona" className="nav-link">Como funciona</a>
+          <a href="#premios" className="nav-link">Prémios</a>
+          <a href="#ranking" className="nav-link">Ranking</a>
+        </nav>
+
+        <div className="ml-auto flex items-center gap-2 md:ml-4">
+          <Link
+            href="/auth"
+            className="hidden rounded-xl border border-white/12 bg-white/[0.04] px-3.5 py-2 text-xs font-bold text-white/75 transition hover:bg-white/[0.08] sm:inline-flex"
+          >
+            Entrar
+          </Link>
+          <Link
+            href="/auth"
+            className="inline-flex rounded-xl bg-white px-3.5 py-2 text-xs font-extrabold text-[#06102b] transition hover:bg-cyan-50"
+          >
+            Criar conta
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
+
 /* ------------------------------------------------------------------
    ROOT LAYOUT
 ------------------------------------------------------------------- */
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const isPublicLanding = pathname === '/' || pathname === '/landing-preview';
 
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -292,6 +333,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     ? [{ href: '/admin', label: 'Backoffice' }, ...navLinks]
     : navLinks;
 
+
   const isActive = (href: string) =>
     pathname === href ||
     (href !== '/jogos' && pathname?.startsWith(href ?? ''));
@@ -321,12 +363,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="pt">
-      <body className="app-body text-white">
+      <body className={`app-body text-white${isPublicLanding ? ' public-landing-body' : ''}`}>
         {/* BANNERS BETANO */}
         <BetanoSideRails />
         <BetanoMobileBanner />
 
         {/* NAVBAR */}
+        {isPublicLanding ? (
+          <PublicLandingHeader />
+        ) : (
         <header className="site-header sticky top-0 z-50">
           <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center px-4">
             {/* LOGO – centrado em mobile, à esquerda em desktop */}
@@ -505,9 +550,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </header>
+        )}
 
         {/* CONTEÚDO */}
-        <main className="app-container">
+        <main className={isPublicLanding ? 'w-full' : 'app-container'}>
           {children}
         </main>
 

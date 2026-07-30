@@ -709,3 +709,13 @@ select option:checked { background-color: var(--ink-800); color: var(--text); }
   border-color: rgba(86, 216, 255, 0.48);
   background: rgba(0, 0, 0, 0.3);
 }
+
+/* Public landing */
+.public-landing-body {
+  padding-bottom: 0;
+}
+
+.public-landing-body > main {
+  width: 100%;
+  max-width: none;
+}

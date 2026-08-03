@@ -95,7 +95,7 @@ adminPredictions.get('/fixture/:fixtureId', async (c) => {
       JOIN users u
         ON u.id = p.user_id
       LEFT JOIN players pl
-        ON pl.id = p.scorer_player_id
+        ON pl.id = CAST(p.scorer_player_id AS INTEGER)
       WHERE p.fixture_id = ?
       ORDER BY p.created_at ASC
     `,

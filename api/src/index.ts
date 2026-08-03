@@ -19,6 +19,7 @@ import { fixtureTrends } from './routes/fixtures-trends';
 import { adminLeagues } from './routes/admin/leagues';
 import { adminDashboard } from './routes/admin/dashboard';
 import { leagues } from './routes/leagues';
+import { normalizePlayerId, toPositivePlayerId } from './scorer-id';
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -346,7 +347,7 @@ app.get('/api/fixtures/closed', async (c) => {
       JOIN teams at ON at.id = f.away_team_id
       LEFT JOIN competitions    co ON co.id = f.competition_id
       LEFT JOIN fixture_scorers fs ON fs.fixture_id = f.id
-      LEFT JOIN players         p  ON p.id = fs.player_id
+      LEFT JOIN players         p  ON p.id = CAST(fs.player_id AS INTEGER)
       WHERE md.season_id = ?
         AND (
           f.status = 'FINISHED'
@@ -417,16 +418,10 @@ app.post('/api/predictions', async (c) => {
       return c.json({ error: 'missing_data' }, 400);
     }
 
-    let scorerId: string | null = null;
-    if (typeof scorer_player_id === 'string') {
-      const t = scorer_player_id.trim();
-      scorerId = t || null;
-    } else if (
-      typeof scorer_player_id === 'number' &&
-      Number.isFinite(scorer_player_id)
-    ) {
-      scorerId = String(scorer_player_id);
-    }
+    const normalizedScorerId = toPositivePlayerId(scorer_player_id);
+    const scorerId = normalizedScorerId == null
+      ? null
+      : normalizePlayerId(normalizedScorerId);
 
     const db = c.env.DB;
 
@@ -613,7 +608,7 @@ app.get('/api/fixtures/:id/trends', async (c) => {
         p.name AS name,
         COUNT(*) AS count
       FROM predictions pr
-      JOIN players p ON p.id = pr.scorer_player_id
+      JOIN players p ON p.id = CAST(pr.scorer_player_id AS INTEGER)
       WHERE pr.fixture_id = ?
       GROUP BY p.id, p.name
       ORDER BY count DESC
@@ -1104,7 +1099,7 @@ app.get('/api/admin/fixtures/:id/scorers', async (c) => {
         p.name,
         p.position
       FROM fixture_scorers fs
-      LEFT JOIN players p ON p.id = fs.player_id
+      LEFT JOIN players p ON p.id = CAST(fs.player_id AS INTEGER)
       WHERE fs.fixture_id = ?
       ORDER BY 
         CASE p.position
@@ -1133,11 +1128,17 @@ app.put('/api/admin/fixtures/:id/scorers', async (c) => {
 
   const fixtureId = c.req.param('id');
   const body = (await c.req.json().catch(() => null)) as
-    | { player_ids?: string[] }
+    | { player_ids?: (string | number)[] }
     | null;
 
   const ids = Array.isArray(body?.player_ids)
-    ? body!.player_ids.map((x) => String(x)).filter(Boolean)
+    ? [
+        ...new Set(
+          body.player_ids
+            .map(toPositivePlayerId)
+            .filter((value): value is number => value != null),
+        ),
+      ]
     : [];
 
   await run(c.env.DB, `DELETE FROM fixture_scorers WHERE fixture_id = ?`, fixtureId);
@@ -1147,10 +1148,10 @@ app.put('/api/admin/fixtures/:id/scorers', async (c) => {
       c.env.DB,
       `
       INSERT INTO fixture_scorers (id, fixture_id, player_id, created_at)
-      VALUES (lower(hex(randomblob(16))), ?, ?, DATETIME('now'))
+      VALUES (abs(random()), ?, ?, DATETIME('now'))
     `,
       fixtureId,
-      pid,
+      normalizePlayerId(pid),
     );
   }
 

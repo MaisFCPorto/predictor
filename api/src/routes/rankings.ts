@@ -1,6 +1,7 @@
 // apps/api/src/routes/rankings.ts
 import { Hono } from 'hono';
 import { getActiveSeasonId } from '../app-settings';
+import { normalizePlayerId } from '../scorer-id';
 
 type Env = { DB: D1Database };
 export const rankings = new Hono<{ Bindings: Env }>();
@@ -173,7 +174,7 @@ rankings.get('/', async (c) => {
         fs.player_id,
         p.position
       FROM fixture_scorers fs
-      LEFT JOIN players p ON p.id = fs.player_id
+      LEFT JOIN players p ON p.id = CAST(fs.player_id AS INTEGER)
       JOIN fixtures f ON f.id = fs.fixture_id
       JOIN matchdays md ON md.id = f.matchday_id
       WHERE ${where}
@@ -191,7 +192,7 @@ rankings.get('/', async (c) => {
   for (const r of scorerRows ?? []) {
     const bonus = scorerBonusForPosition(r.position);
     if (!bonus) continue;
-    const key = `${r.fixture_id}:${String(r.player_id)}`;
+    const key = `${r.fixture_id}:${normalizePlayerId(r.player_id)}`;
     bonusByFixtureAndPlayer.set(key, bonus);
   }
 
@@ -263,11 +264,10 @@ rankings.get('/', async (c) => {
 
     // Bónus por marcador acertado (se o jogador previsto tiver marcado)
     if (p.scorer_player_id != null) {
-      const predId = String(p.scorer_player_id);
+      const predId = normalizePlayerId(p.scorer_player_id);
       const key = `${p.fixture_id}:${predId}`;
-      const bonus = bonusByFixtureAndPlayer.get(key) ?? 0;
-      if (bonus) {
-        pts += bonus;
+      if (bonusByFixtureAndPlayer.has(key)) {
+        pts += bonusByFixtureAndPlayer.get(key) ?? 0;
         hitScorer = true;
       }
     }
@@ -387,7 +387,7 @@ rankings.get('/game', async (c) => {
         fs.player_id,
         p.position
       FROM fixture_scorers fs
-      LEFT JOIN players p ON p.id = fs.player_id
+      LEFT JOIN players p ON p.id = CAST(fs.player_id AS INTEGER)
       WHERE fs.fixture_id = ?
     `,
     )
@@ -398,7 +398,7 @@ rankings.get('/game', async (c) => {
   for (const r of scorerRows ?? []) {
     const bonus = scorerBonusForPosition(r.position);
     if (!bonus) continue;
-    scorerBonusByPlayer.set(String(r.player_id), bonus);
+    scorerBonusByPlayer.set(normalizePlayerId(r.player_id), bonus);
   }
 
   // Users + palpite (se existir) + timestamp do palpite
@@ -443,10 +443,9 @@ rankings.get('/game', async (c) => {
 
     // Bónus marcador por posição
     if (r.pred_scorer_id != null) {
-      const id = String(r.pred_scorer_id);
-      const bonus = scorerBonusByPlayer.get(id) ?? 0;
-      if (bonus) {
-        pts += bonus;
+      const id = normalizePlayerId(r.pred_scorer_id);
+      if (scorerBonusByPlayer.has(id)) {
+        pts += scorerBonusByPlayer.get(id) ?? 0;
         hitScorer = true;
       }
     }

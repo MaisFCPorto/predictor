@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../admin';
 import { requireAdminKey, recomputePointsForFixture } from '../admin';
+import { normalizePlayerId, toPositivePlayerId } from '../../scorer-id';
 
 export const adminFixtureScorers = new Hono<{ Bindings: Env }>();
 
@@ -28,7 +29,7 @@ adminFixtureScorers.get('/scorers-summary', async (c) => {
       `
       SELECT fs.fixture_id, fs.player_id, p.name, p.position
       FROM fixture_scorers fs
-      JOIN players p ON p.id = fs.player_id
+      JOIN players p ON p.id = CAST(fs.player_id AS INTEGER)
       WHERE fs.fixture_id IN (${placeholders})
       ORDER BY fs.fixture_id, p.name
     `,
@@ -53,7 +54,7 @@ adminFixtureScorers.get('/:id/scorers', async (c) => {
       `
       SELECT fs.player_id, p.name, p.position
       FROM fixture_scorers fs
-      JOIN players p ON p.id = fs.player_id
+      JOIN players p ON p.id = CAST(fs.player_id AS INTEGER)
       WHERE fs.fixture_id = ?
       ORDER BY p.name
     `,
@@ -77,8 +78,8 @@ adminFixtureScorers.put('/:id/scorers', async (c) => {
   const ids = [
     ...new Set(
       (body.player_ids ?? [])
-        .map((value) => Number(value))
-        .filter((value) => Number.isInteger(value) && value > 0),
+        .map(toPositivePlayerId)
+        .filter((value): value is number => value != null),
     ),
   ];
 
@@ -105,7 +106,7 @@ adminFixtureScorers.put('/:id/scorers', async (c) => {
             datetime('now')
           )
         `)
-        .bind(fixtureId, playerId),
+        .bind(fixtureId, normalizePlayerId(playerId)),
     ),
   ];
 

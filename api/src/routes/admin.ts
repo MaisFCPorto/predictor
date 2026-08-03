@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { scoreUEFA } from './rankings';
+import { normalizePlayerId } from '../scorer-id';
 
 // ---------------- Pontos extra por posição ----------------
 const SCORER_BONUS_BY_POS: Record<string, number> = {
@@ -67,7 +68,7 @@ export async function recomputePointsForFixture(
       `
       SELECT fs.player_id, p.position
       FROM fixture_scorers fs
-      LEFT JOIN players p ON p.id = fs.player_id
+      LEFT JOIN players p ON p.id = CAST(fs.player_id AS INTEGER)
       WHERE fs.fixture_id = ?
     `,
     )
@@ -79,7 +80,7 @@ export async function recomputePointsForFixture(
   for (const r of scorerRows ?? []) {
     const bonus = scorerBonusForPosition(r.position);
     if (bonus) {
-      bonusByPlayer.set(String(r.player_id), bonus);
+      bonusByPlayer.set(normalizePlayerId(r.player_id), bonus);
     }
   }
 
@@ -122,7 +123,7 @@ export async function recomputePointsForFixture(
 
     // Bónus por marcador acertado (se o jogador previsto tiver marcado)
     if (p.scorer_player_id != null) {
-      const key = String(p.scorer_player_id);
+      const key = normalizePlayerId(p.scorer_player_id);
       const bonus = bonusByPlayer.get(key) ?? 0;
       pts += bonus;
     }

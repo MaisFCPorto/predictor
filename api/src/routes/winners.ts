@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getActiveSeasonId } from '../app-settings';
 import { scoreUEFA } from './rankings';
+import { normalizePlayerId } from '../scorer-id';
 
 type Env = { DB: D1Database };
 export const winners = new Hono<{ Bindings: Env }>();
@@ -125,7 +126,7 @@ winners.get('/', async (c) => {
         fs.player_id,
         p.position
       FROM fixture_scorers fs
-      LEFT JOIN players p ON p.id = fs.player_id
+      LEFT JOIN players p ON p.id = CAST(fs.player_id AS INTEGER)
       JOIN fixtures f ON f.id = fs.fixture_id
       JOIN matchdays md ON md.id = f.matchday_id
       WHERE ${where}
@@ -138,7 +139,7 @@ winners.get('/', async (c) => {
   for (const r of scorerRows ?? []) {
     const bonus = scorerBonusForPosition(r.position);
     if (!bonus) continue;
-    const key = `${r.fixture_id}:${String(r.player_id)}`;
+    const key = `${r.fixture_id}:${normalizePlayerId(r.player_id)}`;
     bonusByFixtureAndPlayer.set(key, bonus);
   }
 
@@ -213,10 +214,9 @@ winners.get('/', async (c) => {
     let hitScorer = false;
 
     if (p.scorer_player_id != null) {
-      const key = `${p.fixture_id}:${String(p.scorer_player_id)}`;
-      const bonus = bonusByFixtureAndPlayer.get(key) ?? 0;
-      if (bonus) {
-        pts += bonus;
+      const key = `${p.fixture_id}:${normalizePlayerId(p.scorer_player_id)}`;
+      if (bonusByFixtureAndPlayer.has(key)) {
+        pts += bonusByFixtureAndPlayer.get(key) ?? 0;
         hitScorer = true;
       }
     }
@@ -320,7 +320,7 @@ winners.get('/monthly', async (c) => {
         fs.player_id,
         p.position
       FROM fixture_scorers fs
-      LEFT JOIN players p ON p.id = fs.player_id
+      LEFT JOIN players p ON p.id = CAST(fs.player_id AS INTEGER)
       JOIN fixtures f ON f.id = fs.fixture_id
       JOIN matchdays md ON md.id = f.matchday_id
       WHERE ${where}
@@ -333,7 +333,7 @@ winners.get('/monthly', async (c) => {
   for (const r of scorerRows ?? []) {
     const bonus = scorerBonusForPosition(r.position);
     if (!bonus) continue;
-    const key = `${r.fixture_id}:${String(r.player_id)}`;
+    const key = `${r.fixture_id}:${normalizePlayerId(r.player_id)}`;
     bonusByFixtureAndPlayer.set(key, bonus);
   }
 
@@ -384,10 +384,9 @@ winners.get('/monthly', async (c) => {
     let hitScorer = false;
 
     if (p.scorer_player_id != null) {
-      const key = `${p.fixture_id}:${String(p.scorer_player_id)}`;
-      const bonus = bonusByFixtureAndPlayer.get(key) ?? 0;
-      if (bonus) {
-        pts += bonus;
+      const key = `${p.fixture_id}:${normalizePlayerId(p.scorer_player_id)}`;
+      if (bonusByFixtureAndPlayer.has(key)) {
+        pts += bonusByFixtureAndPlayer.get(key) ?? 0;
         hitScorer = true;
       }
     }

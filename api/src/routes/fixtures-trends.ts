@@ -73,7 +73,7 @@ fixtureTrends.get('/fixtures/:fixtureId/trends', async (c) => {
               pl.name AS player_name,
               COUNT(*) AS cnt
        FROM predictions p
-       LEFT JOIN players pl ON pl.id = p.scorer_player_id
+       LEFT JOIN players pl ON pl.id = CAST(p.scorer_player_id AS INTEGER)
        WHERE p.fixture_id = ?
          AND p.scorer_player_id IS NOT NULL
        GROUP BY p.scorer_player_id, pl.name

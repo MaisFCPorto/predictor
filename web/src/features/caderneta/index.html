@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Experimenta abrir uma carteira e colar cromos na caderneta +FCPorto.">
+  <title>Caderneta +FCPorto · Protótipo</title>
+  <!-- ALBUM_STYLES -->
+</head>
+<body>
+  <main class="shell">
+    <div class="demo-toolbar">
+      <button id="reset-test" class="button button-quiet" type="button">Recomeçar teste</button>
+    </div>
+    <header class="hero">
+      <p class="eyebrow">+PREDICTOR · COLEÇÃO DE CROMOS</p>
+      <h1>A tua caderneta.</h1>
+      <p>Abre a carteira, cola os cromos e revive os momentos do Porto.</p>
+    </header>
+
+    <div class="workspace">
+      <section class="panel pack-panel" id="carteira" aria-labelledby="pack-title">
+        <p class="eyebrow">03 CROMOS</p>
+        <h2 id="pack-title">Carteira do dia</h2>
+        <div id="sealed-pack">
+          <div class="pack-art" aria-hidden="true">
+            <span class="pack-brand">+FCPorto</span>
+            <span class="pack-mark">03</span>
+            <span class="pack-label">COLEÇÃO DE CROMOS</span>
+          </div>
+          <button class="button button-primary pack-button" id="open-pack" type="button">Abrir carteira grátis</button>
+        </div>
+        <div id="pack-tray" hidden>
+          <h3 class="tray-heading">Por colar <span id="tray-count">0</span></h3>
+          <p class="tray-hint" id="tray-hint">
+            <span class="hint-drag">Arrasta um cromo ou clica nele para encontrar o seu lugar.</span>
+            <span class="hint-tap">Toca num cromo para encontrar o seu lugar.</span>
+          </p>
+          <ul class="pack-cards" id="pack-cards"></ul>
+          <p class="tray-hint" id="tray-empty" hidden>Já colaste os cromos novos desta carteira.</p>
+        </div>
+        <div class="duplicates" id="duplicates" hidden>
+          <h3>Para trocar</h3>
+          <div id="duplicate-list"></div>
+        </div>
+      </section>
+
+      <section class="panel album-panel" id="caderneta" aria-labelledby="album-title">
+        <div class="album-header">
+          <div>
+            <p class="eyebrow">A MINHA COLEÇÃO</p>
+            <h2 id="album-title">Caderneta</h2>
+          </div>
+          <p class="collection-count" id="collection-count" aria-live="polite">4 / 8 colados</p>
+        </div>
+
+        <div class="pa-book" aria-label="Caderneta aberta">
+          <article class="pa-page pa-cover" data-density="hard">
+            <p class="pa-kicker">COLEÇÃO +FCPORTO</p>
+            <h3>Caderneta<br>de cromos</h3>
+            <div class="pa-cover-mark" aria-hidden="true">+</div>
+            <p class="pa-folio">EDIÇÃO DEMONSTRATIVA</p>
+          </article>
+          <article class="pa-page" data-title="Plantel Atual">
+            <p class="pa-kicker">01 / PLANTEL ATUAL</p>
+            <h3>O plantel</h3>
+            <div class="pa-grid">
+              <div class="pa-sticker" data-slot="001" data-owned><strong>001</strong><span>Guarda-redes</span></div>
+              <button class="pa-sticker" type="button" data-slot="002" aria-label="Colar Defesa" disabled><strong>002</strong><span>Defesa</span></button>
+              <button class="pa-sticker" type="button" data-slot="003" aria-label="Colar Médio" disabled><strong>003</strong><span>Médio</span></button>
+              <div class="pa-sticker" data-slot="004" data-owned><strong>004</strong><span>Avançado</span></div>
+            </div>
+            <p class="pa-folio">01</p>
+          </article>
+          <article class="pa-page" data-title="Lendas">
+            <p class="pa-kicker">02 / LENDAS</p>
+            <h3>As lendas</h3>
+            <div class="pa-grid">
+              <div class="pa-sticker pa-gold" data-slot="025" data-owned><strong>025</strong><span>Vítor Baía</span></div>
+              <div class="pa-sticker pa-gold" data-slot="026" data-owned><strong>026</strong><span>Jorge Costa</span></div>
+            </div>
+            <p class="pa-folio">02</p>
+          </article>
+          <article class="pa-page" data-title="Momentos Históricos">
+            <p class="pa-kicker">03 / MOMENTOS HISTÓRICOS</p>
+            <h3>O golo do Kelvin</h3>
+            <button class="pa-sticker pa-feature" type="button" data-slot="092" data-finish="moment" aria-label="Colar Kelvin" disabled>
+              <strong>92′</strong><span>Kelvin</span>
+            </button>
+            <a class="video-link" data-video="092" href="https://www.youtube.com/watch?v=aOqGMCWdRMc" target="_blank" rel="noopener noreferrer" hidden>▶ Ver o golo</a>
+            <p class="pa-folio">03</p>
+          </article>
+          <article class="pa-page" data-title="Momentos Históricos">
+            <p class="pa-kicker">03 / MOMENTOS HISTÓRICOS</p>
+            <h3>Noites europeias</h3>
+            <button class="pa-sticker pa-feature" type="button" data-slot="093" aria-label="Colar Europa" disabled>
+              <strong>093</strong><span>Europa</span>
+            </button>
+            <p class="pa-folio">04</p>
+          </article>
+          <article class="pa-page pa-cover" data-density="hard">
+            <p class="pa-kicker">COLEÇÃO +FCPORTO</p>
+            <h3>+FCPorto</h3>
+            <div class="pa-cover-mark" aria-hidden="true">+</div>
+          </article>
+        </div>
+        <div class="pa-phone" aria-label="Página da caderneta"></div>
+        <nav class="page-nav" aria-label="Folhear a caderneta">
+          <button class="button page-arrow" type="button" data-prev aria-label="Página anterior">←</button>
+          <output aria-live="polite">2–3 / 6</output>
+          <button class="button page-arrow" type="button" data-next aria-label="Página seguinte">→</button>
+        </nav>
+        <p class="album-hint">
+          <span class="hint-desktop">Arrasta o canto da folha ou usa as setas.</span>
+          <span class="hint-mobile">Desliza para folhear ou usa as setas.</span>
+        </p>
+        <button class="back-to-pack" type="button" hidden>↑ Voltar à carteira</button>
+      </section>
+    </div>
+    <p class="sr-only" id="announcement" role="status"></p>
+  </main>
+
+  <dialog class="pack-dialog" id="pack-dialog" aria-labelledby="pack-dialog-title">
+    <header class="pack-dialog-header">
+      <p class="eyebrow">CARTEIRA +FCPORTO</p>
+      <h2 id="pack-dialog-title" aria-live="polite">Puxa a tira para rasgar</h2>
+      <button class="button pack-close" id="close-pack" type="button" aria-label="Fechar carteira">×</button>
+    </header>
+    <div class="pack-stage">
+      <div class="reveal-cards" id="reveal-cards" aria-label="Cromos da carteira"></div>
+      <div class="pack-wrapper">
+        <div class="pack-art" aria-hidden="true">
+          <span class="pack-brand">+FCPorto</span>
+          <span class="pack-mark">03</span>
+          <span class="pack-label">COLEÇÃO DE CROMOS</span>
+        </div>
+        <button class="pack-flap" id="pack-flap" type="button" aria-label="Puxar a tira da carteira">Puxa aqui →</button>
+      </div>
+    </div>
+    <div class="pack-actions">
+      <button class="button" id="tear-pack" type="button">Rasgar de uma vez</button>
+      <button class="button" id="reveal-all" type="button" hidden>Revelar todos</button>
+      <button class="button button-primary" id="keep-pack" type="button" hidden>Guardar e colar</button>
+    </div>
+  </dialog>
+  <!-- ALBUM_SCRIPTS -->
+</body>
+</html>

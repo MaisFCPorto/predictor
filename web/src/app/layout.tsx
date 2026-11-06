@@ -203,6 +203,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   const isPublicLanding = pathname === '/' || pathname === '/landing-preview';
 
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [cadernetaAccessFor, setCadernetaAccessFor] = useState<string | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -309,11 +310,43 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const userId = user?.id;
+
+  useEffect(() => {
+    if (!userId) {
+      setCadernetaAccessFor(null);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    void supabasePKCE.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (controller.signal.aborted || session?.user.id !== userId) return null;
+
+        return fetch('/api/caderneta', {
+          method: 'HEAD',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+      })
+      .then((response) => {
+        if (!controller.signal.aborted) setCadernetaAccessFor(response?.ok ? userId : null);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setCadernetaAccessFor(null);
+      });
+
+    return () => controller.abort();
+  }, [userId]);
+
   async function handleLogout() {
     try {
       await supabasePKCE.auth.signOut();
     } finally {
       setUser(null);
+      setCadernetaAccessFor(null);
       setMobileOpen(false);
       router.push('/auth');
     }
@@ -327,7 +360,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     { href: '/regras', label: 'Regras' },
   ];
 
-  const navLinks = baseNavLinks;
+  const navLinks = userId && cadernetaAccessFor === userId
+    ? [...baseNavLinks, { href: '/caderneta', label: 'Caderneta' }]
+    : baseNavLinks;
 
   const fullNavLinks = user?.isAdmin
     ? [{ href: '/admin', label: 'Backoffice' }, ...navLinks]

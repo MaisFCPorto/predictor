@@ -3,61 +3,14 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { supabasePKCE } from '@/utils/supabase/client';
+import { useAdminBetaContent } from '@/utils/supabase/use-admin-beta-content';
 
-type Preview = { status: 'checking' | 'denied' } | { status: 'ready'; html: string };
+const readAlbum = (response: Response) => response.text();
 
 export default function CadernetaPreview() {
-  const [preview, setPreview] = useState<Preview>({ status: 'checking' });
+  const preview = useAdminBetaContent('/api/caderneta', readAlbum);
   const [revision, setRevision] = useState(0);
   const frame = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    let request: AbortController | undefined;
-    let userId: string | null | undefined;
-    let token: string | undefined;
-    let hasDocument = false;
-
-    const { data } = supabasePKCE.auth.onAuthStateChange((_event, session) => {
-      const nextUserId = session?.user.id ?? null;
-      const nextToken = session?.access_token;
-      if (nextUserId === userId && (hasDocument || nextToken === token)) return;
-
-      userId = nextUserId;
-      token = nextToken;
-      hasDocument = false;
-      request?.abort();
-
-      if (!nextToken) {
-        setPreview({ status: 'denied' });
-        return;
-      }
-
-      request = new AbortController();
-      const { signal } = request;
-      setPreview({ status: 'checking' });
-
-      void fetch('/api/caderneta', {
-        headers: { Authorization: `Bearer ${nextToken}` },
-        cache: 'no-store',
-        signal,
-      })
-        .then((response) => (response.ok ? response.text() : null))
-        .then((html) => {
-          if (signal.aborted) return;
-          hasDocument = html !== null;
-          setPreview(html === null ? { status: 'denied' } : { status: 'ready', html });
-        })
-        .catch(() => {
-          if (!signal.aborted) setPreview({ status: 'denied' });
-        });
-    });
-
-    return () => {
-      request?.abort();
-      data.subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -123,7 +76,7 @@ export default function CadernetaPreview() {
           key={revision}
           ref={frame}
           title="Caderneta +FCPorto"
-          srcDoc={preview.html}
+          srcDoc={preview.data}
           sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
           className="absolute inset-0 block h-full w-full border-0"
         />

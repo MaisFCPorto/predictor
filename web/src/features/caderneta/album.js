@@ -77,9 +77,9 @@ function setupDesktop() {
     height: 412,
     size: "stretch",
     minWidth: 255,
-    maxWidth: 330,
+    maxWidth: 480,
     minHeight: 318,
-    maxHeight: 412,
+    maxHeight: 600,
     startPage: pageIndex,
     showCover: true,
     usePortrait: false,
@@ -211,7 +211,7 @@ function keepPack(stickers) {
   updateTrayCount();
   updateSelection();
   packCards.querySelector("button")?.focus({ preventScroll: true });
-  revealPredictorSection(document.querySelector("#pack-tray"));
+  document.querySelector("#pack-tray").scrollIntoView({ block: "nearest" });
 }
 
 function visibleSlot(sticker) {
@@ -225,7 +225,7 @@ async function findSticker(id, focusSlot) {
   selectedId = id;
   busy = true;
   updateSelection();
-  if (focusSlot && !twoColumns.matches) scrollToPredictorSection(albumPanel);
+  if (focusSlot && !twoColumns.matches) albumPanel.scrollIntoView({ block: "start" });
 
   await goToSticker(sticker.index);
   busy = false;
@@ -270,7 +270,7 @@ async function pasteSticker(id) {
   }
 }
 
-setupPackOpener(trialPack, keepPack, revealPredictorSection);
+setupPackOpener(trialPack, keepPack, (section) => section.scrollIntoView({ block: "nearest" }));
 packCards.addEventListener("click", event => {
   const button = event.target.closest(".tray-sticker");
   if (!button) return;
@@ -328,27 +328,13 @@ albumPanel.addEventListener("click", event => {
   const slot = event.target.closest("button[data-target]");
   if (slot) pasteSticker(slot.dataset.slot);
 });
-function notifyPredictor(kind, value, height) {
-  window.parent.postMessage({ source: "predictor-caderneta", kind, value, height }, "*");
-}
-
-function scrollToPredictorSection(section) {
-  notifyPredictor("scroll", section.getBoundingClientRect().top + window.scrollY);
-}
-
-function revealPredictorSection(section) {
-  const rect = section.getBoundingClientRect();
-  notifyPredictor("reveal", rect.top + window.scrollY, rect.height);
-}
-
-document.querySelector("#reset-test").addEventListener("click", () => notifyPredictor("reset"));
+document.querySelector("#reset-test").addEventListener("click", () => {
+  window.parent.postMessage({ source: "predictor-caderneta", kind: "reset" }, "*");
+});
 document.querySelector(".back-to-pack").addEventListener("click", () => {
-  scrollToPredictorSection(document.querySelector("#carteira"));
+  document.querySelector("#carteira").scrollIntoView({ block: "start" });
 });
 
-new ResizeObserver(() => {
-  notifyPredictor("resize", Math.ceil(document.body.getBoundingClientRect().height));
-}).observe(document.body);
 prev.addEventListener("click", () => turn(-1));
 next.addEventListener("click", () => turn(1));
 phone.addEventListener("pointerdown", event => {

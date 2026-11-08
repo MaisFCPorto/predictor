@@ -11,11 +11,14 @@ async function forward(request: Request) {
   }
 
   try {
+    const url = new URL(request.url);
     const upstream = request.method === 'POST'
-      ? await fetchHubNews('/sync', { method: 'POST' })
+      ? url.searchParams.get('action') === 'add'
+        ? await fetchHubNews('', { method: 'POST', body: await request.text() })
+        : await fetchHubNews('/sync', { method: 'POST' })
       : request.method === 'PATCH'
         ? await fetchHubNews('', { method: 'PATCH', body: await request.text() })
-        : await fetchHubNews(new URL(request.url).search);
+        : await fetchHubNews(url.search);
 
     if (upstream.status >= 500 || !upstream.headers.get('content-type')?.includes('application/json')) {
       throw new Error('Hub news Worker request failed');

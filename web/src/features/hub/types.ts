@@ -3,12 +3,14 @@ export type HubArticle = {
   publishedAt: string;
   url: string;
   source: string;
+  imageUrl: string | null;
 };
 
 export type HubNewsStatus = 'pending' | 'approved' | 'rejected';
-export type HubNewsItem = HubArticle & { id: number; status: HubNewsStatus; revision: number };
+export type HubNewsItem = HubArticle & { id: number; status: HubNewsStatus; revision: number; imageApproved: 0 | 1 };
 export type HubNewsPage = { items: HubNewsItem[]; hasMore: boolean };
-export type HubNewsSync = { found: number; added: number; failedSources: string[] };
+export type HubNewsChanges = { added: number; imagesAdded: number };
+export type HubNewsSync = HubNewsChanges & { found: number; failedSources: string[] };
 
 export type Standing = {
   position: number;

@@ -20,6 +20,8 @@ import { adminLeagues } from './routes/admin/leagues';
 import { adminDashboard } from './routes/admin/dashboard';
 import { leagues } from './routes/leagues';
 import { normalizePlayerId, toPositivePlayerId } from './scorer-id';
+import { HUB_NEWS_CRON, syncHubNews } from './hub-news';
+import { hubNews } from './routes/hub-news';
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -29,6 +31,7 @@ type Env = {
   ADMIN_KEY: string;
   LOCK_MINUTES_BEFORE?: string;
   SUPABASE_URL: string;
+  HUB_NEWS_KEY?: string;
 };
 
 // ----------------------------------------------------
@@ -109,6 +112,7 @@ app.route('/api', fixtureTrends);
 app.route('/api/admin', adminLeagues);
 app.route('/api/admin', adminDashboard);
 app.route('/api', leagues);
+app.route('/api/internal/hub-news', hubNews);
 
 
 
@@ -1304,4 +1308,11 @@ app.get('/api/users/:id/last-points', async (c) => {
 // ----------------------------------------------------
 // Exporta App
 // ----------------------------------------------------
-export default app;
+export default {
+  fetch: app.fetch,
+  async scheduled(controller: ScheduledController, env: Env) {
+    if (controller.cron !== HUB_NEWS_CRON) return;
+    const result = await syncHubNews(env.DB, controller.scheduledTime);
+    console.info('Hub news sync', result);
+  },
+};

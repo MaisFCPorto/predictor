@@ -82,7 +82,7 @@
   background: var(--hub-panel);
 }
 
-.navInner { display: flex; justify-content: space-between; gap: 0 20px; }
+.navInner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 20px; }
 .nav { display: flex; align-items: center; gap: clamp(14px, 2.7vw, 32px); }
 .nav a {
   display: inline-flex;
@@ -336,13 +336,16 @@
   .edition { justify-self: start; font-size: 11px; text-align: left; }
 }
 
-@media (max-width: 530px) {
+@media (max-width: 620px) {
   .navInner { display: block; }
   .nav { justify-content: space-between; gap: 12px; }
   .nav a { min-height: 42px; }
-  .shortcuts { justify-content: flex-start; gap: 22px; border-top: 1px solid var(--hub-line); }
+  .shortcuts { justify-content: flex-start; gap: clamp(13px, 4vw, 22px); border-top: 1px solid var(--hub-line); }
   .shortcuts a { min-height: 37px; font-size: 12px; }
   .section { scroll-margin-top: 96px; }
+}
+
+@media (max-width: 530px) {
   .lead h3 { font-size: clamp(29px, 7.4vw, 35px); }
   .newsGrid { gap: 0; grid-template-columns: minmax(0, 1fr); margin-top: 0; border: 0; padding-top: 0; }
   .newsGrid .story { margin-top: 16px; border-top: 1px solid var(--hub-line); padding-top: 16px; }

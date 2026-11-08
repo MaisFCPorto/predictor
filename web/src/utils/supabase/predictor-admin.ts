@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createClient } from '@supabase/supabase-js';
 
-export async function isPredictorAdmin(authorization: string | null) {
+export async function getPredictorAdminId(authorization: string | null): Promise<string | null> {
   const token = authorization?.match(/^Bearer (\S+)$/i)?.[1];
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
@@ -13,7 +13,7 @@ export async function isPredictorAdmin(authorization: string | null) {
     process.env.API_BASE?.trim() || process.env.NEXT_PUBLIC_API_BASE?.trim() || ''
   ).replace(/\/+$/, '');
 
-  if (!token || !url || !key || !apiBase) return false;
+  if (!token || !url || !key || !apiBase) return null;
 
   try {
     const supabase = createClient(url, key, {
@@ -21,17 +21,21 @@ export async function isPredictorAdmin(authorization: string | null) {
       global: { fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }) },
     });
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) return false;
+    if (error || !data.user) return null;
 
     const roleResponse = await fetch(
       `${apiBase}/api/users/${encodeURIComponent(data.user.id)}/role`,
       { cache: 'no-store' }
     );
-    if (!roleResponse.ok) return false;
+    if (!roleResponse.ok) return null;
 
     const result: { role?: unknown } | null = await roleResponse.json();
-    return result?.role === 'admin';
+    return result?.role === 'admin' ? data.user.id : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export async function isPredictorAdmin(authorization: string | null) {
+  return (await getPredictorAdminId(authorization)) !== null;
 }

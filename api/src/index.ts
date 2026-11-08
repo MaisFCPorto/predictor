@@ -22,6 +22,7 @@ import { leagues } from './routes/leagues';
 import { normalizePlayerId, toPositivePlayerId } from './scorer-id';
 import { HUB_NEWS_CRON, syncHubNews } from './hub-news';
 import { hubNews } from './routes/hub-news';
+import { hubFans } from './routes/hub-fans';
 
 // ----------------------------------------------------
 // Tipos / Bindings
@@ -113,6 +114,7 @@ app.route('/api/admin', adminLeagues);
 app.route('/api/admin', adminDashboard);
 app.route('/api', leagues);
 app.route('/api/internal/hub-news', hubNews);
+app.route('/api/internal/hub-fans', hubFans);
 
 
 

@@ -260,6 +260,8 @@ export default function HubPreview() {
             <a href="#instagram">Instagram</a>
           </nav>
           <nav className={`${styles.nav} ${styles.shortcuts}`} aria-label="Espaços +FCPorto">
+            <Link href="/hub/onze">Onze</Link>
+            <Link href="/hub/notas">Notas</Link>
             <Link href="/jogos">Predictor</Link>
             {cadernetaEnabled && <Link href="/caderneta">Caderneta</Link>}
           </nav>

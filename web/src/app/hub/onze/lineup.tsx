@@ -104,7 +104,7 @@ function Pitch({ svg }: { svg: RefObject<SVGSVGElement | null> }) {
 async function downloadLineup(svg: SVGSVGElement, formation: Formation, players: (FanPlayer | undefined)[]) {
   const canvas = document.createElement('canvas');
   canvas.width = 1080;
-  canvas.height = 1350;
+  canvas.height = 1920;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas unavailable');
 
@@ -115,20 +115,21 @@ async function downloadLineup(svg: SVGSVGElement, formation: Formation, players:
     await field.decode();
 
     const x = 55;
-    const y = 184;
-    const w = 970;
+    const w = canvas.width - 2 * x;
     const h = w * fieldHeight / fieldWidth;
+    // Keep the pitch clear of the Story controls at the top and bottom.
+    const y = Math.round((canvas.height - h) / 2);
     ctx.fillStyle = '#111113';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#65b7ff';
     ctx.font = '700 26px sans-serif';
-    ctx.fillText('+FCPORTO', x, 58);
+    ctx.fillText('+FCPORTO', x, y - 110);
     ctx.fillStyle = '#f3f1ee';
     ctx.font = 'bold 67px Georgia, serif';
-    ctx.fillText('O meu onze', x, 136);
+    ctx.fillText('O meu onze', x, y - 36);
     ctx.textAlign = 'right';
     ctx.font = 'bold 36px sans-serif';
-    ctx.fillText(formation, x + w, 132);
+    ctx.fillText(formation, x + w, y - 40);
     ctx.drawImage(field, x, y, w, h);
 
     ctx.textAlign = 'center';

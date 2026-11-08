@@ -200,7 +200,7 @@ function PublicLandingHeader() {
 export default function RootLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  if (pathname === '/caderneta' || pathname?.startsWith('/caderneta/')) {
+  if (pathname === '/hub' || pathname === '/caderneta' || pathname?.startsWith('/caderneta/')) {
     return (
       <html lang="pt">
         <body>{children}</body>

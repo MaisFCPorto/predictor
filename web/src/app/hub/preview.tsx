@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { formatHubNewsDate } from '@/features/hub/news-date';
+import { NewsImage } from '@/features/hub/news-image';
 import type { HubArticle, HubContent, StandingsSnapshot } from '@/features/hub/types';
 import { useAdminBetaContent } from '@/utils/supabase/use-admin-beta-content';
 import styles from './hub.module.css';
@@ -49,6 +50,7 @@ function NewsFeed({ articles, available }: { articles: HubArticle[]; available: 
             <h3>{lead.title}</h3>
             <NewsLink article={lead} />
           </div>
+          <NewsImage src={lead.imageUrl} className={styles.leadPhoto} />
         </article>
       ) : (
         <p className={styles.newsEmpty}>
@@ -57,6 +59,7 @@ function NewsFeed({ articles, available }: { articles: HubArticle[]; available: 
       )}
       {latest.map((article) => (
         <article className={styles.newsRow} key={article.url}>
+          <NewsImage src={article.imageUrl} className={styles.rowPhoto} />
           <div className={styles.newsCopy}>
             <ArticleLabel article={article} />
             <h3>{article.title}</h3>

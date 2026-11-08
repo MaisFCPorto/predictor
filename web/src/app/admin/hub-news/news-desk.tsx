@@ -1,13 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { formatHubNewsDate } from '@/features/hub/news-date';
-import type { HubNewsItem, HubNewsPage, HubNewsStatus, HubNewsSync } from '@/features/hub/types';
+import { NewsImage } from '@/features/hub/news-image';
+import type { HubArticle, HubNewsChanges, HubNewsItem, HubNewsPage, HubNewsStatus, HubNewsSync } from '@/features/hub/types';
 import { supabasePKCE } from '@/utils/supabase/client';
 
 type ListState = { phase: 'loading' | 'denied' | 'failed' } | { phase: 'ready'; result: HubNewsPage };
 type Decision = Pick<HubNewsItem, 'id' | 'revision'> & { status: 'approved' | 'rejected' };
+type NewsAction =
+  | { type: 'sync' }
+  | { type: 'decision'; decision: Decision }
+  | { type: 'add'; article: Omit<HubArticle, 'source'> };
 
 const tabs: { status: HubNewsStatus; label: string; empty: string }[] = [
   { status: 'pending', label: 'Pendentes', empty: 'Não há notícias por aprovar nesta página.' },
@@ -29,7 +34,7 @@ export default function NewsDesk() {
   const [query, setQuery] = useState<{ status: HubNewsStatus; page: number }>({ status: 'pending', page: 1 });
   const [list, setList] = useState<ListState>({ phase: 'loading' });
   const [refresh, setRefresh] = useState(0);
-  const [action, setAction] = useState<'sync' | 'decision' | null>(null);
+  const [action, setAction] = useState<NewsAction['type'] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,41 +68,81 @@ export default function NewsDesk() {
     setQuery({ status, page });
   }
 
-  async function submit(decision?: Decision) {
-    if (action || list.phase !== 'ready') return;
-    setAction(decision ? 'decision' : 'sync');
+  async function submit(command: NewsAction) {
+    if (action || list.phase !== 'ready') return false;
+    setAction(command.type);
     setNotice(null);
 
     try {
-      const response = await requestNews('', decision
-        ? { method: 'PATCH', body: JSON.stringify(decision) }
-        : { method: 'POST' });
+      const response = command.type === 'add'
+        ? await requestNews('?action=add', { method: 'POST', body: JSON.stringify(command.article) })
+        : command.type === 'decision'
+          ? await requestNews('', { method: 'PATCH', body: JSON.stringify(command.decision) })
+          : await requestNews('', { method: 'POST' });
+
+      if (command.type === 'add' && (response.status === 400 || response.status === 409)) {
+        setNotice(response.status === 409
+          ? 'Esta ligação já foi adicionada.'
+          : 'Confirma o título, a data e as ligações HTTPS da notícia e da imagem.');
+        return false;
+      }
 
       if (response.status === 409) {
         setNotice('A notícia foi alterada entretanto. A lista foi atualizada.');
         reload();
-        return;
+        return false;
       }
       if (!response.ok) throw new Error('News action failed');
 
-      if (decision) {
-        setNotice(decision.status === 'approved'
-          ? 'Notícia aprovada e disponível no hub.'
+      if (command.type === 'decision') {
+        setNotice(command.decision.status === 'approved'
+          ? query.status === 'approved' ? 'Imagem aprovada e disponível no hub.' : 'Notícia aprovada e disponível no hub.'
           : query.status === 'approved' ? 'Notícia retirada do hub.' : 'Notícia rejeitada.');
+      } else if (command.type === 'add') {
+        const result: HubNewsChanges = await response.json();
+        if (result.added) setQuery({ status: 'pending', page: 1 });
+        setNotice(result.added ? 'Notícia adicionada aos pendentes.' : 'Imagem adicionada para aprovação.');
       } else {
         const result: HubNewsSync = await response.json();
         const count = result.added === 1 ? '1 notícia nova' : `${result.added} notícias novas`;
         const failures = result.failedSources.length
           ? ` Fontes indisponíveis: ${result.failedSources.join(', ')}.`
           : '';
-        setNotice(`Sincronização concluída. ${count} por aprovar.${failures}`);
+        const images = result.imagesAdded === 1
+          ? ' Imagem encontrada numa notícia já guardada.'
+          : result.imagesAdded ? ` Imagens encontradas em ${result.imagesAdded} notícias já guardadas.` : '';
+        setNotice(`Sincronização concluída. ${count} por aprovar.${images}${failures}`);
       }
       reload();
+      return true;
     } catch {
-      setNotice(decision ? 'Não foi possível guardar a decisão.' : 'Não foi possível sincronizar as notícias.');
+      setNotice(command.type === 'sync' ? 'Não foi possível sincronizar as notícias.' : 'Não foi possível guardar a alteração.');
+      return false;
     } finally {
       setAction(null);
     }
+  }
+
+  async function addFromForm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const publishedAt = new Date(String(values.get('publishedAt') ?? ''));
+    if (!Number.isFinite(publishedAt.getTime())) {
+      setNotice('Indica a data e hora da publicação.');
+      return;
+    }
+
+    const added = await submit({
+      type: 'add',
+      article: {
+        title: String(values.get('title') ?? ''),
+        url: String(values.get('url') ?? ''),
+        imageUrl: String(values.get('imageUrl') ?? '').trim() || null,
+        publishedAt: publishedAt.toISOString(),
+      },
+    });
+    if (added) form.reset();
   }
 
   if (list.phase === 'denied') {
@@ -127,13 +172,41 @@ export default function NewsDesk() {
           <button
             type="button"
             disabled={disabled}
-            onClick={() => void submit()}
+            onClick={() => void submit({ type: 'sync' })}
             className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-45"
           >
             {action === 'sync' ? 'A sincronizar…' : 'Sincronizar agora'}
           </button>
         </div>
       </header>
+
+      <details className="rounded-xl border border-white/10 bg-white/[.025] px-4 py-3">
+        <summary className="cursor-pointer text-sm font-semibold text-sky-200">Adicionar notícia por ligação</summary>
+        <form onSubmit={addFromForm} className="mt-3 grid gap-3 sm:grid-cols-2">
+          <p className="text-xs text-white/65 sm:col-span-2">
+            Podes adicionar notícias do FC Porto, d’O Jogo e das restantes fontes.
+          </p>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Título
+            <input className="rounded-lg border border-white/15 bg-black/25 px-3 py-2" name="title" required maxLength={400} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Ligação da notícia
+            <input className="rounded-lg border border-white/15 bg-black/25 px-3 py-2" name="url" type="url" required maxLength={2048} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Data e hora da publicação
+            <input className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 [color-scheme:dark]" name="publishedAt" type="datetime-local" required />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Ligação HTTPS da imagem (opcional)
+            <input className="rounded-lg border border-white/15 bg-black/25 px-3 py-2" name="imageUrl" type="url" maxLength={2048} />
+          </label>
+          <button type="submit" disabled={disabled} className="justify-self-start rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-45">
+            Guardar para revisão
+          </button>
+        </form>
+      </details>
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Estado das notícias">
         {tabs.map((tab) => (
@@ -166,29 +239,32 @@ export default function NewsDesk() {
             <ul className="space-y-2">
               {list.result.items.map((article) => (
                 <li key={article.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[.025] p-4">
-                  <div className="min-w-0 space-y-1">
-                    <p className="text-xs font-semibold text-sky-200">
-                      {article.source} · <time dateTime={article.publishedAt}>{formatHubNewsDate(article.publishedAt)}</time>
-                    </p>
-                    <h2 className="font-semibold">{article.title}</h2>
-                    <a href={article.url} target="_blank" rel="noreferrer" className="text-xs text-sky-200 hover:underline">Ler na fonte ↗</a>
+                  <div className="flex min-w-0 flex-1 basis-full items-center gap-3 sm:basis-auto">
+                    <NewsImage src={article.imageUrl} className="relative h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-white/5 [&_img]:object-cover" />
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-xs font-semibold text-sky-200">
+                        {article.source} · <time dateTime={article.publishedAt}>{formatHubNewsDate(article.publishedAt)}</time>
+                      </p>
+                      <h2 className="font-semibold">{article.title}</h2>
+                      <a href={article.url} target="_blank" rel="noreferrer" className="text-xs text-sky-200 hover:underline">Ler na fonte ↗</a>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {article.status !== 'approved' && (
+                    {(article.status !== 'approved' || (article.imageUrl && !article.imageApproved)) && (
                       <button
                         type="button"
                         disabled={disabled}
-                        onClick={() => void submit({ id: article.id, revision: article.revision, status: 'approved' })}
+                        onClick={() => void submit({ type: 'decision', decision: { id: article.id, revision: article.revision, status: 'approved' } })}
                         className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-45"
                       >
-                        Aprovar
+                        {article.status === 'approved' ? 'Aprovar imagem' : 'Aprovar'}
                       </button>
                     )}
                     {article.status !== 'rejected' && (
                       <button
                         type="button"
                         disabled={disabled}
-                        onClick={() => void submit({ id: article.id, revision: article.revision, status: 'rejected' })}
+                        onClick={() => void submit({ type: 'decision', decision: { id: article.id, revision: article.revision, status: 'rejected' } })}
                         className="rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/5 disabled:opacity-45"
                       >
                         {article.status === 'approved' ? 'Retirar do hub' : 'Rejeitar'}

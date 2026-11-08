@@ -161,9 +161,9 @@
 .sectionHead > span { color: var(--text-soft); font-size: 10px; font-weight: 800; letter-spacing: .1em; white-space: nowrap; }
 
 .lead {
-  display: flex;
+  display: grid;
   min-height: 215px;
-  align-items: end;
+  align-items: stretch;
   overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-lg);
@@ -173,7 +173,11 @@
     linear-gradient(145deg, var(--ink-800), var(--ink-900));
 }
 
-.leadBody { width: 100%; padding: clamp(18px, 3vw, 31px); }
+.lead:has(.leadPhoto) { grid-template-columns: minmax(0, 1.3fr) minmax(170px, 1fr); }
+.leadBody { align-self: center; width: 100%; padding: clamp(18px, 3vw, 31px); }
+.leadPhoto, .rowPhoto { position: relative; overflow: hidden; background: var(--ink-800); }
+.leadPhoto img, .rowPhoto img { object-fit: cover; }
+.leadPhoto { min-height: 210px; }
 .leadBody h3 {
   max-width: 20ch;
   margin: 6px 0 8px;
@@ -199,13 +203,16 @@
 .leadBody .textLink, .newsCopy .textLink { margin-top: 9px; }
 
 .newsRow {
+  display: grid;
+  overflow: hidden;
   margin-top: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface);
 }
 
-.newsCopy { padding: clamp(14px, 1.8vw, 20px); }
+.newsRow:has(.rowPhoto) { grid-template-columns: clamp(100px, 19vw, 176px) minmax(0, 1fr); }
+.newsCopy { align-self: center; padding: clamp(14px, 1.8vw, 20px); }
 .newsCopy h3 { margin: 4px 0; font-size: clamp(18px, 2.2vw, 24px); font-weight: 800; letter-spacing: -.035em; line-height: 1.15; }
 
 .tableCard { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
@@ -324,4 +331,6 @@
   .shortcuts { width: 100%; }
   .shortcut { flex: 1 1 0; gap: 7px; padding-inline: 8px; }
   .shortcutArrow { margin-left: auto; }
+  .lead:has(.leadPhoto) { grid-template-columns: 1fr; }
+  .leadPhoto { order: -1; min-height: 0; aspect-ratio: 16 / 10; }
 }

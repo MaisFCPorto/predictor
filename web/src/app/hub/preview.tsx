@@ -11,64 +11,53 @@ import styles from './hub.module.css';
 
 const readHub = (response: Response): Promise<HubContent> => response.json();
 
-function NewsLink({ article }: { article: HubArticle }) {
+function NewsStory({ article, lead = false }: { article: HubArticle; lead?: boolean }) {
   return (
-    <a
-      href={article.url}
-      target="_blank"
-      rel="noreferrer"
-      className={styles.textLink}
-      aria-label={`${article.title} · ${article.source}`}
-    >
-      Ler notícia <span aria-hidden="true">↗</span>
-    </a>
-  );
-}
-
-function ArticleLabel({ article }: { article: HubArticle }) {
-  return (
-    <div className={styles.articleLabel}>
-      <span>{article.source}</span>
-      <time dateTime={article.publishedAt}>{formatHubNewsDate(article.publishedAt)}</time>
-    </div>
-  );
-}
-
-function NewsCard({ article, lead = false }: { article: HubArticle; lead?: boolean }) {
-  return (
-    <article className={lead ? `${styles.newsCard} ${styles.lead}` : styles.newsCard}>
-      <NewsImage src={article.imageUrl} className={styles.newsPhoto} size={lead ? 'lead' : 'card'} />
-      <div className={styles.newsCopy}>
-        {lead && <p className={styles.kicker}>Em destaque</p>}
-        <ArticleLabel article={article} />
-        <h3>{article.title}</h3>
-        <NewsLink article={article} />
-      </div>
+    <article className={lead ? `${styles.story} ${styles.lead}` : styles.story}>
+      <a className={styles.storyLink} href={article.url} target="_blank" rel="noreferrer">
+        <NewsImage src={article.imageUrl} className={styles.newsPhoto} size={lead ? 'lead' : 'card'} />
+        <div className={styles.newsCopy}>
+          <p className={styles.articleLabel}>
+            <span>{article.source}</span>
+            <time dateTime={article.publishedAt}>{formatHubNewsDate(article.publishedAt)}</time>
+          </p>
+          <h3>{article.title}</h3>
+        </div>
+      </a>
     </article>
   );
 }
 
 function NewsFeed({ articles, available }: { articles: HubArticle[]; available: boolean }) {
   const [lead, ...latest] = articles;
+  const nearby = latest.slice(0, 3);
+  const more = latest.slice(3);
 
   return (
     <section id="noticias" aria-labelledby="news-title" className={styles.section}>
       <div className={styles.sectionHead}>
         <h2 id="news-title">Últimas notícias</h2>
         <Link href="/admin/hub-news" className={styles.textLink}>
-          Gerir notícias <span aria-hidden="true">→</span>
+          Gerir notícias
         </Link>
       </div>
       {lead ? (
-        <NewsCard article={lead} lead />
+        <div className={styles.frontPage}>
+          <NewsStory article={lead} lead />
+          {nearby.length > 0 && (
+            <div className={styles.headlines}>
+              {nearby.map((article) => <NewsStory article={article} key={article.url} />)}
+            </div>
+          )}
+        </div>
       ) : (
         <p className={styles.newsEmpty}>
           {available ? 'Ainda não há notícias aprovadas.' : 'As notícias estão temporariamente indisponíveis.'}
         </p>
       )}
-      {latest.length > 0 && (
+      {more.length > 0 && (
         <div className={styles.newsGrid}>
-          {latest.map((article) => <NewsCard article={article} key={article.url} />)}
+          {more.map((article) => <NewsStory article={article} key={article.url} />)}
         </div>
       )}
     </section>
@@ -182,10 +171,9 @@ function InstagramCarousel({ profileUrl, summary, posts }: HubContent['instagram
   }
 
   return (
-    <section id="instagram" className={`${styles.section} ${styles.social}`} aria-labelledby="instagram-title">
+    <section id="instagram" className={styles.section} aria-labelledby="instagram-title">
       <div className={styles.socialHead}>
         <div>
-          <p className={styles.kicker}>@MAISFCPORTO</p>
           <h2 id="instagram-title">Do nosso Instagram</h2>
           <p className={styles.socialMeta}>{summary}</p>
         </div>
@@ -258,57 +246,36 @@ export default function HubPreview() {
       <header className={styles.header}>
         <div className={`${styles.width} ${styles.headerInner}`}>
           <Link href="/hub" className={styles.brand}>
-            <Image src="/logobranco.png" alt="+FCPorto" width={118} height={38} priority />
-            <span>HUB</span>
+            <Image src="/logobranco.png" alt="+FCPorto" width={136} height={44} priority />
           </Link>
+          <h1>O dia do Porto</h1>
+          <time className={styles.edition} dateTime={edition.date}>{edition.label}</time>
+        </div>
+      </header>
+      <div className={styles.navBar}>
+        <div className={`${styles.width} ${styles.navInner}`}>
           <nav aria-label="Secções do hub" className={styles.nav}>
             <a href="#noticias">Notícias</a>
             <a href="#classificacoes">Classificações</a>
             <a href="#instagram">Instagram</a>
           </nav>
-          <span className={styles.beta}>Beta admin</span>
+          <nav className={`${styles.nav} ${styles.shortcuts}`} aria-label="Espaços +FCPorto">
+            <Link href="/jogos">Predictor</Link>
+            {cadernetaEnabled && <Link href="/caderneta">Caderneta</Link>}
+          </nav>
         </div>
-      </header>
+      </div>
 
-      <main id="hub-conteudo">
-        <div className={styles.masthead}>
-          <div className={styles.mastheadImage}>
-            <Image
-              src="/hub/vitoria-fc-porto.webp"
-              alt=""
-              fill
-              sizes="(max-width: 690px) 100vw, 65vw"
-              priority
-            />
-          </div>
-          <div className={`${styles.width} ${styles.mastheadInner}`}>
-            <p className={styles.kicker}><time dateTime={edition.date}>{edition.label}</time></p>
-            <h1>O dia <span>do Porto.</span></h1>
-            <p className={styles.intro}>A atualidade do clube e os espaços da comunidade.</p>
-            <nav className={styles.shortcuts} aria-label="Espaços +FCPorto">
-              <Link href="/jogos" className={`${styles.shortcut} ${styles.shortcutPrimary}`}>
-                Predictor <span aria-hidden="true">→</span>
-              </Link>
-              {cadernetaEnabled && (
-                <Link href="/caderneta" className={styles.shortcut}>
-                  Caderneta <span aria-hidden="true">→</span>
-                </Link>
-              )}
-            </nav>
-          </div>
-        </div>
-
-        <div className={styles.width}>
-          <NewsFeed articles={articles} available={newsAvailable} />
-          <Classifications standings={standings} />
-          <InstagramCarousel {...instagram} />
-        </div>
+      <main id="hub-conteudo" className={styles.width} tabIndex={-1}>
+        <NewsFeed articles={articles} available={newsAvailable} />
+        <Classifications standings={standings} />
+        <InstagramCarousel {...instagram} />
       </main>
 
       <footer className={styles.footer}>
         <div className={styles.width}>
           <span>+FCPorto</span>
-          <span>Hub editorial</span>
+          <span>Beta admin</span>
         </div>
       </footer>
     </div>

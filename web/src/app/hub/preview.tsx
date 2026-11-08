@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { formatHubNewsDate } from '@/features/hub/news-date';
 import type { HubArticle, HubContent, StandingsSnapshot } from '@/features/hub/types';
 import { useAdminBetaContent } from '@/utils/supabase/use-admin-beta-content';
 import styles from './hub.module.css';
@@ -18,7 +19,7 @@ function NewsLink({ article }: { article: HubArticle }) {
       className={styles.textLink}
       aria-label={`${article.title} · ${article.source}`}
     >
-      Ler na {article.source} <span aria-hidden="true">↗</span>
+      Ler notícia <span aria-hidden="true">↗</span>
     </a>
   );
 }
@@ -26,52 +27,39 @@ function NewsLink({ article }: { article: HubArticle }) {
 function ArticleLabel({ article }: { article: HubArticle }) {
   return (
     <div className={styles.articleLabel}>
-      <span>{article.category}</span>
-      <time dateTime={article.time}>{article.time}</time>
+      <span>{article.source}</span>
+      <time dateTime={article.publishedAt}>{formatHubNewsDate(article.publishedAt)}</time>
     </div>
   );
 }
 
-function NewsFeed({ articles }: { articles: HubContent['articles'] }) {
+function NewsFeed({ articles, available }: { articles: HubArticle[]; available: boolean }) {
   const [lead, ...latest] = articles;
 
   return (
     <section id="noticias" aria-labelledby="news-title" className={styles.section}>
       <div className={styles.sectionHead}>
         <h2 id="news-title">Notícias</h2>
-        <span>EDIÇÃO DO DIA</span>
+        <Link href="/admin/hub-news" className={styles.textLink}>Gerir notícias</Link>
       </div>
-      <article className={styles.lead}>
-        <Image
-          src={lead.image}
-          alt={lead.imageAlt}
-          fill
-          priority
-          sizes="(max-width: 820px) 100vw, (max-width: 1370px) 65vw, 875px"
-          className={styles.leadImage}
-        />
-        <span className={styles.photoCredit}>Imagem {lead.source}</span>
-        <div className={styles.leadBody}>
-          <ArticleLabel article={lead} />
-          <h3>{lead.title}</h3>
-          <p>{lead.summary}</p>
-          <NewsLink article={lead} />
-        </div>
-      </article>
+      {lead ? (
+        <article className={styles.lead}>
+          <div className={styles.leadBody}>
+            <ArticleLabel article={lead} />
+            <h3>{lead.title}</h3>
+            <NewsLink article={lead} />
+          </div>
+        </article>
+      ) : (
+        <p className={styles.newsEmpty}>
+          {available ? 'Ainda não há notícias aprovadas.' : 'As notícias estão temporariamente indisponíveis.'}
+        </p>
+      )}
       {latest.map((article) => (
         <article className={styles.newsRow} key={article.url}>
-          <div className={styles.newsThumb}>
-            <Image
-              src={article.image}
-              alt={article.imageAlt}
-              fill
-              sizes="(max-width: 540px) 120px, 210px"
-            />
-          </div>
           <div className={styles.newsCopy}>
             <ArticleLabel article={article} />
             <h3>{article.title}</h3>
-            <p>{article.summary}</p>
             <NewsLink article={article} />
           </div>
         </article>
@@ -255,7 +243,7 @@ export default function HubPreview() {
     return <main className={styles.access}><p role="status">A verificar acesso…</p></main>;
   }
 
-  const { edition, articles, standings, instagram, cadernetaEnabled } = content.data;
+  const { edition, articles, newsAvailable, standings, instagram, cadernetaEnabled } = content.data;
 
   return (
     <div className={styles.hub}>
@@ -299,7 +287,7 @@ export default function HubPreview() {
         </div>
 
         <div className={styles.editorialGrid}>
-          <NewsFeed articles={articles} />
+          <NewsFeed articles={articles} available={newsAvailable} />
           <Classifications standings={standings} />
         </div>
         <InstagramCarousel {...instagram} />
@@ -308,7 +296,7 @@ export default function HubPreview() {
       <footer className={styles.footer}>
         <div className={styles.width}>
           <span>+FCPorto</span>
-          <span>Protótipo editorial · {edition.label}</span>
+          <span>Hub editorial</span>
         </div>
       </footer>
     </div>

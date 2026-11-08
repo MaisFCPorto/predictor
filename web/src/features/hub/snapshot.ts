@@ -3,29 +3,6 @@ import 'server-only';
 import type { HubContent } from './types';
 
 export const hubSnapshot = {
-  edition: { date: '2026-11-08', label: 'Domingo, 8 de novembro de 2026' },
-  articles: [
-    {
-      title: 'FC Porto procura a 11.ª vitória seguida em Guimarães',
-      summary: 'Depois do 4–1 ao Napoli na Champions, os dragões voltam ao campeonato. O duelo com o Vitória SC começa às 18h00, no Estádio D. Afonso Henriques.',
-      category: 'Liga Portugal · Antevisão',
-      time: '11:30',
-      url: 'https://www.sporttv.pt/noticias/867806/assista-ao-vitoria-sc-x-fc-porto-na-sport-tv-2',
-      source: 'SPORT TV',
-      image: '/hub/vitoria-fc-porto.webp',
-      imageAlt: 'Jogadores do FC Porto a celebrar',
-    },
-    {
-      title: 'FC Porto B perde frente ao Portimonense',
-      summary: 'Samuel Neves marcou aos 77 minutos e decidiu o encontro da Liga Portugal 2 por 0–1.',
-      category: 'Liga Portugal 2',
-      time: '13:04',
-      url: 'https://www.sporttv.pt/noticias/867905/golo-solitario-dita-nova-derrota-do-fc-porto-b',
-      source: 'SPORT TV',
-      image: '/hub/fc-porto-b.webp',
-      imageAlt: 'Lance do encontro entre o FC Porto B e o Portimonense',
-    },
-  ],
   standings: {
     liga: {
       name: 'Liga Portugal Betclic',
@@ -132,4 +109,4 @@ export const hubSnapshot = {
       },
     ],
   },
-} satisfies Omit<HubContent, 'cadernetaEnabled'>;
+} satisfies Pick<HubContent, 'standings' | 'instagram'>;

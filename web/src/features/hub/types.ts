@@ -1,13 +1,14 @@
 export type HubArticle = {
   title: string;
-  summary: string;
-  category: string;
-  time: string;
+  publishedAt: string;
   url: string;
   source: string;
-  image: string;
-  imageAlt: string;
 };
+
+export type HubNewsStatus = 'pending' | 'approved' | 'rejected';
+export type HubNewsItem = HubArticle & { id: number; status: HubNewsStatus; revision: number };
+export type HubNewsPage = { items: HubNewsItem[]; hasMore: boolean };
+export type HubNewsSync = { found: number; added: number; failedSources: string[] };
 
 export type Standing = {
   position: number;
@@ -35,7 +36,8 @@ export type InstagramPost = {
 
 export type HubContent = {
   edition: { date: string; label: string };
-  articles: [HubArticle, ...HubArticle[]];
+  articles: HubArticle[];
+  newsAvailable: boolean;
   standings: { liga: StandingsSnapshot; champions: StandingsSnapshot };
   instagram: { profileUrl: string; summary: string; posts: InstagramPost[] };
   cadernetaEnabled: boolean;

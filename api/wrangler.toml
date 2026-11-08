@@ -11,6 +11,9 @@ database_id = "e852c6db-7520-46f1-b429-f6ff22b4560b"
 name = "predictor-porto-api"
 workers_dev = true
 
+[env.production.triggers]
+crons = ["0 */3 * * *"]
+
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "predictor-db"

@@ -34,39 +34,43 @@ function ArticleLabel({ article }: { article: HubArticle }) {
   );
 }
 
+function NewsCard({ article, lead = false }: { article: HubArticle; lead?: boolean }) {
+  return (
+    <article className={lead ? `${styles.newsCard} ${styles.lead}` : styles.newsCard}>
+      <NewsImage src={article.imageUrl} className={styles.newsPhoto} size={lead ? 'lead' : 'card'} />
+      <div className={styles.newsCopy}>
+        {lead && <p className={styles.kicker}>Em destaque</p>}
+        <ArticleLabel article={article} />
+        <h3>{article.title}</h3>
+        <NewsLink article={article} />
+      </div>
+    </article>
+  );
+}
+
 function NewsFeed({ articles, available }: { articles: HubArticle[]; available: boolean }) {
   const [lead, ...latest] = articles;
 
   return (
     <section id="noticias" aria-labelledby="news-title" className={styles.section}>
       <div className={styles.sectionHead}>
-        <h2 id="news-title">Notícias</h2>
-        <Link href="/admin/hub-news" className={styles.textLink}>Gerir notícias</Link>
+        <h2 id="news-title">Últimas notícias</h2>
+        <Link href="/admin/hub-news" className={styles.textLink}>
+          Gerir notícias <span aria-hidden="true">→</span>
+        </Link>
       </div>
       {lead ? (
-        <article className={styles.lead}>
-          <div className={styles.leadBody}>
-            <ArticleLabel article={lead} />
-            <h3>{lead.title}</h3>
-            <NewsLink article={lead} />
-          </div>
-          <NewsImage src={lead.imageUrl} className={styles.leadPhoto} />
-        </article>
+        <NewsCard article={lead} lead />
       ) : (
         <p className={styles.newsEmpty}>
           {available ? 'Ainda não há notícias aprovadas.' : 'As notícias estão temporariamente indisponíveis.'}
         </p>
       )}
-      {latest.map((article) => (
-        <article className={styles.newsRow} key={article.url}>
-          <NewsImage src={article.imageUrl} className={styles.rowPhoto} />
-          <div className={styles.newsCopy}>
-            <ArticleLabel article={article} />
-            <h3>{article.title}</h3>
-            <NewsLink article={article} />
-          </div>
-        </article>
-      ))}
+      {latest.length > 0 && (
+        <div className={styles.newsGrid}>
+          {latest.map((article) => <NewsCard article={article} key={article.url} />)}
+        </div>
+      )}
     </section>
   );
 }
@@ -266,34 +270,39 @@ export default function HubPreview() {
         </div>
       </header>
 
-      <main id="hub-conteudo" className={styles.width}>
+      <main id="hub-conteudo">
         <div className={styles.masthead}>
-          <div>
-            <p className={styles.kicker}><time dateTime={edition.date}>{edition.label}</time></p>
-            <h1>O dia do Porto<span>.</span></h1>
-            <p>A atualidade do clube e os espaços da comunidade.</p>
+          <div className={styles.mastheadImage}>
+            <Image
+              src="/hub/vitoria-fc-porto.webp"
+              alt=""
+              fill
+              sizes="(max-width: 690px) 100vw, 65vw"
+              priority
+            />
           </div>
-          <div className={styles.shortcuts} aria-label="Espaços +FCPorto">
-            <Link href="/jogos" className={styles.shortcut}>
-              <span className={styles.shortcutMark} aria-hidden="true">P</span>
-              <span><small>PALPITES</small><strong>Predictor</strong></span>
-              <span className={styles.shortcutArrow} aria-hidden="true">↗</span>
-            </Link>
-            {cadernetaEnabled && (
-              <Link href="/caderneta" className={styles.shortcut}>
-                <span className={styles.shortcutMark} aria-hidden="true">C</span>
-                <span><small>COLEÇÃO</small><strong>Caderneta</strong></span>
-                <span className={styles.shortcutArrow} aria-hidden="true">↗</span>
+          <div className={`${styles.width} ${styles.mastheadInner}`}>
+            <p className={styles.kicker}><time dateTime={edition.date}>{edition.label}</time></p>
+            <h1>O dia <span>do Porto.</span></h1>
+            <p className={styles.intro}>A atualidade do clube e os espaços da comunidade.</p>
+            <nav className={styles.shortcuts} aria-label="Espaços +FCPorto">
+              <Link href="/jogos" className={`${styles.shortcut} ${styles.shortcutPrimary}`}>
+                Predictor <span aria-hidden="true">→</span>
               </Link>
-            )}
+              {cadernetaEnabled && (
+                <Link href="/caderneta" className={styles.shortcut}>
+                  Caderneta <span aria-hidden="true">→</span>
+                </Link>
+              )}
+            </nav>
           </div>
         </div>
 
-        <div className={styles.editorialGrid}>
+        <div className={styles.width}>
           <NewsFeed articles={articles} available={newsAvailable} />
           <Classifications standings={standings} />
+          <InstagramCarousel {...instagram} />
         </div>
-        <InstagramCarousel {...instagram} />
       </main>
 
       <footer className={styles.footer}>

@@ -199,6 +199,19 @@ function PublicLandingHeader() {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+
+  if (pathname === '/caderneta' || pathname?.startsWith('/caderneta/')) {
+    return (
+      <html lang="pt">
+        <body>{children}</body>
+      </html>
+    );
+  }
+
+  return <PredictorLayout pathname={pathname}>{children}</PredictorLayout>;
+}
+
+function PredictorLayout({ children, pathname }: { children: ReactNode; pathname: string | null }) {
   const router = useRouter();
   const isPublicLanding = pathname === '/' || pathname === '/landing-preview';
 

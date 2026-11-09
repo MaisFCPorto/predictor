@@ -54,45 +54,124 @@ function NewsFeed({ articles, available, edition }: {
           ))}
         </section>
       )}
-      {(latest.length > 0 || featured.length === 0) && (
-        <section aria-labelledby="news-title" className={styles.newsPanel}>
-          <div className={styles.newsPanelHead}>
-            <h2 id="news-title">Notícias</h2>
-            <time dateTime={edition.date}>{edition.label}</time>
+      <section aria-labelledby="news-title" className={styles.newsPanel}>
+        <div className={styles.newsPanelHead}>
+          <h2 id="news-title">Outras notícias</h2>
+          <time dateTime={edition.date}>{edition.label}</time>
+        </div>
+        {latest.length > 0 ? (
+          <div className={styles.newsGrid}>
+            {latest.map((article) => <NewsStory article={article} placement="feed" key={article.url} />)}
           </div>
-          {latest.length > 0 ? (
-            <div className={styles.newsGrid}>
-              {latest.map((article) => <NewsStory article={article} placement="feed" key={article.url} />)}
-            </div>
-          ) : (
-            <p className={styles.newsEmpty}>
-              {available ? 'Ainda não há notícias aprovadas.' : 'As notícias estão temporariamente indisponíveis.'}
-            </p>
-          )}
-        </section>
-      )}
+        ) : (
+          <p className={styles.newsEmpty}>
+            {available ? 'As próximas notícias aprovadas aparecem aqui.' : 'As notícias estão temporariamente indisponíveis.'}
+          </p>
+        )}
+      </section>
     </div>
   );
 }
 
-function PredictorBanner() {
+const gamePromos = [
+  {
+    id: 'predictor',
+    name: 'Predictor',
+    title: 'O teu prognóstico dá prémios',
+    description: 'A participação é gratuita',
+    action: 'Jogar já',
+    href: '/jogos',
+    photo: '/hub/vitoria-fc-porto.webp',
+  },
+  {
+    id: 'notas',
+    name: 'Notas',
+    title: 'Avalia os jogadores',
+    description: 'Dá as tuas notas e vê a média dos adeptos',
+    action: 'Dar notas',
+    href: '/hub/notas',
+    photo: '/hub/ig-01.webp',
+  },
+  {
+    id: 'onze',
+    name: 'Onze',
+    title: 'Faz o teu onze',
+    description: 'Escolhe a formação e partilha a tua equipa',
+    action: 'Montar o onze',
+    href: '/hub/onze',
+    photo: '/hub/ig-09.webp',
+  },
+  {
+    id: 'album',
+    name: 'Álbum',
+    title: 'A tua caderneta digital',
+    description: 'Abre carteiras e coleciona cromos do FC Porto',
+    action: 'Abrir álbum',
+    href: '/caderneta',
+    photo: '/hub/ig-05.webp',
+  },
+] as const;
+
+function GameCarousel({ cadernetaEnabled }: { cadernetaEnabled: boolean }) {
+  const [active, setActive] = useState(0);
+  const game = gamePromos[active];
+  const canOpen = game.id !== 'album' || cadernetaEnabled;
+
+  function move(step: -1 | 1) {
+    setActive((index) => (index + step + gamePromos.length) % gamePromos.length);
+  }
+
   return (
-    <section aria-labelledby="predictor-title" className={styles.promo}>
-      <div className={styles.promoCopy}>
-        <Image src="/logos/predictor-02.svg" alt="+Predictor" width={210} height={58} />
-        <h2 id="predictor-title">O teu prognóstico dá prémios</h2>
-        <p>A participação é gratuita</p>
-        <Link href="/jogos" className={styles.promoLink}>
-          Jogar já <span aria-hidden="true">→</span>
-        </Link>
+    <section aria-label="Jogos e apps do +FCPorto" aria-roledescription="carrossel" className={styles.promo}>
+      <div id="hub-jogo-destaque" aria-live="polite" aria-atomic="true">
+        <div className={styles.promoSlide} data-game={game.id} key={game.id}>
+          <div className={styles.promoCopy}>
+            <div className={styles.promoBrand}>
+              {game.id === 'predictor'
+                ? <Image src="/logos/predictor-02.svg" alt="+Predictor" width={210} height={58} />
+                : <strong>{game.name}</strong>}
+            </div>
+            <h2>{game.title}</h2>
+            <p>{game.description}</p>
+            {canOpen ? (
+              <Link href={game.href} className={styles.promoLink}>
+                {game.action} <span aria-hidden="true">→</span>
+              </Link>
+            ) : (
+              <span className={styles.promoUnavailable}>Em breve</span>
+            )}
+          </div>
+          <div className={styles.promoPhoto}>
+            <Image
+              src={game.photo}
+              alt=""
+              fill
+              sizes="(max-width: 560px) calc(100vw - 28px), (max-width: 1000px) 35vw, 465px"
+            />
+          </div>
+        </div>
       </div>
-      <div className={styles.promoPhoto}>
-        <Image
-          src="/hub/vitoria-fc-porto.webp"
-          alt=""
-          fill
-          sizes="(max-width: 560px) calc(100vw - 28px), (max-width: 1000px) 35vw, 465px"
-        />
+      <div className={styles.promoControls}>
+        <button type="button" aria-label="Destaque anterior" aria-controls="hub-jogo-destaque" onClick={() => move(-1)}>
+          <span aria-hidden="true">←</span>
+        </button>
+        <div className={styles.promoChoices} role="group" aria-label="Escolher jogo">
+          {gamePromos.map((promo, index) => (
+            <button
+              type="button"
+              key={promo.id}
+              aria-label={`Mostrar ${promo.name}`}
+              aria-pressed={index === active}
+              aria-controls="hub-jogo-destaque"
+              onClick={() => setActive(index)}
+            >
+              <span>{promo.name}</span>
+            </button>
+          ))}
+        </div>
+        <button type="button" aria-label="Destaque seguinte" aria-controls="hub-jogo-destaque" onClick={() => move(1)}>
+          <span aria-hidden="true">→</span>
+        </button>
       </div>
     </section>
   );
@@ -304,7 +383,7 @@ export default function HubPreview() {
 
       <main id="hub-conteudo" className={`${styles.width} ${styles.main}`} tabIndex={-1}>
         <NewsFeed articles={articles} available={newsAvailable} edition={edition} />
-        <PredictorBanner />
+        <GameCarousel cadernetaEnabled={cadernetaEnabled} />
         <div className={styles.bottomGrid}>
           <Classifications standings={standings} />
           <InstagramCarousel {...instagram} />

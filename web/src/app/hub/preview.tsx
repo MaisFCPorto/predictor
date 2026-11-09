@@ -11,55 +11,89 @@ import styles from './hub.module.css';
 
 const readHub = (response: Response): Promise<HubContent> => response.json();
 
-function NewsStory({ article, lead = false }: { article: HubArticle; lead?: boolean }) {
+type StoryPlacement = 'lead' | 'highlight' | 'feed';
+
+function NewsStory({ article, placement }: { article: HubArticle; placement: StoryPlacement }) {
   return (
-    <article className={lead ? `${styles.story} ${styles.lead}` : styles.story}>
+    <article className={styles[placement]}>
       <a className={styles.storyLink} href={article.url} target="_blank" rel="noreferrer">
-        <NewsImage src={article.imageUrl} className={styles.newsPhoto} size={lead ? 'lead' : 'card'} />
+        <NewsImage src={article.imageUrl} className={styles.newsPhoto} size={placement === 'lead' ? 'lead' : 'card'} />
         <div className={styles.newsCopy}>
-          <p className={styles.articleLabel}>
-            <span>{article.source}</span>
-            <time dateTime={article.publishedAt}>{formatHubNewsDate(article.publishedAt)}</time>
-          </p>
+          <p className={styles.articleSource}>{article.source}</p>
           <h3>{article.title}</h3>
+          {placement === 'feed' && (
+            <time className={styles.articleDate} dateTime={article.publishedAt}>
+              {formatHubNewsDate(article.publishedAt)}
+            </time>
+          )}
         </div>
       </a>
     </article>
   );
 }
 
-function NewsFeed({ articles, available }: { articles: HubArticle[]; available: boolean }) {
-  const [lead, ...latest] = articles;
-  const nearby = latest.slice(0, 3);
-  const more = latest.slice(3);
+function NewsFeed({ articles, available, edition }: {
+  articles: HubArticle[];
+  available: boolean;
+  edition: HubContent['edition'];
+}) {
+  const featured = [
+    ...articles.filter((article) => article.imageUrl),
+    ...articles.filter((article) => !article.imageUrl),
+  ].slice(0, 3);
+  const latest = articles.filter((article) => !featured.includes(article));
 
   return (
-    <section id="noticias" aria-labelledby="news-title" className={styles.section}>
-      <div className={styles.sectionHead}>
-        <h2 id="news-title">Últimas notícias</h2>
-        <Link href="/admin/hub-news" className={styles.textLink}>
-          Gerir notícias
+    <div id="noticias" className={styles.section}>
+      <h1 className={styles.masthead}>O dia do Porto</h1>
+      {featured.length > 0 && (
+        <section aria-labelledby="featured-title" className={styles.frontPage} data-count={featured.length}>
+          <h2 id="featured-title" className="sr-only">Em destaque</h2>
+          {featured.map((article, index) => (
+            <NewsStory article={article} placement={index === 0 ? 'lead' : 'highlight'} key={article.url} />
+          ))}
+        </section>
+      )}
+      {(latest.length > 0 || featured.length === 0) && (
+        <section aria-labelledby="news-title" className={styles.newsPanel}>
+          <div className={styles.newsPanelHead}>
+            <h2 id="news-title">Notícias</h2>
+            <time dateTime={edition.date}>{edition.label}</time>
+          </div>
+          {latest.length > 0 ? (
+            <div className={styles.newsGrid}>
+              {latest.map((article) => <NewsStory article={article} placement="feed" key={article.url} />)}
+            </div>
+          ) : (
+            <p className={styles.newsEmpty}>
+              {available ? 'Ainda não há notícias aprovadas.' : 'As notícias estão temporariamente indisponíveis.'}
+            </p>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function PredictorBanner() {
+  return (
+    <section aria-labelledby="predictor-title" className={styles.promo}>
+      <div className={styles.promoCopy}>
+        <Image src="/logos/predictor-02.svg" alt="+Predictor" width={210} height={58} />
+        <h2 id="predictor-title">O teu prognóstico dá prémios</h2>
+        <p>A participação é gratuita</p>
+        <Link href="/jogos" className={styles.promoLink}>
+          Jogar já <span aria-hidden="true">→</span>
         </Link>
       </div>
-      {lead ? (
-        <div className={styles.frontPage}>
-          <NewsStory article={lead} lead />
-          {nearby.length > 0 && (
-            <div className={styles.headlines}>
-              {nearby.map((article) => <NewsStory article={article} key={article.url} />)}
-            </div>
-          )}
-        </div>
-      ) : (
-        <p className={styles.newsEmpty}>
-          {available ? 'Ainda não há notícias aprovadas.' : 'As notícias estão temporariamente indisponíveis.'}
-        </p>
-      )}
-      {more.length > 0 && (
-        <div className={styles.newsGrid}>
-          {more.map((article) => <NewsStory article={article} key={article.url} />)}
-        </div>
-      )}
+      <div className={styles.promoPhoto}>
+        <Image
+          src="/hub/vitoria-fc-porto.webp"
+          alt=""
+          fill
+          sizes="(max-width: 560px) calc(100vw - 28px), (max-width: 1000px) 35vw, 465px"
+        />
+      </div>
     </section>
   );
 }
@@ -244,34 +278,37 @@ export default function HubPreview() {
     <div className={styles.hub}>
       <a href="#hub-conteudo" className={styles.skip}>Saltar para o conteúdo</a>
       <header className={styles.header}>
-        <div className={`${styles.width} ${styles.headerInner}`}>
+        <div className={styles.headerInner}>
           <Link href="/hub" className={styles.brand}>
-            <Image src="/logobranco.png" alt="+FCPorto" width={136} height={44} priority />
+            <Image src="/logobranco.png" alt="+FCPorto" width={168} height={54} priority />
           </Link>
-          <h1>O dia do Porto</h1>
-          <time className={styles.edition} dateTime={edition.date}>{edition.label}</time>
+          <div className={styles.headerActions}>
+            <span>Beta admin</span>
+            <Link href="/admin/hub-news">Gerir notícias</Link>
+          </div>
         </div>
       </header>
       <div className={styles.navBar}>
-        <div className={`${styles.width} ${styles.navInner}`}>
-          <nav aria-label="Secções do hub" className={styles.nav}>
-            <a href="#noticias">Notícias</a>
-            <a href="#classificacoes">Classificações</a>
-            <a href="#instagram">Instagram</a>
-          </nav>
-          <nav className={`${styles.nav} ${styles.shortcuts}`} aria-label="Espaços +FCPorto">
-            <Link href="/hub/onze">Onze</Link>
-            <Link href="/hub/notas">Notas</Link>
-            <Link href="/jogos">Predictor</Link>
-            {cadernetaEnabled && <Link href="/caderneta">Caderneta</Link>}
-          </nav>
-        </div>
+        <nav aria-label="Secções do hub" className={styles.nav}>
+          <ul>
+            <li><a href="#noticias" className={styles.navHome}>Dragão</a></li>
+            <li><a href="#classificacoes">Classificações</a></li>
+            <li><Link href="/jogos">Predictor</Link></li>
+            {cadernetaEnabled && <li><Link href="/caderneta">Caderneta</Link></li>}
+            <li><Link href="/hub/onze">Faz o teu Onze</Link></li>
+            <li><Link href="/hub/notas">Avalia os jogadores</Link></li>
+            <li><a href="#instagram">Instagram</a></li>
+          </ul>
+        </nav>
       </div>
 
-      <main id="hub-conteudo" className={styles.width} tabIndex={-1}>
-        <NewsFeed articles={articles} available={newsAvailable} />
-        <Classifications standings={standings} />
-        <InstagramCarousel {...instagram} />
+      <main id="hub-conteudo" className={`${styles.width} ${styles.main}`} tabIndex={-1}>
+        <NewsFeed articles={articles} available={newsAvailable} edition={edition} />
+        <PredictorBanner />
+        <div className={styles.bottomGrid}>
+          <Classifications standings={standings} />
+          <InstagramCarousel {...instagram} />
+        </div>
       </main>
 
       <footer className={styles.footer}>

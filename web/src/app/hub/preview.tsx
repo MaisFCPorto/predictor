@@ -13,6 +13,74 @@ const readHub = (response: Response): Promise<HubContent> => response.json();
 
 type StoryPlacement = 'lead' | 'highlight' | 'feed';
 
+function HubNavigation({ cadernetaEnabled }: { cadernetaEnabled: boolean }) {
+  const [open, setOpen] = useState(false);
+  const bar = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function dismiss(event: PointerEvent) {
+      if (event.target instanceof Node && !bar.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, [open]);
+
+  function closeMenu() {
+    setOpen(false);
+  }
+
+  return (
+    <div
+      ref={bar}
+      className={styles.navBar}
+      onKeyDown={(event) => {
+        if (open && event.key === 'Escape') {
+          closeMenu();
+          toggle.current?.focus();
+        }
+      }}
+    >
+      <button
+        ref={toggle}
+        type="button"
+        className={styles.menuToggle}
+        aria-label={open ? 'Fechar menu' : 'Abrir menu'}
+        aria-expanded={open}
+        aria-controls="hub-nav"
+        onClick={() => setOpen((previous) => !previous)}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d={open ? 'M6 6l12 12M18 6L6 18' : 'M4 6h16M4 12h16M4 18h16'}
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+        Menu
+      </button>
+      <nav id="hub-nav" aria-label="Secções do hub" className={styles.nav} data-open={open}>
+        <ul>
+          <li><a href="#noticias" className={styles.navHome} onClick={closeMenu}>Dragão</a></li>
+          <li><a href="#mais-noticias" onClick={closeMenu}>Mais notícias</a></li>
+          <li><a href="#classificacoes" onClick={closeMenu}>Classificações</a></li>
+          <li><Link href="/jogos" onClick={closeMenu}>Predictor</Link></li>
+          {cadernetaEnabled && <li><Link href="/caderneta" onClick={closeMenu}>Caderneta</Link></li>}
+          <li><Link href="/hub/onze" onClick={closeMenu}>Faz o teu Onze</Link></li>
+          <li><Link href="/hub/notas" onClick={closeMenu}>Avalia os jogadores</Link></li>
+          <li><a href="#instagram" onClick={closeMenu}>Instagram</a></li>
+        </ul>
+      </nav>
+    </div>
+  );
+}
+
 function NewsStory({ article, placement }: { article: HubArticle; placement: StoryPlacement }) {
   return (
     <article className={styles[placement]}>
@@ -54,7 +122,7 @@ function NewsFeed({ articles, available, edition }: {
           ))}
         </section>
       )}
-      <section aria-labelledby="news-title" className={styles.newsPanel}>
+      <section id="mais-noticias" aria-labelledby="news-title" className={styles.newsPanel} tabIndex={-1}>
         <div className={styles.newsPanelHead}>
           <h2 id="news-title">Outras notícias</h2>
           <time dateTime={edition.date}>{edition.label}</time>
@@ -72,6 +140,8 @@ function NewsFeed({ articles, available, edition }: {
     </div>
   );
 }
+
+const GAME_ROTATION_MS = 6_000;
 
 const gamePromos = [
   {
@@ -114,16 +184,77 @@ const gamePromos = [
 
 function GameCarousel({ cadernetaEnabled }: { cadernetaEnabled: boolean }) {
   const [active, setActive] = useState(0);
+  const [autoRotate, setAutoRotate] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const rotationControl = useRef<HTMLButtonElement>(null);
   const game = gamePromos[active];
   const canOpen = game.id !== 'album' || cadernetaEnabled;
+  const rotationAction = autoRotate ? 'Pausar rotação automática' : 'Retomar rotação automática';
+
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setAutoRotate(!preference.matches);
+
+    function respectReducedMotion() {
+      if (preference.matches) setAutoRotate(false);
+    }
+
+    preference.addEventListener('change', respectReducedMotion);
+    return () => preference.removeEventListener('change', respectReducedMotion);
+  }, []);
+
+  useEffect(() => {
+    if (!autoRotate || hovering) return;
+
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setActive((index) => (index + 1) % gamePromos.length);
+    }, GAME_ROTATION_MS);
+
+    return () => window.clearInterval(timer);
+  }, [autoRotate, hovering]);
 
   function move(step: -1 | 1) {
+    setAutoRotate(false);
     setActive((index) => (index + step + gamePromos.length) % gamePromos.length);
   }
 
   return (
-    <section aria-label="Jogos e apps do +FCPorto" aria-roledescription="carrossel" className={styles.promo}>
-      <div id="hub-jogo-destaque" aria-live="polite" aria-atomic="true">
+    <section
+      aria-label="Jogos e apps do +FCPorto"
+      aria-roledescription="carrossel"
+      className={styles.promo}
+      onPointerEnter={(event) => {
+        if (event.pointerType === 'mouse') setHovering(true);
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType === 'mouse') setHovering(false);
+      }}
+      onFocusCapture={(event) => {
+        if (event.target !== rotationControl.current || event.target.matches(':focus-visible')) {
+          setAutoRotate(false);
+        }
+      }}
+    >
+      <button
+        ref={rotationControl}
+        type="button"
+        className={styles.promoRotation}
+        aria-label={rotationAction}
+        aria-controls="hub-jogo-destaque"
+        title={rotationAction}
+        onClick={() => setAutoRotate((previous) => !previous)}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d={autoRotate ? 'M9 5v14M15 5v14' : 'M9 5l11 7-11 7z'}
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      <div id="hub-jogo-destaque" aria-live={autoRotate ? 'off' : 'polite'} aria-atomic="true">
         <div className={styles.promoSlide} data-game={game.id} key={game.id}>
           <div className={styles.promoCopy}>
             <div className={styles.promoBrand}>
@@ -163,7 +294,10 @@ function GameCarousel({ cadernetaEnabled }: { cadernetaEnabled: boolean }) {
               aria-label={`Mostrar ${promo.name}`}
               aria-pressed={index === active}
               aria-controls="hub-jogo-destaque"
-              onClick={() => setActive(index)}
+              onClick={() => {
+                setAutoRotate(false);
+                setActive(index);
+              }}
             >
               <span>{promo.name}</span>
             </button>
@@ -367,19 +501,7 @@ export default function HubPreview() {
           </div>
         </div>
       </header>
-      <div className={styles.navBar}>
-        <nav aria-label="Secções do hub" className={styles.nav}>
-          <ul>
-            <li><a href="#noticias" className={styles.navHome}>Dragão</a></li>
-            <li><a href="#classificacoes">Classificações</a></li>
-            <li><Link href="/jogos">Predictor</Link></li>
-            {cadernetaEnabled && <li><Link href="/caderneta">Caderneta</Link></li>}
-            <li><Link href="/hub/onze">Faz o teu Onze</Link></li>
-            <li><Link href="/hub/notas">Avalia os jogadores</Link></li>
-            <li><a href="#instagram">Instagram</a></li>
-          </ul>
-        </nav>
-      </div>
+      <HubNavigation cadernetaEnabled={cadernetaEnabled} />
 
       <main id="hub-conteudo" className={`${styles.width} ${styles.main}`} tabIndex={-1}>
         <NewsFeed articles={articles} available={newsAvailable} edition={edition} />

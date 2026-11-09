@@ -182,7 +182,7 @@ function isRating(value: unknown): value is Rating {
   if (!value || typeof value !== 'object') return false;
   const { playerId, rating } = value as Partial<Rating>;
   return Number.isSafeInteger(playerId) && (playerId ?? 0) > 0 &&
-    Number.isInteger(rating) && (rating ?? 0) >= 1 && (rating ?? 0) <= 10;
+    typeof rating === 'number' && Number.isInteger(rating) && rating >= 0 && rating <= 10;
 }
 
 hubFans.put('/notas', async (c) => {

@@ -96,7 +96,7 @@
 .nextMatch { display: grid; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .fieldLabel { display: grid; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
 
-.app :where(select, input:not([type='checkbox'])) {
+.app :where(select, input:not([type='checkbox'], [type='radio'])) {
   min-height: 42px;
   min-width: 0;
   max-width: 100%;
@@ -189,6 +189,27 @@
 .table th[scope='row'] { overflow-wrap: anywhere; }
 .table small, .participants small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .table select { min-width: 56px; }
+.ratingScale { display: none; align-items: center; gap: 5px; }
+.ratingChoice { position: relative; display: inline-grid; }
+.ratingChoice input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.ratingChoice span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  font-weight: 700;
+}
+.ratingChoice:last-child { margin-left: 3px; }
+.ratingChoice:last-child span { border-style: dashed; background: transparent; color: var(--muted); }
+.ratingChoice input:enabled:hover + span { border-color: var(--accent); }
+.ratingChoice:not(:last-child) input:checked + span { border-color: var(--accent); background: var(--action); color: #fff; }
+.ratingChoice:last-child input:checked + span { border-color: var(--muted); color: var(--text); }
+.ratingChoice input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ratingChoice input:disabled { cursor: default; }
+.ratingChoice input:disabled + span { opacity: .55; }
 .score { color: var(--accent); font-weight: 800; }
 .method { margin-top: 13px; color: var(--muted); font-size: 13px; }
 .method summary { color: var(--accent); cursor: pointer; }
@@ -207,6 +228,11 @@
 }
 .participants label { display: flex; min-height: 46px; align-items: center; gap: 10px; padding: 5px 9px; border: 1px solid var(--line); font-size: 14px; cursor: pointer; }
 .participants input { width: 17px; height: 17px; accent-color: var(--action); }
+
+@media (min-width: 760px) {
+  .ratingScale { display: inline-flex; }
+  .ratingSelect { display: none; }
+}
 
 @media (max-width: 670px) {
   .lineupGrid { grid-template-columns: minmax(0, 1fr); }

@@ -10,7 +10,8 @@ import styles from '@/features/hub/fan-tools.module.css';
 
 const scoreFormat = new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const voteFormat = new Intl.NumberFormat('pt-PT');
-const scores = Array.from({ length: 10 }, (_, index) => index + 1);
+const scores = Array.from({ length: 11 }, (_, index) => String(index));
+const ratingChoices = [...scores, ''];
 const maxPlayers = 23;
 
 function Ranking({ season, players }: { season: string; players: RatingRank[] }) {
@@ -107,6 +108,34 @@ function SelectParticipants({ roster, saving, save }: { roster: FanPlayer[]; sav
   );
 }
 
+function RatingInput({ player, value, onChange }: { player: FanPlayer; value: string; onChange: (value: string) => void }) {
+  const label = `Nota para ${player.name}`;
+  return (
+    <>
+      <div className={styles.ratingScale} role="radiogroup" aria-label={label}>
+        {ratingChoices.map((rating) => (
+          <label className={styles.ratingChoice} key={rating} title={rating === '' ? 'Sem nota' : undefined}>
+            <input
+              type="radio"
+              name={`rating-${player.id}`}
+              aria-label={rating === '' ? 'Sem nota' : rating}
+              value={rating}
+              checked={value === rating}
+              onChange={() => onChange(rating)}
+            />
+            <span aria-hidden="true">{rating === '' ? '–' : rating}</span>
+          </label>
+        ))}
+      </div>
+      <select className={styles.ratingSelect} aria-label={label} value={value}
+        onChange={(event) => onChange(event.target.value)}>
+        <option value="">Sem nota</option>
+        {scores.map((rating) => <option key={rating} value={rating}>{rating}</option>)}
+      </select>
+    </>
+  );
+}
+
 function MatchVotes({ eligible, saving, save }: { eligible: MatchBallot['eligible']; saving: boolean; save: Save }) {
   const [draft, setDraft] = useState<Record<number, string>>(() =>
     Object.fromEntries(eligible.map((player) => [player.id, String(player.mine ?? '')])));
@@ -115,14 +144,14 @@ function MatchVotes({ eligible, saving, save }: { eligible: MatchBallot['eligibl
   return (
     <form onSubmit={(event) => {
       event.preventDefault();
-      const ratings = eligible.filter((player) => draft[player.id]).map((player) => ({
+      const ratings = eligible.filter((player) => (draft[player.id] ?? '') !== '').map((player) => ({
         playerId: player.id, rating: Number(draft[player.id]),
       }));
       void save('PUT', { ratings });
     }}>
       <fieldset disabled={saving}>
         <legend>As tuas notas</legend>
-        <p className={styles.muted}>Dá uma nota de 1 a 10 aos jogadores que quiseres avaliar.</p>
+        <p className={styles.muted}>Dá uma nota de 0 a 10 aos jogadores que quiseres avaliar.</p>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -136,11 +165,8 @@ function MatchVotes({ eligible, saving, save }: { eligible: MatchBallot['eligibl
               <tr key={player.id}>
                 <th scope="row">{player.name}<small>{positionName(player.position)}</small></th>
                 <td>
-                  <select aria-label={`Nota para ${player.name}`} value={draft[player.id]}
-                    onChange={(event) => setDraft({ ...draft, [player.id]: event.target.value })}>
-                    <option value="">–</option>
-                    {scores.map((rating) => <option key={rating}>{rating}</option>)}
-                  </select>
+                  <RatingInput player={player} value={draft[player.id] ?? ''}
+                    onChange={(value) => setDraft((current) => ({ ...current, [player.id]: value }))} />
                 </td>
                 <td className={styles.score}>
                   {player.average === null ? '–' : scoreFormat.format(player.average)}

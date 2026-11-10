@@ -1,7 +1,13 @@
 import { Hono } from 'hono';
 import { getActiveSeasonId } from '../app-settings';
+import {
+  getPortoCalendar,
+  getPortoGame,
+  isSportsKgmid,
+  PortoFixtureNotFound,
+} from '../serpapi-sports';
 
-type Env = { DB: D1Database; HUB_NEWS_KEY?: string };
+type Env = { DB: D1Database; HUB_NEWS_KEY?: string; SERPAPI_API_KEY?: string };
 type Player = { id: number; name: string; position: string };
 type Fixture = {
   id: string;
@@ -51,6 +57,26 @@ hubFans.use('*', async (c, next) => {
   if (!admin) return c.body(null, 404);
   c.set('userId', userId);
   await next();
+});
+
+hubFans.get('/serpapi', async (c) => {
+  const apiKey = c.env.SERPAPI_API_KEY?.trim();
+  if (!apiKey) return c.json({ error: 'serpapi_not_configured' }, 503);
+
+  const kgmid = c.req.query('kgmid');
+  if (kgmid !== undefined && !isSportsKgmid(kgmid)) {
+    return c.json({ error: 'invalid_kgmid' }, 400);
+  }
+
+  try {
+    if (!kgmid) return c.json(await getPortoCalendar(apiKey));
+
+    const { results } = await readPlayers(c.env.DB, true);
+    return c.json(await getPortoGame(apiKey, kgmid, results ?? []));
+  } catch (error) {
+    if (error instanceof PortoFixtureNotFound) return c.json({ error: 'not_porto_fixture' }, 404);
+    return c.json({ error: 'serpapi_unavailable' }, 502);
+  }
 });
 
 function readPlayers(db: D1Database, includeInactive = false) {

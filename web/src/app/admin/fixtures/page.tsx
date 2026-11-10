@@ -6,6 +6,7 @@ import Link from 'next/link';
 import AdminGate from '../_components/AdminGate';
 import { adm } from '../_utils/adminClients';
 import { localDateTimeToUtcIso } from '@/utils/dates';
+import SerpApiPreview from './serpapi-preview';
 
 /* -------------------- Tipos -------------------- */
 type Team = { id: string; name: string };
@@ -238,6 +239,7 @@ export default function AdminFixtures() {
   const [pageSize, setPageSize] = useState(20);
 
   const [showCreate, setShowCreate] = useState(false);
+  const [showSerpApi, setShowSerpApi] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [editingFixtureId, setEditingFixtureId] = useState<string | null>(null);
@@ -890,7 +892,14 @@ export default function AdminFixtures() {
             </p>
           </div>
 
-          <div className="flex w-full gap-2 sm:w-auto">
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setShowSerpApi(true)}
+              className="flex-1 rounded-xl border border-white/12 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 sm:flex-none"
+            >
+              Consultar SerpApi
+            </button>
             <button
               type="button"
               onClick={() => setShowSuggestions((value) => !value)}
@@ -1158,6 +1167,15 @@ export default function AdminFixtures() {
         ) : null}
 
         {/* Criar jogo */}
+        <Drawer
+          open={showSerpApi}
+          onClose={() => setShowSerpApi(false)}
+          title="Consultar SerpApi"
+          description="Confere o calendário, os resultados e os jogadores utilizados nos jogos do FC Porto."
+        >
+          <SerpApiPreview />
+        </Drawer>
+
         <Drawer
           open={showCreate}
           onClose={() => setShowCreate(false)}

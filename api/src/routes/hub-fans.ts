@@ -5,6 +5,7 @@ import {
   getPortoGame,
   isSportsKgmid,
   PortoFixtureNotFound,
+  SerpApiError,
 } from '../serpapi-sports';
 
 type Env = { DB: D1Database; HUB_NEWS_KEY?: string; SERPAPI_API_KEY?: string };
@@ -75,6 +76,9 @@ hubFans.get('/serpapi', async (c) => {
     return c.json(await getPortoGame(apiKey, kgmid, results ?? []));
   } catch (error) {
     if (error instanceof PortoFixtureNotFound) return c.json({ error: 'not_porto_fixture' }, 404);
+    if (error instanceof SerpApiError) {
+      return c.json({ error: error.code, upstreamStatus: error.upstreamStatus, detail: error.detail }, 502);
+    }
     return c.json({ error: 'serpapi_unavailable' }, 502);
   }
 });

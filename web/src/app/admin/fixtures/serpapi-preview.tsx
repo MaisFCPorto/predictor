@@ -48,10 +48,33 @@ function playerLabel(player: Player | null) {
 }
 
 function errorLabel(error: unknown) {
-  const code = axios.isAxiosError<{ error?: string }>(error) ? error.response?.data?.error : undefined;
-  if (code === 'serpapi_not_configured') return 'Falta configurar a chave SerpApi no Worker.';
-  if (code === 'serpapi_proxy_not_configured') return 'Falta configurar o acesso ao Worker do Hub.';
-  if (axios.isAxiosError(error) && error.response?.status === 404) {
+  const response = axios.isAxiosError<{ error?: string; upstreamStatus?: number; detail?: string }>(error)
+    ? error.response
+    : undefined;
+  const data = response?.data;
+  const messages: Record<string, string> = {
+    serpapi_not_configured: 'Falta configurar a chave SerpApi no Worker.',
+    serpapi_proxy_not_configured: 'Falta configurar o acesso ao Worker do Hub.',
+    serpapi_timeout: 'A consulta à SerpApi excedeu o tempo de espera. Tenta novamente.',
+    serpapi_network_error: 'O Worker não conseguiu estabelecer ligação à SerpApi.',
+    serpapi_invalid_response: 'A SerpApi devolveu uma resposta inválida.',
+    serpapi_calendar_missing: 'A resposta da SerpApi não inclui o calendário do FC Porto.',
+    serpapi_game_missing: 'A resposta da SerpApi não inclui a ficha completa do jogo pedido.',
+    not_porto_fixture: 'A ficha recebida não corresponde a um jogo do FC Porto.',
+  };
+  if (data?.error === 'serpapi_request_failed') {
+    const statusMessages: Record<number, string> = {
+      400: 'A SerpApi recusou os parâmetros da consulta (HTTP 400).',
+      401: 'A chave foi recusada pela SerpApi (HTTP 401). Confirma o valor de SERPAPI_API_KEY no Worker.',
+      403: 'A conta SerpApi não tem permissão para realizar esta consulta (HTTP 403).',
+      429: 'Atingiste o limite de consultas da conta SerpApi ou o limite horário (HTTP 429).',
+    };
+    const label = statusMessages[data.upstreamStatus ?? 0]
+      ?? `A SerpApi devolveu um erro (HTTP ${data.upstreamStatus ?? 502}).`;
+    return data.detail ? `${label} ${data.detail}` : label;
+  }
+  if (data?.error && messages[data.error]) return messages[data.error];
+  if (response?.status === 404) {
     return 'A consulta SerpApi ainda não está disponível no Worker (HTTP 404). Confirma a publicação da API e o acesso interno do Hub.';
   }
   return 'Não foi possível consultar a SerpApi. Tenta novamente.';

@@ -47,6 +47,16 @@ type SportsResponse = {
 
 export class PortoFixtureNotFound extends Error {}
 
+export class SerpApiError extends Error {
+  constructor(
+    readonly code: string,
+    readonly upstreamStatus?: number,
+    readonly detail?: string,
+  ) {
+    super(code);
+  }
+}
+
 export function isSportsKgmid(value: unknown): value is string {
   return typeof value === 'string' && /^\/[gm]\/[a-z0-9_]{1,64}$/.test(value);
 }
@@ -60,14 +70,32 @@ async function searchSports(apiKey: string, params: Record<string, string>) {
     ...params,
     api_key: apiKey,
   });
-  const response = await fetch('https://serpapi.com/search.json?' + query.toString(), {
-    redirect: 'error',
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (!response.ok) throw new Error('SerpApi request failed');
+  let response: Response;
+  try {
+    response = await fetch('https://serpapi.com/search.json?' + query.toString(), {
+      redirect: 'error',
+      signal: AbortSignal.timeout(12_000),
+    });
+  } catch (error) {
+    const timedOut = error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name);
+    throw new SerpApiError(timedOut ? 'serpapi_timeout' : 'serpapi_network_error');
+  }
 
-  const data = (await response.json()) as SportsResponse;
-  if (!data || data.error) throw new Error('SerpApi returned an error');
+  const data = (await response.json().catch(() => null)) as SportsResponse | null;
+  const formEncodedKey = new URLSearchParams({ api_key: apiKey }).toString().slice('api_key='.length);
+  const detail = typeof data?.error === 'string'
+    ? data.error
+      .replaceAll(apiKey, '[ocultado]')
+      .replaceAll(encodeURIComponent(apiKey), '[ocultado]')
+      .replaceAll(formEncodedKey, '[ocultado]')
+      .slice(0, 240)
+    : undefined;
+  if (!response.ok || data?.error) {
+    throw new SerpApiError('serpapi_request_failed', response.status, detail);
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new SerpApiError('serpapi_invalid_response', response.status);
+  }
   return data;
 }
 
@@ -150,7 +178,7 @@ function substitutionsFromLineup(lineup: Lineup | undefined, players: readonly C
 export async function getPortoCalendar(apiKey: string) {
   const data = await searchSports(apiKey, { type: 'team', tab: 'gm', kgmid: PORTO_KGMID });
   const games = data.team_results?.games;
-  if (!Array.isArray(games)) throw new Error('SerpApi did not return a calendar');
+  if (!Array.isArray(games)) throw new SerpApiError('serpapi_calendar_missing');
 
   return { games: games.map(fixtureSummary).filter((game) => game !== null) };
 }
@@ -160,13 +188,13 @@ export async function getPortoGame(apiKey: string, kgmid: string, players: reado
   const game = data.game_results;
   const info = game?.info;
   if (!game || !info || info.kgmid !== kgmid || !Array.isArray(info.teams)) {
-    throw new Error('SerpApi did not return the requested fixture');
+    throw new SerpApiError('serpapi_game_missing');
   }
 
   const fixture = fixtureSummary(info);
   const portoIndex = info.teams.findIndex((team) => team.kgmid === PORTO_KGMID);
   if (portoIndex < 0) throw new PortoFixtureNotFound();
-  if (!fixture) throw new Error('SerpApi returned an incomplete fixture');
+  if (!fixture) throw new SerpApiError('serpapi_game_missing');
 
   const porto = info.teams[portoIndex];
   const lineup = game.lineups?.teams?.find((team) => team.team_index === portoIndex);

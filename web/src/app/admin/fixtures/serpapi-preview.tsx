@@ -51,6 +51,9 @@ function errorLabel(error: unknown) {
   const code = axios.isAxiosError<{ error?: string }>(error) ? error.response?.data?.error : undefined;
   if (code === 'serpapi_not_configured') return 'Falta configurar a chave SerpApi no Worker.';
   if (code === 'serpapi_proxy_not_configured') return 'Falta configurar o acesso ao Worker do Hub.';
+  if (axios.isAxiosError(error) && error.response?.status === 404) {
+    return 'A consulta SerpApi ainda não está disponível no Worker (HTTP 404). Confirma a publicação da API e o acesso interno do Hub.';
+  }
   return 'Não foi possível consultar a SerpApi. Tenta novamente.';
 }
 

@@ -82,10 +82,12 @@ async function searchSports(apiKey: string, params: Record<string, string>) {
   }
 
   const data = (await response.json().catch(() => null)) as SportsResponse | null;
+  const formEncodedKey = new URLSearchParams({ api_key: apiKey }).toString().slice('api_key='.length);
   const detail = typeof data?.error === 'string'
     ? data.error
       .replaceAll(apiKey, '[ocultado]')
       .replaceAll(encodeURIComponent(apiKey), '[ocultado]')
+      .replaceAll(formEncodedKey, '[ocultado]')
       .slice(0, 240)
     : undefined;
   if (!response.ok || data?.error) {

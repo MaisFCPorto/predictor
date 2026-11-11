@@ -19,7 +19,7 @@ binding = "DB"
 database_name = "predictor-db"
 database_id = "e852c6db-7520-46f1-b429-f6ff22b4560b"
 [env.production.vars]
-FOOTBALL_AUTOMATION_ENABLED = "false"
+FOOTBALL_AUTOMATION_ENABLED = "true"
 LOCK_MINUTES_BEFORE = "5"
 SUPABASE_URL = "https://predictorporto.supabase.co" 
 

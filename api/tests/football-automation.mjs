@@ -11,10 +11,103 @@ const idFor = (kgmid) => 'auto-' + createHash('sha256').update('test-season\0' +
 const fixtureId = idFor(gameId);
 const count = async (db, table) => (await db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first()).n;
 
+function novemberCalendar() {
+  const template = calendar().team_results.games[0];
+  const porto = template.teams.find((team) => team.kgmid === '/m/0177gl');
+  const fixture = (kgmid, when, league, opponent, home = true) => ({
+    ...structuredClone(template), kgmid, start_time: when, league,
+    teams: home ? [structuredClone(porto), opponent] : [opponent, structuredClone(porto)],
+  });
+  return { team_results: { games: [
+    fixture('/g/11z_0fwl22', '2026-11-20T20:45:00Z', { kgmid: '/m/03qdvf', name: 'Taça de Portugal' },
+      { kgmid: '/g/121b6wjl', name: 'União Sport Clube Paredes' }),
+    fixture('/g/11nvlsdd0q', '2026-11-24T20:00:00Z', { kgmid: '/m/0c1q0', name: 'UEFA Champions League' },
+      { kgmid: '/m/0cttx', name: 'Feyenoord' }, false),
+    fixture('/g/11nqx_y6yr', '2026-11-29T20:30:00Z', { kgmid: '/m/03n_lr', name: 'Liga Portugal' },
+      { kgmid: '/m/03b04g', name: 'Sporting CP' }),
+  ] } };
+}
+async function linkChampions(db) {
+  await db.batch([
+    db.prepare("INSERT INTO competitions (id, code, name) VALUES ('LC', 'LC', 'Liga dos Campeões')"),
+    db.prepare("INSERT INTO football_competition_links (kgmid, competition_id) VALUES ('/m/0c1q0', 'LC')"),
+  ]);
+}
+
 await scenario('disabled automation does not even require the new tables', async ({ tick, calls }) => {
   assert.equal((await tick()).status, 200);
   assert.equal(calls.length, 0);
 }, { disabled: true, noSchema: true });
+
+const november = novemberCalendar();
+await scenario('20 Nov cup and 24 Nov Champions open first; 29 Nov league follows the imported cup', async ({ db, tick, calls, request, hubHeaders, provider }) => {
+  await linkChampions(db);
+  const [cup, champions, league] = november.team_results.games;
+  const cupKickoff = Date.parse(cup.start_time);
+  const initial = cupKickoff - day;
+  await tick(initial);
+  const opened = await request('/api/fixtures/open', { now: initial });
+  assert.deepEqual(opened.body.map((fx) => fx.id), [idFor(cup.kgmid), idFor(champions.kgmid)]);
+  assert.equal((await request('/api/internal/hub-fans/plantel', { now: initial, headers: hubHeaders })).body.next.id, idFor(cup.kgmid));
+  assert.equal((await db.prepare('SELECT fixture_id FROM football_calendar WHERE kgmid = ?').bind(league.kgmid).first()).fixture_id, null);
+  provider((id) => {
+    assert.equal(id, cup.kgmid);
+    const data = finishedFixture(id);
+    const porto = data.game_results.info.teams[1];
+    data.game_results.info = { ...structuredClone(cup), status: 'finished', status_original: 'FT',
+      teams: [porto, { ...cup.teams[1], score: 1 }] };
+    data.game_results.lineups.teams.forEach((team) => { team.team_index = 1 - team.team_index; });
+    data.game_results.timeline.events.forEach((event) => {
+      if (event.team_index === 0 || event.team_index === 1) event.team_index = 1 - event.team_index;
+    });
+    return data;
+  });
+  await tick(cupKickoff + 119 * minute);
+  assert.equal(await count(db, 'fixtures'), 2, 'The next pair must wait for the running cup game');
+  await tick(cupKickoff + 120 * minute);
+  assert.deepEqual(await db.prepare('SELECT status, home_score, away_score FROM fixtures WHERE id = ?')
+    .bind(idFor(cup.kgmid)).first(), { status: 'FINISHED', home_score: 2, away_score: 1 });
+  const ballot = await request('/api/internal/hub-fans/notas?jogo=' + idFor(cup.kgmid), {
+    now: cupKickoff + 120 * minute, headers: hubHeaders,
+  });
+  assert.equal(ballot.status, 200);
+  assert.equal(ballot.body.eligible.length, 18);
+  await tick(cupKickoff + 125 * minute);
+  const following = await request('/api/fixtures/open', { now: cupKickoff + 125 * minute });
+  assert.deepEqual(following.body.map((fx) => fx.id), [idFor(champions.kgmid), idFor(league.kgmid)]);
+  assert.equal((await request('/api/internal/hub-fans/plantel', {
+    now: cupKickoff + 125 * minute, headers: hubHeaders,
+  })).body.next.id, idFor(champions.kgmid));
+  await tick(cupKickoff + 130 * minute);
+  assert.equal(await count(db, 'fixtures'), 3);
+  assert.deepEqual(calls.map((call) => call.type), ['team', 'game'], 'Advancing the pair must reuse the stored calendar');
+}, { calendar: november });
+
+const crowded = novemberCalendar();
+crowded.team_results.games[2].start_time = '2026-11-25T20:30:00Z';
+crowded.team_results.games.reverse();
+await scenario('only the first two games open even when three competitions fit within seven days', async ({ db, tick, request }) => {
+  await linkChampions(db);
+  await tick();
+  const opened = await request('/api/fixtures/open');
+  assert.deepEqual(opened.body.map((fx) => fx.id), [idFor('/g/11z_0fwl22'), idFor('/g/11nvlsdd0q')]);
+  assert.equal((await db.prepare("SELECT fixture_id FROM football_calendar WHERE kgmid = '/g/11nqx_y6yr'").first()).fixture_id, null);
+}, { calendar: crowded });
+
+for (const [label, interval, together] of [
+  ['less than seven days', 7 * day - minute, true],
+  ['exactly seven days', 7 * day, false],
+]) {
+  const data = calendar();
+  data.team_results.games = data.team_results.games.slice(0, 2);
+  data.team_results.games[1].start_time = new Date(kickoff + interval).toISOString();
+  await scenario('the second game is ' + label + ' after the first', async ({ tick, request, calls }) => {
+    await tick();
+    const opened = await request('/api/fixtures/open');
+    assert.deepEqual(opened.body.map((fx) => fx.id), together ? [fixtureId, idFor(cupId)] : [fixtureId]);
+    assert.equal(calls.length, 1);
+  }, { calendar: data });
+}
 
 await scenario('complete lifecycle: Predictor, Onze, scores, scorers, points and Notas', async ({ db, tick, calls, request, hubHeaders }) => {
   // A manual fixture is a sentinel: automation must not modify it.

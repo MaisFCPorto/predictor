@@ -18,6 +18,17 @@ em simultâneo; o jogo seguinte da Liga, um jogo a exatamente sete dias e outro
 sem hora confirmada ficam guardados no calendário. O relógio avança por código,
 sem esperar pela hora real.
 
+Abre sempre o próximo jogo com data e hora confirmadas, independentemente da
+competição. Abre também o seguinte se o intervalo entre os dois inícios for
+inferior a sete dias, num máximo de dois jogos. O par só avança depois da
+importação do resultado do jogo em curso. Um intervalo de exatamente sete dias
+não abre o segundo jogo.
+
+O ensaio inclui o calendário Taça a 20/11, Champions a 24/11 e Liga a 29/11:
+abrem Taça e Champions; depois da ficha final da Taça, abre a Liga usando o mesmo
+calendário guardado. Confirma ainda o limite de dois jogos quando três competições
+cabem na mesma semana, a hora por confirmar e o limite exato de sete dias.
+
 São verificados o calendário persistido, as apps através dos seus endpoints reais,
 a submissão antes do início, o bloqueio no instante certo, resultado, marcadores,
 pontos, onze titulares, sete substituições e a votação dos dezoito participantes.
@@ -32,13 +43,12 @@ ser `src/index.ts`. O teste não altera as permissões beta existentes do Hub.
 
 # Ativação posterior
 
-A automação de produção fica desligada: a configuração define explicitamente
-`FOOTBALL_AUTOMATION_ENABLED = "false"`. O cron de cinco em cinco minutos está
-preparado e mantém-se também o cron das notícias. Enquanto a variável estiver em
-`false`, o handler novo não consulta a BD nem a SerpApi. A publicação do frontend
-também não publica o Worker.
+A configuração de produção define `FOOTBALL_AUTOMATION_ENABLED = "true"`.
+O próximo deploy do Worker ativa o cron de cinco em cinco minutos e mantém o
+cron das notícias. A publicação do frontend não publica o Worker. Aplicar as
+migrações abaixo antes desse deploy.
 
-Antes de ativar num ambiente escolhido:
+Antes de publicar num ambiente escolhido:
 
 1. Aplicar as migrações `021_football_automation.sql` e
    `022_football_initial_links.sql` através do processo de migrações desse ambiente.
@@ -47,9 +57,8 @@ Antes de ativar num ambiente escolhido:
    época, jornada ativa e a chave SerpApi no Worker.
 2. Confirmar que `FOOTBALL_DATA_TOKEN` está guardado como Secret no Worker, tal
    como `SERPAPI_API_KEY`, antes de publicar esta configuração. O token já não
-   está no ficheiro. Publicar com `npx wrangler@4.55.0 deploy --env production`.
-   Os dois crons já estão definidos na configuração: notícias de três em três
-   horas e automação de jogos de cinco em cinco minutos, ainda desligada.
+   está no ficheiro. Os dois crons já estão definidos na configuração: notícias
+   de três em três horas e automação de jogos de cinco em cinco minutos.
 3. Rever as associações iniciais de equipas e competições. `football_team_links` e
    `football_competition_links` permitem associar KGMIDs aos IDs existentes. As
    equipas sem correspondência são criadas no próprio pedido do calendário, com
@@ -60,9 +69,12 @@ Antes de ativar num ambiente escolhido:
    Nomes ambíguos, associações contraditórias ou equipas sem KGMID válido ficam
    pendentes. Nomes diferentes entre sistemas exigem revisão inicial para evitar
    duplicados. Não há associações por aproximação.
-4. Só depois, mudar `FOOTBALL_AUTOMATION_ENABLED` para `"true"` na configuração
-   desse ambiente e voltar a publicar o Worker. Manter esse valor no Git evita
-   que uma publicação posterior volte inadvertidamente a desligar a automação.
+4. Confirmar `FOOTBALL_AUTOMATION_ENABLED = "true"` na configuração desse ambiente
+   e publicar com `npx wrangler@4.55.0 deploy --env production`.
+   Manter esse valor no Git evita que uma publicação posterior volte
+   inadvertidamente a desligar a automação. Nos ambientes de ensaio, definir
+   `"false"` enquanto se prepara a BD; nesse estado o handler não consulta a BD
+   nem a SerpApi.
 
 O primeiro cron depois da ativação importa o calendário numa chamada e abre apenas os jogos
 selecionados. Jogos manuais coincidentes ficam com

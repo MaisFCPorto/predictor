@@ -7,7 +7,6 @@ export const FOOTBALL_CRON = '*/5 * * * *';
 const minute = 60_000;
 const day = 24 * 60 * minute;
 const portoKgmid = '/m/0177gl';
-const leagueKgmid = '/m/03n_lr';
 const retryMinutes = [15, 30, 60, 120, 360];
 
 export type FootballEnv = {
@@ -115,20 +114,12 @@ function selectedGames(rows: CalendarRow[], now: number) {
   const upcoming = rows.filter((row) => row.kickoff_confirmed && row.kickoff_at &&
     Date.parse(row.kickoff_at) > now && row.provider_status === 'upcoming');
   upcoming.sort((a, b) => Date.parse(a.kickoff_at!) - Date.parse(b.kickoff_at!));
-  const nextLeague = rows.filter((row) => row.provider_status === 'upcoming' &&
-      Date.parse(row.kickoff_at ?? row.kickoff_date ?? '') > now &&
-      (JSON.parse(row.calendar_json) as PortoCalendarGame).competition?.kgmid === leagueKgmid)
-    .sort((a, b) => Date.parse(a.kickoff_at ?? a.kickoff_date!) - Date.parse(b.kickoff_at ?? b.kickoff_date!))[0];
-  if (nextLeague && !nextLeague.kickoff_confirmed) {
-    return upcoming.filter((row) => (JSON.parse(row.calendar_json) as PortoCalendarGame).competition?.kgmid !== leagueKgmid).slice(0, 1);
-  }
-  // In a break without a league date, the nearest confirmed match can still open.
-  if (!nextLeague) return upcoming.slice(0, 1);
-  const anchor = Date.parse(nextLeague.kickoff_at!);
-  return upcoming.filter((row) => row === nextLeague || (
-    (JSON.parse(row.calendar_json) as PortoCalendarGame).competition?.kgmid !== leagueKgmid &&
-    Math.abs(Date.parse(row.kickoff_at!) - anchor) < 7 * day
-  ));
+  // Open the next match regardless of competition, plus at most its immediate successor.
+  const [first, second] = upcoming;
+  if (!first) return [];
+  return second && Date.parse(second.kickoff_at!) - Date.parse(first.kickoff_at!) < 7 * day
+    ? [first, second]
+    : [first];
 }
 
 async function syncStoredFixtureTimes(db: D1Database, rows: CalendarRow[]) {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { setup, calendar, start, minute } from './support.mjs';
 
 const opponentKgmid = '/m/048mcq';
@@ -138,6 +139,33 @@ await scenario('a shared short code cannot associate two different clubs', async
   assert.equal((await db.prepare("SELECT team_id FROM football_team_links WHERE kgmid = '/m/test_other_club'").first()).team_id,
     'serp-team-m-test_other_club');
   assert.equal((await db.prepare("SELECT name FROM teams WHERE id = 'test-opponent'").first()).name, 'Vitória S.C.');
+});
+
+await scenario('initial aliases reuse existing club IDs and Portuguese competition names', async ({ db, tick }, data) => {
+  await db.batch([
+    db.prepare("INSERT INTO teams (id, name) VALUES ('AVFC', 'Ac. Viseu FC'), ('est', 'Estoril Praia')"),
+    db.prepare("INSERT INTO competitions (id, code, name) VALUES ('LC', 'LC', 'Liga dos Campeões'), ('ST', 'ST', 'Supertaça')"),
+  ]);
+  const migration = (await readFile(new URL('../migrations/022_football_initial_links.sql', import.meta.url), 'utf8'))
+    .replace(/--[^\n]*/g, '').replace(/\s+/g, ' ');
+  await db.exec(migration);
+  await db.exec(migration);
+  Object.assign(data.team_results.games[0].teams[0], {
+    kgmid: '/m/01xn49s', name: 'Académico de Viseu F.C.', short_name: 'Académico de Viseu',
+  });
+  Object.assign(data.team_results.games[1].teams[0], {
+    kgmid: '/m/05hywl', name: 'G.D. Estoril Praia', short_name: 'Estoril',
+  });
+  data.team_results.games[1].league = { kgmid: '/m/0c1q0', name: 'UEFA Champions League' };
+  data.team_results.games[2].league = { kgmid: '/m/05j8n2', name: 'Supertaça Cândido de Oliveira' };
+  await tick();
+  assert.equal(await count(db, 'teams'), 4, 'The existing aliases must not become duplicate clubs');
+  assert.equal((await db.prepare("SELECT team_id FROM football_team_links WHERE kgmid = '/m/01xn49s'").first()).team_id, 'AVFC');
+  assert.equal((await db.prepare("SELECT team_id FROM football_team_links WHERE kgmid = '/m/05hywl'").first()).team_id, 'est');
+  assert.equal((await db.prepare("SELECT competition_id FROM football_competition_links WHERE kgmid = '/m/05j8n2'").first()).competition_id, 'ST');
+  const { results: opened } = await db.prepare('SELECT home_team_id, competition_id FROM fixtures ORDER BY kickoff_at').all();
+  assert.deepEqual(opened, [{ home_team_id: 'AVFC', competition_id: 'LP' }, { home_team_id: 'est', competition_id: 'LC' }]);
+  assert.equal((await db.prepare("SELECT name FROM competitions WHERE id = 'LC'").first()).name, 'Liga dos Campeões');
 });
 
 console.log('\nEquipas e logótipos verificados sem pesquisas reais à SerpApi nem pedidos às imagens.');

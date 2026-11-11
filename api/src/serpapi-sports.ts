@@ -23,6 +23,7 @@ type Team = Entity & {
 type Fixture = {
   kgmid?: string;
   start_time?: string;
+  start_date?: string;
   status?: string;
   status_original?: string;
   league?: Entity;
@@ -107,6 +108,8 @@ function fixtureSummary(fixture?: Fixture) {
   return {
     kgmid: fixture.kgmid,
     kickoffAt: fixture.start_time ?? null,
+    kickoffDate: fixture.start_date?.slice(0, 10) ?? fixture.start_time?.slice(0, 10) ?? null,
+    kickoffConfirmed: Boolean(fixture.start_time && Number.isFinite(Date.parse(fixture.start_time))),
     status: fixture.status ?? null,
     statusOriginal: fixture.status_original ?? null,
     competition: fixture.league
@@ -184,8 +187,13 @@ export async function getPortoCalendar(apiKey: string) {
   return { games: games.map(fixtureSummary).filter((game) => game !== null) };
 }
 
-export async function getPortoGame(apiKey: string, kgmid: string, players: readonly ClubPlayer[] = []) {
-  const data = await searchSports(apiKey, { type: 'game', kgmid });
+export async function getPortoGame(
+  apiKey: string,
+  kgmid: string,
+  players: readonly ClubPlayer[] = [],
+  options: { fresh?: boolean } = {},
+) {
+  const data = await searchSports(apiKey, { type: 'game', kgmid, ...(options.fresh ? { no_cache: 'true' } : {}) });
   const game = data.game_results;
   const info = game?.info;
   if (!game || !info || info.kgmid !== kgmid || !Array.isArray(info.teams)) {
@@ -230,3 +238,6 @@ export async function getPortoGame(apiKey: string, kgmid: string, players: reado
     },
   };
 }
+
+export type PortoCalendarGame = Awaited<ReturnType<typeof getPortoCalendar>>['games'][number];
+export type PortoGame = Awaited<ReturnType<typeof getPortoGame>>;

@@ -23,11 +23,12 @@ import { normalizePlayerId, toPositivePlayerId } from './scorer-id';
 import { HUB_NEWS_CRON, syncHubNews } from './hub-news';
 import { hubNews } from './routes/hub-news';
 import { hubFans } from './routes/hub-fans';
+import { FOOTBALL_CRON, runFootballAutomation, type FootballEnv } from './football-automation';
 
 // ----------------------------------------------------
 // Tipos / Bindings
 // ----------------------------------------------------
-type Env = {
+type Env = FootballEnv & {
   DB: D1Database;
   ADMIN_KEY: string;
   LOCK_MINUTES_BEFORE?: string;
@@ -451,7 +452,7 @@ app.post('/api/predictions', async (c) => {
 
     const lockMs = getLockMs(c);
     if (
-      fx.status === 'FINISHED' ||
+      !['SCHEDULED', 'TIMED'].includes(fx.status) ||
       isLocked(fx.kickoff_at, Date.now(), lockMs)
     ) {
       return c.json({ error: 'locked' }, 400);
@@ -1313,8 +1314,14 @@ app.get('/api/users/:id/last-points', async (c) => {
 export default {
   fetch: app.fetch,
   async scheduled(controller: ScheduledController, env: Env) {
-    if (controller.cron !== HUB_NEWS_CRON) return;
-    const result = await syncHubNews(env.DB, controller.scheduledTime);
-    console.info('Hub news sync', result);
+    if (controller.cron === HUB_NEWS_CRON) {
+      const result = await syncHubNews(env.DB, controller.scheduledTime);
+      console.info('Hub news sync', result);
+    }
+    if (controller.cron === FOOTBALL_CRON) {
+      const result = await runFootballAutomation(env, controller.scheduledTime);
+      if (result.enabled && (result.error || result.opened || result.final?.imported || result.calendarError ||
+          (result.final?.reason && result.final.reason !== 'not_due'))) console.info('Football sync', result);
+    }
   },
 };

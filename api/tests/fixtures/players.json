@@ -1,0 +1,248 @@
+[
+  {
+    "id": 1,
+    "team_id": "fcp",
+    "name": "Diogo Costa",
+    "position": "GR"
+  },
+  {
+    "id": 2,
+    "team_id": "fcp",
+    "name": "Cláudio Ramos",
+    "position": "GR"
+  },
+  {
+    "id": 3,
+    "team_id": "fcp",
+    "name": "João Costa",
+    "position": "GR"
+  },
+  {
+    "id": 4,
+    "team_id": "fcp",
+    "name": "Jakub Kiwior",
+    "position": "D"
+  },
+  {
+    "id": 5,
+    "team_id": "fcp",
+    "name": "Nehuén Pérez",
+    "position": "D"
+  },
+  {
+    "id": 6,
+    "team_id": "fcp",
+    "name": "Jan Bednarek",
+    "position": "D"
+  },
+  {
+    "id": 7,
+    "team_id": "fcp",
+    "name": "Dominik Prpić",
+    "position": "D"
+  },
+  {
+    "id": 8,
+    "team_id": "fcp",
+    "name": "Francisco Moura",
+    "position": "D"
+  },
+  {
+    "id": 9,
+    "team_id": "fcp",
+    "name": "Zaidu",
+    "position": "D"
+  },
+  {
+    "id": 10,
+    "team_id": "fcp",
+    "name": "Alberto Costa",
+    "position": "D"
+  },
+  {
+    "id": 11,
+    "team_id": "fcp",
+    "name": "Martim Fernandes",
+    "position": "D"
+  },
+  {
+    "id": 13,
+    "team_id": "fcp",
+    "name": "Alan Varela",
+    "position": "M"
+  },
+  {
+    "id": 14,
+    "team_id": "fcp",
+    "name": "Pablo Rosario",
+    "position": "M"
+  },
+  {
+    "id": 15,
+    "team_id": "fcp",
+    "name": "Tomás Pérez",
+    "position": "M"
+  },
+  {
+    "id": 16,
+    "team_id": "fcp",
+    "name": "Victor Froholdt",
+    "position": "M"
+  },
+  {
+    "id": 18,
+    "team_id": "fcp",
+    "name": "Rodrigo Mora",
+    "position": "M"
+  },
+  {
+    "id": 19,
+    "team_id": "fcp",
+    "name": "Gabri Veiga",
+    "position": "M"
+  },
+  {
+    "id": 20,
+    "team_id": "fcp",
+    "name": "Borja Sainz",
+    "position": "A"
+  },
+  {
+    "id": 21,
+    "team_id": "fcp",
+    "name": "William Gomes",
+    "position": "A"
+  },
+  {
+    "id": 22,
+    "team_id": "fcp",
+    "name": "Yann Karamoh",
+    "position": "A"
+  },
+  {
+    "id": 23,
+    "team_id": "fcp",
+    "name": "Pepê",
+    "position": "A"
+  },
+  {
+    "id": 24,
+    "team_id": "fcp",
+    "name": "Samu Aghehowa",
+    "position": "A"
+  },
+  {
+    "id": 25,
+    "team_id": "fcp",
+    "name": "Deniz Gül",
+    "position": "A"
+  },
+  {
+    "id": 26,
+    "team_id": "fcp",
+    "name": "Luuk de Jong",
+    "position": "A"
+  },
+  {
+    "id": 27,
+    "team_id": "fcp",
+    "name": "Thiago Silva",
+    "position": "D"
+  },
+  {
+    "id": 28,
+    "team_id": "fcp",
+    "name": "Oskar Pietuszewski",
+    "position": "A"
+  },
+  {
+    "id": 29,
+    "team_id": "fcp",
+    "name": "Seko Fofana",
+    "position": "M"
+  },
+  {
+    "id": 30,
+    "team_id": "fcp",
+    "name": "Terem Moffi",
+    "position": "A"
+  },
+  {
+    "id": 31,
+    "team_id": "fcp",
+    "name": "João Afonso",
+    "position": "GR"
+  },
+  {
+    "id": 32,
+    "team_id": "fcp",
+    "name": "Luís Gomes",
+    "position": "D"
+  },
+  {
+    "id": 33,
+    "team_id": "fcp",
+    "name": "Stephen Eustáquio",
+    "position": "M"
+  },
+  {
+    "id": 34,
+    "team_id": "fcp",
+    "name": "Hwang In-beom",
+    "position": "M"
+  },
+  {
+    "id": 35,
+    "team_id": "fcp",
+    "name": "Vasco Sousa",
+    "position": "M"
+  },
+  {
+    "id": 36,
+    "team_id": "fcp",
+    "name": "Tiago Silva",
+    "position": "M"
+  },
+  {
+    "id": 37,
+    "team_id": "fcp",
+    "name": "Bernardo Lima",
+    "position": "M"
+  },
+  {
+    "id": 38,
+    "team_id": "fcp",
+    "name": "André Silva",
+    "position": "A"
+  },
+  {
+    "id": 39,
+    "team_id": "fcp",
+    "name": "Duarte Cunha",
+    "position": "A"
+  },
+  {
+    "id": 40,
+    "team_id": "fcp",
+    "name": "Santiago Giménez",
+    "position": "A"
+  },
+  {
+    "id": 41,
+    "team_id": "fcp",
+    "name": "Souza",
+    "position": "D"
+  },
+  {
+    "id": 42,
+    "team_id": "fcp",
+    "name": "Gabriel Mec",
+    "position": "A"
+  },
+  {
+    "id": 43,
+    "team_id": "fcp",
+    "name": "Chris Smalling",
+    "position": "D"
+  }
+]

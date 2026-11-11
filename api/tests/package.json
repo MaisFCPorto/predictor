@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node football-automation.mjs"
+    "test": "node football-automation.mjs && node football-teams.mjs"
   },
   "devDependencies": {
     "esbuild": "0.27.0",

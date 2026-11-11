@@ -23,6 +23,8 @@ a submissão antes do início, o bloqueio no instante certo, resultado, marcador
 pontos, onze titulares, sete substituições e a votação dos dezoito participantes.
 Também são exercitados adiamentos, alterações de hora, jogos manuais, jogadores
 por associar, autogolos, 0-0, 1.000 previsões, falhas de BD e tarefas em simultâneo.
+O ensaio de equipas cobre criação automática com logótipos, conservação dos dados
+do backoffice, associação persistente, imagens inválidas e rollback do calendário.
 
 `worker.ts` é apenas a entrada deste ensaio. Os controlos de relógio e o endpoint
 `/__rehearsal/tick` não fazem parte do Worker publicado, cuja entrada continua a
@@ -44,9 +46,16 @@ Antes de ativar num ambiente escolhido:
    Antes de guardar alterações à configuração no Git, retirar quaisquer tokens
    em texto simples e passá-los para os secrets desse Worker. Este PR não altera
    nem republica o ficheiro de configuração existente.
-3. Rever as associações de equipas e competições. `football_team_links` e
-   `football_competition_links` permitem associar KGMIDs aos IDs existentes. Nomes
-   com correspondência exata e única também são aceites; não há aproximações.
+3. Rever as associações iniciais de equipas e competições. `football_team_links` e
+   `football_competition_links` permitem associar KGMIDs aos IDs existentes. As
+   equipas sem correspondência são criadas no próprio pedido do calendário, com
+   nome, nome curto e o `thumbnail` disponível, sem pedidos adicionais à API.
+   Equipas existentes são reutilizadas por KGMID ou por nome exato e único; o
+   nome escolhido no backoffice mantém-se, e só se preenchem logótipos ou nomes
+   curtos vazios. Depois da associação, mudanças de nome na API usam o mesmo ID.
+   Nomes ambíguos, associações contraditórias ou equipas sem KGMID válido ficam
+   pendentes. Nomes diferentes entre sistemas exigem revisão inicial para evitar
+   duplicados. Não há associações por aproximação.
 4. Só depois, definir `FOOTBALL_AUTOMATION_ENABLED=true` nesse ambiente.
 
 O primeiro cron importa o calendário numa chamada e abre apenas os jogos
@@ -55,6 +64,11 @@ selecionados. Jogos manuais coincidentes ficam com
 Uma associação deliberada usa `football_calendar.fixture_id` e deve confirmar
 equipas, competição, época e hora. Jogos novos usam a jornada ativa, como a criação
 manual atual. Não são inventadas novas regras de jornadas ou de prémios.
+
+As equipas e os respetivos links são gravados na mesma transação do calendário,
+incluindo adversários de jogos que ainda não abrem. Usa-se o URL HTTPS do
+logótipo disponibilizado pela API; não se descarregam imagens nem se fazem
+pesquisas separadas. Não é necessária outra migração além da 021.
 
 Os jogos e erros de associação podem ser inspecionados com uma consulta:
 

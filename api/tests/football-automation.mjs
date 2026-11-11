@@ -188,8 +188,8 @@ await scenario('all prediction points publish in one transaction for 1000 users'
   assert.equal(calls.length, 2);
 });
 
-await scenario('unmatched opponents are recorded without creating a wrong game', async ({ db, tick, calls }) => {
-  await db.prepare("UPDATE teams SET name = 'Equipa por associar' WHERE id = 'test-opponent'").run();
+await scenario('ambiguous opponents are recorded without creating a wrong game', async ({ db, tick, calls }) => {
+  await db.prepare("INSERT INTO teams (id, name) VALUES ('ambiguous-opponent', 'Vitoria SC')").run();
   await tick();
   assert.equal(await count(db, 'fixtures'), 0);
   assert.equal((await db.prepare('SELECT last_error FROM football_calendar WHERE kgmid = ?').bind(gameId).first()).last_error, 'unmatched_team');

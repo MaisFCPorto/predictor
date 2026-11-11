@@ -32,20 +32,21 @@ ser `src/index.ts`. O teste não altera as permissões beta existentes do Hub.
 
 # Ativação posterior
 
-A automação de produção fica desligada: o repositório não define
-`FOOTBALL_AUTOMATION_ENABLED=true`, nem altera os agendamentos da configuração
-existente. Sem essa variável o handler novo não consulta a BD nem a SerpApi.
-A publicação do frontend também não publica o Worker.
+A automação de produção fica desligada: a configuração define explicitamente
+`FOOTBALL_AUTOMATION_ENABLED = "false"`. O cron de cinco em cinco minutos está
+preparado e mantém-se também o cron das notícias. Enquanto a variável estiver em
+`false`, o handler novo não consulta a BD nem a SerpApi. A publicação do frontend
+também não publica o Worker.
 
 Antes de ativar num ambiente escolhido:
 
 1. Aplicar a migração `021_football_automation.sql` através do processo de migrações
    desse ambiente. Confirmar a época, jornada ativa e a chave SerpApi no Worker.
-2. Publicar o Worker. O cron das notícias mantém-se independente. Configurar o
-   agendamento `*/5 * * * *` no ambiente escolhido, preservando o das notícias.
-   Antes de guardar alterações à configuração no Git, retirar quaisquer tokens
-   em texto simples e passá-los para os secrets desse Worker. Este PR não altera
-   nem republica o ficheiro de configuração existente.
+2. Confirmar que `FOOTBALL_DATA_TOKEN` está guardado como Secret no Worker, tal
+   como `SERPAPI_API_KEY`, antes de publicar esta configuração. O token já não
+   está no ficheiro. Publicar com `npx wrangler@4.55.0 deploy --env production`.
+   Os dois crons já estão definidos na configuração: notícias de três em três
+   horas e automação de jogos de cinco em cinco minutos, ainda desligada.
 3. Rever as associações iniciais de equipas e competições. `football_team_links` e
    `football_competition_links` permitem associar KGMIDs aos IDs existentes. As
    equipas sem correspondência são criadas no próprio pedido do calendário, com
@@ -56,9 +57,11 @@ Antes de ativar num ambiente escolhido:
    Nomes ambíguos, associações contraditórias ou equipas sem KGMID válido ficam
    pendentes. Nomes diferentes entre sistemas exigem revisão inicial para evitar
    duplicados. Não há associações por aproximação.
-4. Só depois, definir `FOOTBALL_AUTOMATION_ENABLED=true` nesse ambiente.
+4. Só depois, mudar `FOOTBALL_AUTOMATION_ENABLED` para `"true"` na configuração
+   desse ambiente e voltar a publicar o Worker. Manter esse valor no Git evita
+   que uma publicação posterior volte inadvertidamente a desligar a automação.
 
-O primeiro cron importa o calendário numa chamada e abre apenas os jogos
+O primeiro cron depois da ativação importa o calendário numa chamada e abre apenas os jogos
 selecionados. Jogos manuais coincidentes ficam com
 `existing_fixture_requires_link`, sem serem duplicados ou assumidos pela automação.
 Uma associação deliberada usa `football_calendar.fixture_id` e deve confirmar
@@ -94,5 +97,5 @@ transação. Depois, `finalized_at` impede novas importações do mesmo jogo. Ne
 resultado ou votação inseridos manualmente é substituído automaticamente. O Onze
 continua a usar o próximo jogo confirmado, e as Notas mantêm o acesso beta atual.
 
-Para desligar o agendamento, retirar a variável de ativação ou defini-la como
-`false`. Os dados importados ficam disponíveis e a gestão manual continua a existir.
+Para desligar a automação, definir a variável de ativação como `"false"` e voltar
+a publicar. Os dados importados ficam disponíveis e a gestão manual continua a existir.

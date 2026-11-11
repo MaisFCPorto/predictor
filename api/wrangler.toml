@@ -12,16 +12,16 @@ name = "predictor-porto-api"
 workers_dev = true
 
 [env.production.triggers]
-crons = ["0 */3 * * *"]
+crons = ["0 */3 * * *", "*/5 * * * *"]
 
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "predictor-db"
 database_id = "e852c6db-7520-46f1-b429-f6ff22b4560b"
 [env.production.vars]
+FOOTBALL_AUTOMATION_ENABLED = "false"
 LOCK_MINUTES_BEFORE = "5"
 SUPABASE_URL = "https://predictorporto.supabase.co" 
-FOOTBALL_DATA_TOKEN="0ad2a2751c984fd98cc9dd1c79c43f0b"
 
 
 TEST_SUPABASE_URL = "https://efguqopmcfklbnytbejo.supabase.co"

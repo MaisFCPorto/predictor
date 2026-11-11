@@ -73,7 +73,8 @@ async function searchSports(apiKey: string, params: Record<string, string>) {
   let response: Response;
   try {
     response = await fetch('https://serpapi.com/search.json?' + query.toString(), {
-      redirect: 'error',
+      // Workers supports manual redirects, which the status check below rejects.
+      redirect: 'manual',
       signal: AbortSignal.timeout(12_000),
     });
   } catch (error) {

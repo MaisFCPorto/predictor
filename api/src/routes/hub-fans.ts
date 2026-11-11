@@ -127,9 +127,9 @@ hubFans.get('/plantel', async (c) => {
     db.prepare(`
       SELECT ${fixtureColumns} ${fixtureTeams}
       WHERE md.season_id = ? AND f.status IN ('SCHEDULED', 'TIMED') AND ${portoFixture}
-        AND datetime(f.kickoff_at) > datetime('now')
+        AND datetime(f.kickoff_at) > datetime(?)
       ORDER BY datetime(f.kickoff_at), f.id LIMIT 1
-    `).bind(season).first<Fixture>(),
+    `).bind(season, new Date(Date.now()).toISOString()).first<Fixture>(),
   ]);
   return c.json({ players: players.results, next: fixture });
 });

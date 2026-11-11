@@ -1,0 +1,278 @@
+{
+  "game_results": {
+    "info": {
+      "kgmid": "/g/11nqx_cnn9",
+      "start_time": "2026-11-08T18:00:00Z",
+      "league": {
+        "kgmid": "/m/03n_lr",
+        "name": "Liga Portugal"
+      },
+      "status": "finished",
+      "status_original": "FT",
+      "teams": [
+        {
+          "name": "Vitória S.C.",
+          "kgmid": "/m/048mcq",
+          "score": 1
+        },
+        {
+          "name": "FC Porto",
+          "kgmid": "/m/0177gl",
+          "score": 2,
+          "goal_summary": [
+            {
+              "player": {
+                "name": "Borja Sainz",
+                "kgmid": "/g/11fn0lg4n8"
+              },
+              "goals": [
+                {
+                  "in_game_time": {
+                    "minute": 38
+                  }
+                }
+              ]
+            },
+            {
+              "player": {
+                "name": "Martim Fernandes",
+                "kgmid": "/g/11qh8yfbj1"
+              },
+              "goals": [
+                {
+                  "in_game_time": {
+                    "minute": 86
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "lineups": {
+      "teams": [
+        {
+          "team_index": 1,
+          "starters": [
+            {
+              "name": "Diogo Costa"
+            },
+            {
+              "name": "Zaidu Sanusi"
+            },
+            {
+              "name": "Jakub Kiwior"
+            },
+            {
+              "name": "Jan Bednarek"
+            },
+            {
+              "name": "Alberto Costa"
+            },
+            {
+              "name": "Victor Froholdt"
+            },
+            {
+              "name": "Pablo Rosario"
+            },
+            {
+              "name": "Gabri Veiga"
+            },
+            {
+              "name": "Borja Sainz",
+              "kgmid": "/g/11fn0lg4n8"
+            },
+            {
+              "name": "Samu Aghehowa"
+            },
+            {
+              "name": "Pepê"
+            }
+          ],
+          "bench": [
+            {
+              "name": "Nehuén Pérez",
+              "substitution_in": {
+                "starter_player_index": 3,
+                "in_game_time": {
+                  "minute": 65
+                }
+              }
+            },
+            {
+              "name": "Santiago Giménez",
+              "substitution_in": {
+                "starter_player_index": 4,
+                "in_game_time": {
+                  "minute": 77
+                }
+              }
+            },
+            {
+              "name": "Alan Varela",
+              "substitution_in": {
+                "starter_player_index": 6,
+                "in_game_time": {
+                  "minute": 57
+                }
+              }
+            },
+            {
+              "name": "Hwang In-beom",
+              "substitution_in": {
+                "starter_player_index": 7,
+                "in_game_time": {
+                  "minute": 65
+                }
+              }
+            },
+            {
+              "name": "Martim Fernandes",
+              "kgmid": "/g/11qh8yfbj1",
+              "substitution_in": {
+                "starter_player_index": 8,
+                "in_game_time": {
+                  "minute": 58
+                }
+              }
+            },
+            {
+              "name": "André Silva",
+              "substitution_in": {
+                "starter_player_index": 9,
+                "in_game_time": {
+                  "minute": 57
+                }
+              }
+            },
+            {
+              "name": "Dominik Prpić",
+              "substitution_in": {
+                "starter_player_index": 10,
+                "in_game_time": {
+                  "minute": 90,
+                  "stoppage_minute": 3
+                }
+              }
+            },
+            {
+              "name": "Suplente não utilizado"
+            }
+          ]
+        }
+      ]
+    },
+    "timeline": {
+      "events": [
+        {
+          "type": "substitution",
+          "team_index": 1,
+          "player_in": {
+            "name": "Nehuén Pérez"
+          },
+          "player_out": {
+            "name": "Jan Bednarek"
+          },
+          "in_game_time": {
+            "minute": 66
+          }
+        },
+        {
+          "type": "substitution",
+          "team_index": 1,
+          "player_in": {
+            "name": "Santiago Giménez"
+          },
+          "player_out": {
+            "name": "Alberto Costa"
+          },
+          "in_game_time": {
+            "minute": 78
+          }
+        },
+        {
+          "type": "substitution",
+          "team_index": 1,
+          "player_in": {
+            "name": "Alan Varela"
+          },
+          "player_out": {
+            "name": "Pablo Rosario"
+          },
+          "in_game_time": {
+            "minute": 58
+          }
+        },
+        {
+          "type": "substitution",
+          "team_index": 1,
+          "player_in": {
+            "name": "Hwang In-beom"
+          },
+          "player_out": {
+            "name": "Gabri Veiga"
+          },
+          "in_game_time": {
+            "minute": 66
+          }
+        },
+        {
+          "type": "substitution",
+          "team_index": 1,
+          "player_in": {
+            "name": "Martim Fernandes",
+            "kgmid": "/g/11qh8yfbj1"
+          },
+          "player_out": {
+            "name": "Borja Sainz",
+            "kgmid": "/g/11fn0lg4n8"
+          },
+          "in_game_time": {
+            "minute": 59
+          }
+        },
+        {
+          "type": "substitution",
+          "team_index": 1,
+          "player_in": {
+            "name": "André Silva"
+          },
+          "player_out": {
+            "name": "Samu Aghehowa"
+          },
+          "in_game_time": {
+            "minute": 58
+          }
+        },
+        {
+          "type": "substitution",
+          "team_index": 1,
+          "player_in": {
+            "name": "Dominik Prpić"
+          },
+          "player_out": {
+            "name": "Pepê"
+          },
+          "in_game_time": {
+            "minute": 90,
+            "stoppage_minute": 4
+          }
+        },
+        {
+          "type": "substitution",
+          "team_index": 0,
+          "player_in": {
+            "name": "Nehuén Pérez"
+          },
+          "player_out": {
+            "name": "Jan Bednarek"
+          },
+          "in_game_time": {
+            "minute": 66
+          }
+        }
+      ]
+    }
+  }
+}

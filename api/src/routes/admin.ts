@@ -18,6 +18,19 @@ function scorerBonusForPosition(pos: string | null | undefined): number {
   return SCORER_BONUS_BY_POS[key] ?? 0;
 }
 
+// Shared by manual results and the opt-in automatic importer.
+export function predictionPoints(
+  prediction: { home_goals: number | null; away_goals: number | null; scorer_player_id: string | number | null },
+  homeScore: number,
+  awayScore: number,
+  bonusByPlayer: ReadonlyMap<string, number>,
+) {
+  const base = scoreUEFA(prediction.home_goals, prediction.away_goals, homeScore, awayScore).points;
+  return base + (prediction.scorer_player_id == null ? 0 : bonusByPlayer.get(normalizePlayerId(prediction.scorer_player_id)) ?? 0);
+}
+
+export { scorerBonusForPosition };
+
 // ---------------- Env bindings ----------------
 export type Env = {
   DB: D1Database;
@@ -112,21 +125,7 @@ export async function recomputePointsForFixture(
   // 4) Calcular pontos UEFA + bónus marcador e gravar em points
   for (const p of preds ?? []) {
     // Pontos base (tendência + golos casa + golos fora + diferença)
-    const s = scoreUEFA(
-      p.home_goals,
-      p.away_goals,
-      home_score,
-      away_score,
-    );
-
-    let pts = s.points;
-
-    // Bónus por marcador acertado (se o jogador previsto tiver marcado)
-    if (p.scorer_player_id != null) {
-      const key = normalizePlayerId(p.scorer_player_id);
-      const bonus = bonusByPlayer.get(key) ?? 0;
-      pts += bonus;
-    }
+    const pts = predictionPoints(p, home_score, away_score, bonusByPlayer);
 
     await db
       .prepare(

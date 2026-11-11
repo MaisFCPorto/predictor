@@ -1,6 +1,7 @@
 import { getActiveMatchdayId, getActiveSeasonId } from './app-settings';
 import { getPortoCalendar, getPortoGame, SerpApiError, type PortoCalendarGame, type PortoGame } from './serpapi-sports';
 import { predictionPoints, scorerBonusForPosition } from './routes/admin';
+import { prepareCalendarTeams } from './football-teams';
 
 export const FOOTBALL_CRON = '*/5 * * * *';
 const minute = 60_000;
@@ -39,7 +40,7 @@ async function teamId(db: D1Database, team: PortoCalendarGame['teams'][number]) 
   if (team.kgmid) {
     const linked = await db.prepare('SELECT team_id AS id FROM football_team_links WHERE kgmid = ?')
       .bind(team.kgmid).first<{ id: string }>();
-    if (linked) return linked.id;
+    return linked?.id ?? null;
   }
   if (!team.name) return null;
   const { results } = await db.prepare('SELECT id, name, short_name FROM teams')
@@ -79,7 +80,7 @@ export async function refreshFootballCalendar(env: FootballEnv, now = Date.now()
   try {
     const { games } = await getPortoCalendar(env.SERPAPI_API_KEY.trim());
     const pending = games.some((game) => !game.kickoffConfirmed && game.status === 'upcoming');
-    const statements = [db.prepare(`
+    const statements = [...await prepareCalendarTeams(db, games, season, token), db.prepare(`
       WITH incoming AS (SELECT value AS game FROM json_each(?))
       INSERT INTO football_calendar
         (season_id, kgmid, kickoff_at, kickoff_date, kickoff_confirmed, provider_status, calendar_json)

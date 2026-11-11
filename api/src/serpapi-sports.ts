@@ -16,6 +16,8 @@ type Player = Entity & {
 };
 type Goal = Clock & { extensions?: string[] };
 type Team = Entity & {
+  short_code?: string;
+  thumbnail?: string;
   score?: number;
   penalty_score?: number;
   goal_summary?: { player?: Player; goals?: Goal[] }[];
@@ -117,11 +119,34 @@ function fixtureSummary(fixture?: Fixture) {
       : null,
     teams: fixture.teams.map((team) => ({
       kgmid: team.kgmid ?? null,
-      name: team.name ?? team.short_name ?? null,
+      name: teamLabel(team.name) ?? teamLabel(team.short_name),
+      shortName: teamLabel(team.short_name),
+      shortCode: teamLabel(team.short_code),
+      crestUrl: teamCrestUrl(team.thumbnail),
       score: team.score ?? null,
       penaltyScore: team.penalty_score ?? null,
     })),
   };
+}
+
+function teamLabel(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const label = value.trim().replace(/\s+/g, ' ');
+  return label && label.length <= 200 ? label : null;
+}
+
+function teamCrestUrl(value: unknown) {
+  if (typeof value !== 'string' || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
+    const google = url.hostname.endsWith('.gstatic.com') || url.hostname.endsWith('.googleusercontent.com');
+    const serpImage = url.hostname === 'serpapi.com' && /^\/searches\/.+\/images\/[^/]+$/.test(url.pathname);
+    if ((!google && !serpImage) || ['api_key', 'token', 'access_token'].some((key) => url.searchParams.has(key))) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
 }
 
 function normalizePlayerName(name: string) {

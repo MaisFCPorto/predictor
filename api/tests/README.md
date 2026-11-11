@@ -40,8 +40,11 @@ também não publica o Worker.
 
 Antes de ativar num ambiente escolhido:
 
-1. Aplicar a migração `021_football_automation.sql` através do processo de migrações
-   desse ambiente. Confirmar a época, jornada ativa e a chave SerpApi no Worker.
+1. Aplicar as migrações `021_football_automation.sql` e
+   `022_football_initial_links.sql` através do processo de migrações desse ambiente.
+   A 022 associa os nomes existentes do Académico de Viseu, Estoril, Champions e
+   Supertaça aos KGMIDs, preservando os IDs e nomes do backoffice. Confirmar a
+   época, jornada ativa e a chave SerpApi no Worker.
 2. Confirmar que `FOOTBALL_DATA_TOKEN` está guardado como Secret no Worker, tal
    como `SERPAPI_API_KEY`, antes de publicar esta configuração. O token já não
    está no ficheiro. Publicar com `npx wrangler@4.55.0 deploy --env production`.
@@ -71,7 +74,8 @@ manual atual. Não são inventadas novas regras de jornadas ou de prémios.
 As equipas e os respetivos links são gravados na mesma transação do calendário,
 incluindo adversários de jogos que ainda não abrem. Usa-se o URL HTTPS do
 logótipo disponibilizado pela API; não se descarregam imagens nem se fazem
-pesquisas separadas. Não é necessária outra migração além da 021.
+pesquisas separadas. A migração 022 completa as quatro associações iniciais cujos
+nomes diferem entre o backoffice e a API, sem criar tabelas novas.
 
 Os jogos e erros de associação podem ser inspecionados com uma consulta:
 

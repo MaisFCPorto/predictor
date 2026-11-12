@@ -1,15 +1,17 @@
 import { SaxesParser } from 'saxes';
+import { cleanNewsContext } from './hub-news-summaries';
 
 export const HUB_NEWS_CRON = '0 */3 * * *';
 
-type Feed = { source: string; url: string; imageHosts: readonly string[] };
-type Item = Partial<Record<'title' | 'link' | 'pubDate' | 'description' | 'image', string>>;
+type Feed = { source: string; url: string; imageHosts: readonly string[]; publisherHost?: string };
+type Item = Partial<Record<'title' | 'link' | 'pubDate' | 'description' | 'image' | 'publisher', string>>;
 export type HubNewsArticle = {
   title: string;
   url: string;
   source: string;
   publishedAt: string;
   imageUrl: string | null;
+  sourceExcerpt?: string | null;
 };
 
 const bolaFeed: Feed = {
@@ -18,6 +20,11 @@ const bolaFeed: Feed = {
   imageHosts: ['sportal365images.com', 'www.abola.pt'],
 };
 const feeds: Feed[] = [
+  // Public headline feeds: no article extraction, paywall access or invented context.
+  { source: 'O Jogo', publisherHost: 'www.ojogo.pt', imageHosts: [],
+    url: 'https://news.google.com/rss/search?q=FC%20Porto%20site%3Aojogo.pt%20when%3A7d&hl=pt-PT&gl=PT&ceid=PT%3Apt-150' },
+  { source: 'Jornal de Notícias', publisherHost: 'www.jn.pt', imageHosts: [],
+    url: 'https://news.google.com/rss/search?q=FC%20Porto%20site%3Ajn.pt%20when%3A7d&hl=pt-PT&gl=PT&ceid=PT%3Apt-150' },
   { source: 'RTP Notícias', url: 'https://www.rtp.pt/noticias/rss/desporto', imageHosts: ['cdn-images.rtp.pt'] },
   bolaFeed,
   { source: 'Record', url: 'https://www.record.pt/rss/', imageHosts: ['cdn.record.pt'] },
@@ -25,7 +32,7 @@ const feeds: Feed[] = [
   { source: 'zerozero', url: 'https://www.zerozero.pt/rss/noticias.php', imageHosts: ['www.zerozero.pt'] },
 ];
 const publishers = [
-  ...feeds.map(({ source, url }) => ({ source, hostname: new URL(url).hostname })),
+  ...feeds.map(({ source, url, publisherHost }) => ({ source, hostname: publisherHost ?? new URL(url).hostname })),
   { source: 'FC Porto', hostname: 'www.fcporto.pt' },
   { source: 'O Jogo', hostname: 'www.ojogo.pt' },
 ];
@@ -48,6 +55,7 @@ function readRss(xml: string): Item[] {
     if (item && depth === 4 && (name === 'title' || name === 'link' || name === 'pubDate' || name === 'description')) {
       field = name;
     }
+    if (item && depth === 4 && name === 'source') item.publisher = attributes.url;
     if (item && (depth === 4 || depth === 5)) {
       const isImage = attributes.type?.startsWith('image/') || attributes.medium === 'image';
       if (name === 'media:thumbnail' || (isImage && (name === 'media:content' || name === 'enclosure'))) {
@@ -106,8 +114,9 @@ function imageFromFeed(value: unknown, feed: Feed) {
 
 export function manualHubArticle(input: unknown): HubNewsArticle | null {
   if (!input || typeof input !== 'object') return null;
-  const { title, url: link, imageUrl: image, publishedAt } = input as Partial<Record<keyof HubNewsArticle, unknown>>;
+  const { title, url: link, imageUrl: image, publishedAt, sourceExcerpt } = input as Partial<Record<keyof HubNewsArticle, unknown>>;
   if (typeof title !== 'string' || title.length > 400 || typeof publishedAt !== 'string') return null;
+  if (sourceExcerpt !== undefined && sourceExcerpt !== null && (typeof sourceExcerpt !== 'string' || sourceExcerpt.length > 6000)) return null;
 
   const url = parseHttpsUrl(link);
   const cleanTitle = cleanText(title);
@@ -131,11 +140,12 @@ export function manualHubArticle(input: unknown): HubNewsArticle | null {
     source: publisher.source,
     publishedAt: new Date(timestamp).toISOString(),
     imageUrl: imageUrl?.href ?? null,
+    sourceExcerpt: cleanNewsContext(sourceExcerpt) || null,
   };
 }
 
 function articleFromItem(item: Item, feed: Feed, now: number): HubNewsArticle | null {
-  const title = cleanText(item.title).slice(0, 400);
+  let title = cleanText(item.title).slice(0, 400);
   const link = cleanText(item.link);
   const published = Date.parse(cleanText(item.pubDate));
   if (!title || !link || !Number.isFinite(published)) return null;
@@ -143,7 +153,13 @@ function articleFromItem(item: Item, feed: Feed, now: number): HubNewsArticle | 
 
   const url = parseHttpsUrl(link, feed.url);
   if (!url || url.origin !== new URL(feed.url).origin) return null;
-  if (!portoHeadline.test(title) && !url.pathname.split('/').includes('fc-porto')) return null;
+  if (feed.publisherHost) {
+    const publisher = parseHttpsUrl(item.publisher);
+    if (!publisher || publisher.hostname.replace(/^www\./, '') !== feed.publisherHost.replace(/^www\./, '') ||
+        !/^\/rss\/articles\/[A-Za-z0-9_-]+$/.test(url.pathname)) return null;
+    const suffix = ' - ' + feed.source;
+    if (title.endsWith(suffix)) title = title.slice(0, -suffix.length);
+  } else if (!portoHeadline.test(title) && !url.pathname.split('/').includes('fc-porto')) return null;
 
   const thumbnail = item.description?.match(/<img\b[^>]*?\s+src\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
   const imageUrl = imageFromFeed(item.image, feed) ??
@@ -154,6 +170,7 @@ function articleFromItem(item: Item, feed: Feed, now: number): HubNewsArticle | 
     source: feed.source,
     publishedAt: new Date(published).toISOString(),
     imageUrl,
+    sourceExcerpt: feed.publisherHost ? null : cleanNewsContext(item.description) || null,
   };
 }
 
@@ -248,6 +265,12 @@ export async function storeHubNews(db: D1Database, articles: HubNewsArticle[]) {
   }
 
   const results = statements.length ? await db.batch<{ revision: number }>(statements) : [];
+  const excerpts = articles.filter((article) => article.sourceExcerpt);
+  if (excerpts.length) await db.prepare(`
+    WITH incoming AS (SELECT json_extract(value, '$.url') AS url, json_extract(value, '$.sourceExcerpt') AS excerpt FROM json_each(?))
+    UPDATE hub_news SET source_excerpt = (SELECT excerpt FROM incoming WHERE incoming.url = hub_news.url LIMIT 1), revision = revision + 1
+    WHERE TRIM(COALESCE(source_excerpt, '')) = '' AND EXISTS (SELECT 1 FROM incoming WHERE incoming.url = hub_news.url)
+  `).bind(JSON.stringify(excerpts.map(({ url, sourceExcerpt }) => ({ url, sourceExcerpt })))).run();
   const changes = results.flatMap(({ results }) => results);
   const added = changes.filter(({ revision }) => revision === 0).length;
   return { added, imagesAdded: changes.length - added };

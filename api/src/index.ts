@@ -24,11 +24,12 @@ import { HUB_NEWS_CRON, syncHubNews } from './hub-news';
 import { hubNews } from './routes/hub-news';
 import { hubFans } from './routes/hub-fans';
 import { FOOTBALL_CRON, runFootballAutomation, type FootballEnv } from './football-automation';
+import { runNewsSummaries, type NewsSummaryEnv } from './hub-news-summaries';
 
 // ----------------------------------------------------
 // Tipos / Bindings
 // ----------------------------------------------------
-type Env = FootballEnv & {
+type Env = FootballEnv & NewsSummaryEnv & {
   DB: D1Database;
   ADMIN_KEY: string;
   LOCK_MINUTES_BEFORE?: string;
@@ -1315,8 +1316,14 @@ export default {
   fetch: app.fetch,
   async scheduled(controller: ScheduledController, env: Env) {
     if (controller.cron === HUB_NEWS_CRON) {
-      const result = await syncHubNews(env.DB, controller.scheduledTime);
-      console.info('Hub news sync', result);
+      try {
+        const result = await syncHubNews(env.DB, controller.scheduledTime);
+        console.info('Hub news sync', result);
+      } catch {
+        console.warn('Hub news sources unavailable');
+      }
+      const summaries = await runNewsSummaries(env, controller.scheduledTime);
+      if (summaries.generated || summaries.reason !== 'not_due') console.info('Hub news summaries', summaries);
     }
     if (controller.cron === FOOTBALL_CRON) {
       const result = await runFootballAutomation(env, controller.scheduledTime);

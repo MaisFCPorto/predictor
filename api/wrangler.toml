@@ -20,6 +20,8 @@ database_name = "predictor-db"
 database_id = "e852c6db-7520-46f1-b429-f6ff22b4560b"
 [env.production.vars]
 FOOTBALL_AUTOMATION_ENABLED = "true"
+HUB_NEWS_SUMMARIES_ENABLED = "true"
+HUB_NEWS_SUMMARY_DAILY_LIMIT = "30"
 LOCK_MINUTES_BEFORE = "5"
 SUPABASE_URL = "https://predictorporto.supabase.co" 
 

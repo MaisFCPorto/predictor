@@ -4,15 +4,17 @@ import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { formatHubNewsDate } from '@/features/hub/news-date';
 import { NewsImage } from '@/features/hub/news-image';
-import type { HubArticle, HubNewsChanges, HubNewsItem, HubNewsPage, HubNewsStatus, HubNewsSync } from '@/features/hub/types';
+import type { HubArticle, HubNewsChanges, HubNewsItem, HubNewsPage, HubNewsStatus, HubNewsSync, HubSummarySettings } from '@/features/hub/types';
 import { supabasePKCE } from '@/utils/supabase/client';
+import SummaryEditor, { summaryMessages, type SummaryCommand } from './summary-editor';
 
 type ListState = { phase: 'loading' | 'denied' | 'failed' } | { phase: 'ready'; result: HubNewsPage };
 type Decision = Pick<HubNewsItem, 'id' | 'revision'> & { status: 'approved' | 'rejected' };
 type NewsAction =
   | { type: 'sync' }
   | { type: 'decision'; decision: Decision }
-  | { type: 'add'; article: Omit<HubArticle, 'source'> };
+  | { type: 'add'; article: Omit<HubArticle, 'source'> & { sourceExcerpt?: string | null } }
+  | SummaryCommand;
 
 const tabs: { status: HubNewsStatus; label: string; empty: string }[] = [
   { status: 'pending', label: 'Pendentes', empty: 'Não há notícias por aprovar nesta página.' },
@@ -36,6 +38,17 @@ export default function NewsDesk() {
   const [refresh, setRefresh] = useState(0);
   const [action, setAction] = useState<NewsAction['type'] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [summarySettings, setSummarySettings] = useState<HubSummarySettings | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void requestNews('?action=settings', { signal: controller.signal }).then(async (response) => {
+      if (!response.ok) return;
+      const settings: HubSummarySettings = await response.json();
+      if (!controller.signal.aborted) setSummarySettings(settings);
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [refresh]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -74,7 +87,9 @@ export default function NewsDesk() {
     setNotice(null);
 
     try {
-      const response = command.type === 'add'
+      const response = command.type === 'context' || command.type === 'summary' || command.type === 'summaries'
+        ? await requestNews('?action=' + command.type, { method: command.type === 'summaries' ? 'POST' : 'PATCH', body: JSON.stringify(command.payload) })
+        : command.type === 'add'
         ? await requestNews('?action=add', { method: 'POST', body: JSON.stringify(command.article) })
         : command.type === 'decision'
           ? await requestNews('', { method: 'PATCH', body: JSON.stringify(command.decision) })
@@ -92,9 +107,24 @@ export default function NewsDesk() {
         reload();
         return false;
       }
+      if (command.type === 'summaries') {
+        const result: { generated?: number; reason?: string } = await response.json();
+        setNotice(result.generated ? 'Resumo gerado e guardado para revisão.' : summaryMessages[result.reason ?? ''] ?? 'Não foi possível gerar o resumo.');
+        reload();
+        return response.ok;
+      }
+      if (response.status === 400 && (command.type === 'summary' || command.type === 'context')) {
+        setNotice(command.type === 'context' ? 'Confirma o contexto: máximo de 6 000 caracteres.' : 'Confirma o título e o resumo: entre 25 e 110 palavras, sem HTML nem links.');
+        return false;
+      }
       if (!response.ok) throw new Error('News action failed');
 
-      if (command.type === 'decision') {
+      if (command.type === 'context') {
+        setNotice('Contexto guardado. O resumo será gerado para nova revisão.');
+      } else if (command.type === 'summary') {
+        setNotice(command.payload.decision === 'approved' ? 'Notícia e resumo publicados no Hub.'
+          : command.payload.decision === 'draft' ? 'Rascunho guardado para revisão.' : 'Resumo retirado. A ligação à fonte mantém-se se a notícia estiver aprovada.');
+      } else if (command.type === 'decision') {
         setNotice(command.decision.status === 'approved'
           ? query.status === 'approved' ? 'Imagem aprovada e disponível no hub.' : 'Notícia aprovada e disponível no hub.'
           : query.status === 'approved' ? 'Notícia retirada do hub.' : 'Notícia rejeitada.');
@@ -139,6 +169,7 @@ export default function NewsDesk() {
         title: String(values.get('title') ?? ''),
         url: String(values.get('url') ?? ''),
         imageUrl: String(values.get('imageUrl') ?? '').trim() || null,
+        sourceExcerpt: String(values.get('sourceExcerpt') ?? '').trim() || null,
         publishedAt: publishedAt.toISOString(),
       },
     });
@@ -158,6 +189,7 @@ export default function NewsDesk() {
   const ready = list.phase === 'ready';
   const disabled = !ready || action !== null;
   const activeTab = tabs.find((tab) => tab.status === query.status);
+  const canGenerate = !!summarySettings?.enabled && summarySettings.keyConfigured && summarySettings.usage.requests < summarySettings.dailyLimit;
 
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6" aria-busy={list.phase === 'loading' || action !== null}>
@@ -180,11 +212,25 @@ export default function NewsDesk() {
         </div>
       </header>
 
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-300/15 bg-sky-400/5 p-4" aria-label="Geração de resumos">
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold text-sky-100">Resumos com revisão editorial</h2>
+          <p className="text-xs text-white/65">{summarySettings
+            ? !summarySettings.keyConfigured ? 'Falta configurar a chave OpenAI no Worker.'
+              : !summarySettings.enabled ? 'A geração automática está desligada.'
+                : `${summarySettings.usage.requests} de ${summarySettings.dailyLimit} pedidos de IA hoje (UTC). Modelo: ${summarySettings.model}.`
+            : 'As opções de resumos ficam disponíveis depois da atualização do Worker e da BD.'}</p>
+          <p className="text-xs text-white/55">A geração corre após o sync. Títulos sem contexto suficiente mantêm a ligação à fonte. Nada é publicado sem aprovação.</p>
+        </div>
+        <button type="button" className="rounded-lg border border-sky-300/20 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-white/5 disabled:opacity-40"
+          disabled={disabled || !canGenerate} onClick={() => void submit({ type: 'summaries', payload: {} })}>{action === 'summaries' ? 'A gerar…' : 'Gerar próximo resumo'}</button>
+      </section>
+
       <details className="rounded-xl border border-white/10 bg-white/[.025] px-4 py-3">
         <summary className="cursor-pointer text-sm font-semibold text-sky-200">Adicionar notícia por ligação</summary>
         <form onSubmit={addFromForm} className="mt-3 grid gap-3 sm:grid-cols-2">
           <p className="text-xs text-white/65 sm:col-span-2">
-            Podes adicionar notícias do FC Porto, d’O Jogo e das restantes fontes.
+            Podes adicionar notícias do FC Porto, d’O Jogo, do Jornal de Notícias e das restantes fontes.
           </p>
           <label className="grid gap-1 text-sm sm:col-span-2">
             Título
@@ -197,6 +243,11 @@ export default function NewsDesk() {
           <label className="grid gap-1 text-sm">
             Data e hora da publicação
             <input className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 [color-scheme:dark]" name="publishedAt" type="datetime-local" required />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Contexto factual para o resumo (opcional)
+            <textarea className="rounded-lg border border-white/15 bg-black/25 px-3 py-2" name="sourceExcerpt" rows={3} maxLength={6000} disabled={!summarySettings}
+              placeholder="Factos verificados na fonte. Uma notícia só com título não é suficiente para gerar um resumo." />
           </label>
           <label className="grid gap-1 text-sm sm:col-span-2">
             Ligação HTTPS da imagem (opcional)
@@ -271,6 +322,7 @@ export default function NewsDesk() {
                       </button>
                     )}
                   </div>
+                  <SummaryEditor key={article.id + ':' + article.revision} article={article} disabled={disabled} canGenerate={canGenerate} onSubmit={submit} />
                 </li>
               ))}
             </ul>

@@ -82,9 +82,11 @@ function HubNavigation({ cadernetaEnabled }: { cadernetaEnabled: boolean }) {
 }
 
 function NewsStory({ article, placement }: { article: HubArticle; placement: StoryPlacement }) {
+  const internal = Number.isSafeInteger(article.summaryId) && (article.summaryId ?? 0) > 0;
   return (
     <article className={styles[placement]}>
-      <a className={styles.storyLink} href={article.url} target="_blank" rel="noreferrer">
+      <a className={styles.storyLink} href={internal ? `/hub/noticias/${article.summaryId}` : article.url}
+        target={internal ? undefined : '_blank'} rel={internal ? undefined : 'noreferrer'}>
         <NewsImage src={article.imageUrl} className={styles.newsPhoto} size={placement === 'lead' ? 'lead' : 'card'} />
         <div className={styles.newsCopy}>
           <p className={styles.articleSource}>{article.source}</p>
@@ -105,10 +107,7 @@ function NewsFeed({ articles, available, edition }: {
   available: boolean;
   edition: HubContent['edition'];
 }) {
-  const featured = [
-    ...articles.filter((article) => article.imageUrl),
-    ...articles.filter((article) => !article.imageUrl),
-  ].slice(0, 3);
+  const featured = articles.slice(0, 3);
   const latest = articles.filter((article) => !featured.includes(article));
 
   return (

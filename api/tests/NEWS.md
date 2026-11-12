@@ -2,9 +2,19 @@
 
 ## Funcionamento
 
-O cron existente das notícias corre a cada três horas. Depois de guardar as
-novidades, prepara até quatro resumos de notícias dos últimos três dias.
-Notícias mais antigas só são resumidas por pedido explícito no backoffice. Usa a
+O cron existente das notícias corre a cada três horas. No início de cada
+sincronização, automática ou manual, elimina notícias pendentes e rejeitadas
+publicadas há mais de 48 horas, bem como os respetivos rascunhos. As aprovadas
+são preservadas, tal como o histórico de consumo diário da IA. A limpeza corre
+mesmo quando as fontes estão indisponíveis ou a geração está desligada. Uma
+geração em curso só é limpa depois de expirar a sua reserva. Os feeds e a leitura
+direta não voltam a importar notícias fora desta janela. Exatamente às 48 horas,
+a notícia ainda é mantida até à sincronização seguinte. A migração 025 reserva
+IDs crescentes: uma notícia nova não reutiliza o ID de uma eliminada, mantendo
+seguras as ligações antigas e decisões de moderação de versões já removidas.
+
+Depois de guardar as novidades, prepara até quatro resumos de notícias com
+contexto suficiente. Usa a
 Responses API da OpenAI, modelo `gpt-6-luna`, sem ferramentas de pesquisa e sem
 armazenamento de respostas na OpenAI (`store: false`). Cada pedido tem um máximo
 de 2.000 tokens de saída e usa apenas o título e até 6.000 caracteres de contexto.
@@ -36,14 +46,23 @@ visitas não fazem pedidos à IA. O acesso beta atual do Hub mantém-se.
 
 ## Fontes
 
-O Jogo e Jornal de Notícias são recolhidos através dos seus títulos públicos
-no Google Notícias, validando o domínio do editor em cada item. Acesso direto
-aos sites e aos antigos feeds falhou na verificação de 12/11/2026. Estes feeds
-de títulos não fornecem o corpo dos artigos: acrescentar factos verificados
-no backoffice ou fornecer futuramente um feed autorizado com descrições. Os
-pedidos diretos aos dois jornais foram novamente recusados com HTTP 403 na
-mesma data. A geração por leitura automática desses artigos continua dependente
-de acesso autorizado ao texto; uma página própria não remove esse impedimento.
+O Jogo é recolhido através dos seus títulos públicos no Google Notícias,
+validando o domínio do editor e uma referência explícita ao FC Porto no título.
+A pesquisa usa a expressão exata "FC Porto" e os últimos dois dias; cada item
+continua sujeito ao filtro local, pois o Google também pode devolver notícias
+sem relação com o clube. Títulos de temas gerais ou sobre a cidade do Porto não
+são suficientes. Metadados de O Jogo já importados sem esta referência são
+removidos dos pendentes e rejeitados, preservando contexto revisto manualmente.
+
+O Jornal de Notícias foi retirado a pedido do projeto: não é consultado, não
+consta dos filtros e deixa de poder ser adicionado por ligação. Na sincronização
+são eliminados os seus pendentes e rejeitados, mantendo publicações já aprovadas.
+
+O Google Notícias não fornece o corpo dos artigos. A leitura pública da secção
+do FC Porto e do sitemap de O Jogo devolveu HTTP 403 em 12/11/2026. Acrescentar
+texto ou factos verificados no backoffice, ou fornecer futuramente um feed
+autorizado. A interface distingue estes títulos de um artigo efetivamente lido;
+uma página própria não remove o impedimento de acesso ao original.
 
 O RSS direto do Maisfutebol foi verificado e mantém a descrição como metadado. O Record e A BOLA passam também a ter leitura dos parágrafos públicos dos artigos. As declarações e os títulos dentro do corpo são recolhidos para preservar o contexto e os nomes nos exemplos.
 A secção `https://maisfutebol.iol.pt/fc-porto` também é consultada para descobrir
@@ -58,16 +77,16 @@ artigos. Estas consultas HTTP não consomem pedidos de IA nem SerpApi.
 
 O metadado context_kind distingue descrições de feed, artigos lidos e contexto manual. A migração 024 preserva o contexto anterior como legacy. Um rascunho pode ser regenerado explicitamente, com revisão e quota diária verificadas. Notícias aprovadas nunca são regeneradas por uma mera alteração do formato.
 
-Para O Jogo e JN, uma falha de consulta do RSS pelo Worker pode usar o endpoint fixo do servidor do site. Ambos consultam o mesmo feed público do Google Notícias. A chave HUB_NEWS_KEY só é enviada à origem própria https://maispredictor.app e nunca ao Google. O endpoint verifica a identidade do Worker ou de um administrador, limita as fontes, o tamanho e os redirecionamentos, e não fornece artigos integrais. O backoffice mostra contagens e filtros por fonte, além de códigos de erro de importação.
+Para O Jogo, uma falha de consulta do RSS pelo Worker pode usar o endpoint fixo do servidor do site. Ambos consultam o mesmo feed público do Google Notícias. A chave HUB_NEWS_KEY só é enviada à origem própria https://maispredictor.app e nunca ao Google. O endpoint verifica a identidade do Worker ou de um administrador, limita a fonte, o tamanho e os redirecionamentos, e não fornece artigos integrais. A antiga rota JN devolve 404. O backoffice mostra contagens e filtros por fonte, além de códigos de erro de importação.
 
 Mantêm-se RTP, A BOLA, Record e zerozero. Dentro do mesmo dia, O Jogo tem
-prioridade, seguido de Jornal de Notícias e Maisfutebol; datas mais recentes
+prioridade, seguido de Maisfutebol; datas mais recentes
 continuam primeiro. A prioridade também se aplica à fila de geração. Não se
 fazem novas pesquisas na SerpApi para notícias.
 
 ## Publicação
 
-Na pasta `api`, depois de obter o código de `main`, aplicar as migrações até 024 antes do deploy:
+Na pasta `api`, depois de obter o código de `main`, aplicar as migrações até 025 antes do deploy:
 
 ```sh
 npx wrangler@4.55.0 d1 migrations apply predictor-db --remote --env production
@@ -101,4 +120,9 @@ Os ensaios usam o Worker real em workerd, D1 descartável e respostas simuladas
 para fontes e IA. Não usam chaves reais, não gastam créditos e não escrevem em
 produção. Cobrem geração, edição, aprovação, retirada, credenciais em falta,
 concorrência, quota diária, alterações de contexto, recuperação de falhas,
-proteção dos rascunhos e validação da identidade dos editores.
+proteção dos rascunhos e validação da identidade dos editores. A retenção é
+verificada nos limites das 48 horas, com pendentes, rejeitadas, aprovadas,
+rascunhos associados, consumo diário, reservas ativas, falhas de fontes e
+reimportação por RSS ou pela secção direta do editor. Também se verificam a não
+reutilização de IDs eliminados, a rejeição de decisões antigas, o filtro de
+relevância de O Jogo e a remoção do Jornal de Notícias.

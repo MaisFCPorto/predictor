@@ -9,7 +9,7 @@ type Status = 'pending' | 'approved' | 'rejected';
 type NewsItem = HubNewsArticle & { id: number; status: Status; revision: number; imageApproved: 0 | 1 };
 
 const PAGE_SIZE = 25;
-const sources = ['O Jogo', 'Jornal de Notícias', 'Maisfutebol', 'A BOLA', 'Record', 'RTP Notícias', 'zerozero', 'FC Porto'];
+const sources = ['O Jogo', 'Maisfutebol', 'A BOLA', 'Record', 'RTP Notícias', 'zerozero', 'FC Porto'];
 const isStatus = (value: unknown): value is Status =>
   value === 'pending' || value === 'approved' || value === 'rejected';
 

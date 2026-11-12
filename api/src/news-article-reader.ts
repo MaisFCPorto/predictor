@@ -1,5 +1,6 @@
 import type { HubNewsArticle } from './hub-news';
 import { cleanNewsContext, enoughNewsContext } from './hub-news-summaries';
+import { withinNewsRetention } from './news-retention';
 
 const origin = 'https://maisfutebol.iol.pt';
 const sectionUrl = origin + '/fc-porto';
@@ -161,7 +162,8 @@ export async function readPublicNewsArticle(input: string, source: 'Maisfutebol'
   if (!metadata || metadata.isAccessibleForFree === false || String(metadata.isAccessibleForFree).toLowerCase() === 'false') return null;
   const title = cleanNewsContext(metadata.headline);
   const published = Date.parse(metadata.datePublished);
-  if (!title || title.length > 400 || !Number.isFinite(published) || published < now - 7 * 86_400_000 || published > now + 3_600_000) return null;
+  if (!title || title.length > 400 || !Number.isFinite(published) ||
+      !withinNewsRetention(new Date(published).toISOString(), now) || published > now + 3_600_000) return null;
   const image = Array.isArray(metadata.image) ? metadata.image[0] : metadata.image;
   return { title, url, source, publishedAt: new Date(published).toISOString(),
     imageUrl: imageUrl(typeof image === 'string' ? image : image?.url, source === 'Record' ? ['cdn.record.pt'] : source === 'A BOLA' ? ['sportal365images.com', 'www.abola.pt'] : ['img.iol.pt']),

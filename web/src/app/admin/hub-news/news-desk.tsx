@@ -145,7 +145,8 @@ export default function NewsDesk() {
           ? ' Imagem encontrada numa notícia já guardada.'
           : result.imagesAdded ? ` Imagens encontradas em ${result.imagesAdded} notícias já guardadas.` : '';
         const articles = result.articlesRead ? ` Texto recolhido em ${result.articlesRead} artigo${result.articlesRead === 1 ? '' : 's'} das fontes.` : '';
-        setNotice(`Sincronização concluída. ${count} por aprovar.${images}${articles}${failures}`);
+        const removed = result.removed ? ` ${result.removed === 1 ? '1 notícia eliminada' : `${result.removed} notícias eliminadas`}.` : '';
+        setNotice(`Sincronização concluída. ${count} por aprovar.${images}${articles}${removed}${failures}`);
       }
       reload();
       return true;
@@ -203,6 +204,7 @@ export default function NewsDesk() {
           <Link href="/admin" className="text-sm font-semibold text-sky-200 hover:underline">← Backoffice</Link>
           <h1 className="text-3xl font-bold tracking-tight">Notícias do hub</h1>
           <p className="text-sm text-white/65">O sync corre a cada três horas. A aprovação publica a notícia no hub.</p>
+          <p className="text-xs text-white/55">A sincronização elimina pendentes e rejeitadas com mais de 48 horas desde a publicação. As aprovadas são mantidas.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/hub" className="rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/5">Ver hub</Link>
@@ -221,7 +223,7 @@ export default function NewsDesk() {
         <div className="space-y-1">
           <h2 className="text-sm font-semibold text-sky-100">Notícias adaptadas com revisão editorial</h2>
           <p className="text-xs text-white/65">{summarySettings
-            ? !formatReady ? 'Atualiza o Worker e aplica a migração 24 para ativar as notícias desenvolvidas.'
+            ? !formatReady ? 'Atualiza o Worker e aplica as migrações pendentes para ativar as notícias desenvolvidas.'
               : !summarySettings.keyConfigured ? 'Falta configurar a chave OpenAI no Worker.'
               : !summarySettings.enabled ? 'A geração automática está desligada.'
                 : `${summarySettings.usage.requests} de ${summarySettings.dailyLimit} pedidos de IA hoje (UTC). Modelo: ${summarySettings.model}.`
@@ -244,7 +246,7 @@ export default function NewsDesk() {
         <summary className="cursor-pointer text-sm font-semibold text-sky-200">Adicionar notícia por ligação</summary>
         <form onSubmit={addFromForm} className="mt-3 grid gap-3 sm:grid-cols-2">
           <p className="text-xs text-white/65 sm:col-span-2">
-            Podes adicionar notícias do FC Porto, d’O Jogo, do Jornal de Notícias e das restantes fontes.
+            Podes adicionar notícias do FC Porto, d’O Jogo e das restantes fontes.
           </p>
           <label className="grid gap-1 text-sm sm:col-span-2">
             Título

@@ -48,8 +48,12 @@ export default function SummaryEditor({ article, disabled, canGenerate, onSubmit
         onClick={() => void onSubmit({ type: 'summaries', payload: state === 'draft' ? { ...payload, regenerate: true } : { id: article.id } })}>
         {state === 'draft' ? 'Gerar nova adaptação' : state === 'failed' ? 'Tentar novamente' : 'Ler e adaptar notícia'}
       </button>}
-      {!article.summaryText && <p className="text-sm text-white/65">O artigo original é lido antes de a IA escrever a notícia. O texto adaptado ficará aqui para revisão antes de ser publicado no Hub.</p>}
-      <details className="rounded-lg border border-white/10 p-3">
+      {!article.summaryText && <p className="text-sm text-white/65">{canRead
+        ? 'O artigo original é lido antes de a IA escrever a notícia. O texto adaptado ficará aqui para revisão antes de ser publicado no Hub.'
+        : contextReady ? 'O texto guardado da fonte será usado para preparar a notícia, que ficará aqui para revisão.'
+          : article.source === 'O Jogo' ? 'O Jogo está a fornecer apenas títulos através do Google Notícias. O texto do artigo não foi recolhido. Para gerar a adaptação, acrescenta abaixo o texto original ou factos verificados na fonte.'
+            : 'Esta fonte não disponibilizou o texto do artigo. Acrescenta abaixo o texto original ou factos verificados para preparar a adaptação.'}</p>}
+      <details open={!canRead && !contextReady} className="rounded-lg border border-white/10 p-3">
       <summary className="cursor-pointer text-sm text-white/65">Texto original · {article.contextKind === 'article' ? 'Recolhido do artigo' : article.contextKind === 'manual' ? 'Revisto no backoffice' : article.contextKind === 'feed' ? 'Descrição RSS, artigo por ler' : 'Contexto guardado'}</summary>
       <label className="grid gap-2 text-sm">
         Texto e contexto da fonte

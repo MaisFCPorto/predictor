@@ -1,6 +1,8 @@
 import { SaxesParser } from 'saxes';
 import { cleanNewsContext } from './hub-news-summaries';
 import { collectMaisfutebolArticles, collectLinkedArticles } from './news-article-reader';
+import { pruneUnapprovedNews, withinNewsRetention } from './news-retention';
+import { portoHeadline } from './news-relevance';
 
 export const HUB_NEWS_CRON = '0 */3 * * *';
 export type NewsFeedEnv = { HUB_NEWS_KEY?: string; HUB_NEWS_FEED_ORIGIN?: string };
@@ -23,11 +25,9 @@ const bolaFeed: Feed = {
   imageHosts: ['sportal365images.com', 'www.abola.pt'],
 };
 const feeds: Feed[] = [
-  // O Jogo and JN provide public headlines. Their full articles are not accessible here.
+  // O Jogo provides public headlines. Its full articles are not accessible here.
   { source: 'O Jogo', publisherHost: 'www.ojogo.pt', imageHosts: [],
-    url: 'https://news.google.com/rss/search?q=FC%20Porto%20site%3Aojogo.pt%20when%3A7d&hl=pt-PT&gl=PT&ceid=PT%3Apt-150' },
-  { source: 'Jornal de Notícias', publisherHost: 'www.jn.pt', imageHosts: [],
-    url: 'https://news.google.com/rss/search?q=FC%20Porto%20site%3Ajn.pt%20when%3A7d&hl=pt-PT&gl=PT&ceid=PT%3Apt-150' },
+    url: 'https://news.google.com/rss/search?q=%22FC%20Porto%22%20site%3Aojogo.pt%20when%3A2d&hl=pt-PT&gl=PT&ceid=PT%3Apt-150' },
   { source: 'RTP Notícias', url: 'https://www.rtp.pt/noticias/rss/desporto', imageHosts: ['cdn-images.rtp.pt'] },
   bolaFeed,
   { source: 'Record', url: 'https://www.record.pt/rss/', imageHosts: ['cdn.record.pt'] },
@@ -39,9 +39,6 @@ const publishers = [
   { source: 'FC Porto', hostname: 'www.fcporto.pt' },
   { source: 'O Jogo', hostname: 'www.ojogo.pt' },
 ];
-
-const portoHeadline = /\b(?:f\.?\s*c\.?\s*porto|futebol clube do porto|dragão|dragões|portistas?)\b/i;
-const dayMs = 24 * 60 * 60_000;
 
 function readRss(xml: string): Item[] {
   const items: Item[] = [];
@@ -153,7 +150,7 @@ function articleFromItem(item: Item, feed: Feed, now: number): HubNewsArticle | 
   const link = cleanText(item.link);
   const published = Date.parse(cleanText(item.pubDate));
   if (!title || !link || !Number.isFinite(published)) return null;
-  if (published < now - 7 * dayMs || published > now + 60 * 60_000) return null;
+  if (!withinNewsRetention(new Date(published).toISOString(), now) || published > now + 60 * 60_000) return null;
 
   const url = parseHttpsUrl(link, feed.url);
   if (!url || url.origin !== new URL(feed.url).origin) return null;
@@ -163,7 +160,8 @@ function articleFromItem(item: Item, feed: Feed, now: number): HubNewsArticle | 
         !/^\/rss\/articles\/[A-Za-z0-9_-]+$/.test(url.pathname)) return null;
     const suffix = ' - ' + feed.source;
     if (title.endsWith(suffix)) title = title.slice(0, -suffix.length);
-  } else if (!portoHeadline.test(title) && !url.pathname.split('/').includes('fc-porto')) return null;
+    if (!portoHeadline(title)) return null;
+  } else if (!portoHeadline(title) && !url.pathname.split('/').includes('fc-porto')) return null;
 
   const thumbnail = item.description?.match(/<img\b[^>]*?\s+src\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
   const imageUrl = imageFromFeed(item.image, feed) ??
@@ -197,8 +195,7 @@ async function readFeed(feed: Feed, now: number, env?: NewsFeedEnv) {
     // The site's server is a second client of the same public metadata feed.
     // This credential is sent only to our own fixed origin, never to Google or publishers.
     if (!feed.publisherHost || env?.HUB_NEWS_FEED_ORIGIN !== 'https://maispredictor.app' || !env.HUB_NEWS_KEY?.trim()) throw error;
-    const source = feed.source === 'O Jogo' ? 'ojogo' : 'jn';
-    response = await fetch(`https://maispredictor.app/api/internal/hub-news-feeds/${source}`, {
+    response = await fetch('https://maispredictor.app/api/internal/hub-news-feeds/ojogo', {
       headers: { 'x-hub-news-key': env.HUB_NEWS_KEY.trim(), Accept: 'application/rss+xml' }, redirect: 'manual', signal: AbortSignal.timeout(7_000),
     });
     if (!response.ok) throw new Error(`RSS_HTTP_${response.status}`);
@@ -208,8 +205,7 @@ async function readFeed(feed: Feed, now: number, env?: NewsFeedEnv) {
   try { return await parseFeedResponse(response, feed, now); }
   catch (error) {
     if (!feed.publisherHost || env?.HUB_NEWS_FEED_ORIGIN !== 'https://maispredictor.app' || !env.HUB_NEWS_KEY?.trim() || target.startsWith('https://maispredictor.app/')) throw error;
-    const source = feed.source === 'O Jogo' ? 'ojogo' : 'jn';
-    const fallback = await fetch(`https://maispredictor.app/api/internal/hub-news-feeds/${source}`, {
+    const fallback = await fetch('https://maispredictor.app/api/internal/hub-news-feeds/ojogo', {
       headers: { 'x-hub-news-key': env.HUB_NEWS_KEY.trim(), Accept: 'application/rss+xml' }, redirect: 'manual', signal: AbortSignal.timeout(7_000),
     });
     if (!fallback.ok) throw new Error(`RSS_HTTP_${fallback.status}`);
@@ -290,9 +286,11 @@ export async function storeHubNews(db: D1Database, articles: HubNewsArticle[]) {
   const statements: D1PreparedStatement[] = [];
   for (let offset = 0; offset < articles.length; offset += 16) {
     const batch = articles.slice(offset, offset + 16);
-    const values = batch.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+    statements.push(db.prepare(`UPDATE hub_news_sequence
+      SET last_id = MAX(last_id, (SELECT COALESCE(MAX(id), 0) FROM hub_news)) + ? WHERE singleton = 1`).bind(batch.length));
+    const values = batch.map((_, index) => `((SELECT last_id - ${batch.length - index - 1} FROM hub_news_sequence WHERE singleton = 1), ?, ?, ?, ?, ?, ?)`).join(', ');
     statements.push(db.prepare(`
-      INSERT INTO hub_news (title, url, source, published_at, image_url, context_kind)
+      INSERT INTO hub_news (id, title, url, source, published_at, image_url, context_kind)
       VALUES ${values}
       ON CONFLICT(url) DO UPDATE SET image_url = excluded.image_url, revision = hub_news.revision + 1
       WHERE hub_news.image_url IS NULL AND excluded.image_url IS NOT NULL
@@ -313,6 +311,8 @@ export async function storeHubNews(db: D1Database, articles: HubNewsArticle[]) {
 }
 
 export async function syncHubNews(db: D1Database, now = Date.now(), env?: NewsFeedEnv) {
+  // Run before contacting publishers so an outage cannot block retention.
+  const removed = await pruneUnapprovedNews(db, now);
   const responses = await Promise.allSettled(feeds.map((feed) => readFeed(feed, now, env)));
   const articles = new Map<string, HubNewsArticle>();
   const failedSources: string[] = [];
@@ -341,10 +341,12 @@ export async function syncHubNews(db: D1Database, now = Date.now(), env?: NewsFe
   if (failedSources.length === feeds.length) throw new Error('All hub RSS feeds failed');
 
   const candidates = [...articles.values()]
+    .filter((article) => withinNewsRetention(article.publishedAt, now))
     .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
     .slice(0, 200);
   await addBolaPreviews(db, candidates);
   return {
+    removed,
     found: candidates.length,
     articlesRead: direct.articlesRead + record.articlesRead + bola.articlesRead,
     ...await storeHubNews(db, candidates),

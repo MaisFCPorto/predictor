@@ -12,7 +12,7 @@ async function scenario(name, run, options = {}) {
   const api = (path = '', init = {}) => env.request(base + path, { ...init, headers: env.hubHeaders });
   const list = async (status = 'pending') => (await api('?status=' + status)).body.items;
   const add = async (source = 'rtp', suffix = '1', extra = {}) => {
-    const hosts = { rtp: 'www.rtp.pt', ojogo: 'www.ojogo.pt', jn: 'www.jn.pt', mais: 'maisfutebol.iol.pt' };
+    const hosts = { rtp: 'www.rtp.pt', ojogo: 'www.ojogo.pt', mais: 'maisfutebol.iol.pt' };
     assert.equal((await api('', { method: 'POST', body: { title: 'FC Porto em destaque na eleição dos defesas ' + suffix,
       url: 'https://' + hosts[source] + '/noticias/fc-porto/teste-' + suffix,
       publishedAt: new Date(start).toISOString(), sourceExcerpt: context, ...extra } })).status, 201);
@@ -120,7 +120,7 @@ await scenario('simultaneous requests share the article lease and daily budget',
 });
 
 await scenario('source priority and the daily request limit are enforced atomically and reset next day', async ({ add, api, request, newsCalls }) => {
-  await add('mais', 'mais'); await add('jn', 'jn'); const preferred = await add('ojogo', 'ojogo');
+  await add('rtp', 'rtp'); await add('mais', 'mais'); const preferred = await add('ojogo', 'ojogo');
   await Promise.all(Array.from({ length: 3 }, () => api('/summaries', { method: 'POST', body: {} })));
   assert.equal(newsCalls.length, 1);
   assert.equal(JSON.parse(newsCalls[0].input).source, 'O Jogo');
@@ -128,7 +128,7 @@ await scenario('source priority and the daily request limit are enforced atomica
   assert.equal((await api('/summaries', { method: 'POST', body: {} })).body.reason, 'daily_limit');
   await request('/__rehearsal/summaries', { now: start + day });
   assert.equal(newsCalls.length, 2);
-  assert.equal(JSON.parse(newsCalls[1].input).source, 'Jornal de Notícias');
+  assert.equal(JSON.parse(newsCalls[1].input).source, 'Maisfutebol');
   assert.ok(preferred.id);
 }, { newsDailyLimit: 1 });
 
@@ -229,23 +229,22 @@ await scenario('manual retries remain bounded and invalid changes cannot expose 
 });
 
 const rss = (title, link, publisher, description = '', date = start) => `<rss><channel><item><title><![CDATA[${title}]]></title><link>${link}</link><pubDate>${new Date(date).toUTCString()}</pubDate><description><![CDATA[${description}]]></description>${publisher ? `<source url="https://${publisher}">source</source>` : ''}</item></channel></rss>`;
-await scenario('O Jogo and JN public metadata are authenticated by publisher and Maisfutebol keeps its factual excerpt', async ({ api, list, newsCalls }) => {
+await scenario('O Jogo metadata is authenticated by publisher and Maisfutebol keeps its factual excerpt', async ({ api, list, newsCalls }) => {
   const result = await api('/sync', { method: 'POST' });
-  assert.equal(result.body.added, 3);
+  assert.equal(result.body.added, 2);
   const items = await list();
-  assert.deepEqual(items.map((row) => row.source), ['O Jogo', 'Jornal de Notícias', 'Maisfutebol']);
+  assert.deepEqual(items.map((row) => row.source), ['O Jogo', 'Maisfutebol']);
   assert.equal(items[0].sourceExcerpt, null);
-  assert.equal(items[1].sourceExcerpt, null);
-  assert.ok(items[2].sourceExcerpt.length >= 160);
+  assert.ok(items[1].sourceExcerpt.length >= 160);
   await api('/sync', { method: 'POST' });
-  assert.equal((await list()).length, 3);
+  assert.equal((await list()).length, 2);
   assert.equal(newsCalls.length, 0);
 }, { newsFeeds: (url) => {
   let xml = '<rss><channel></channel></rss>';
   if (url.hostname === 'news.google.com') {
-    const ojogo = url.searchParams.get('q').includes('ojogo.pt');
-    xml = rss('FC Porto vence o clássico - ' + (ojogo ? 'O Jogo' : 'Jornal de Notícias'),
-      'https://news.google.com/rss/articles/' + (ojogo ? 'testOJ' : 'testJN'), ojogo ? 'www.ojogo.pt' : 'www.jn.pt', context);
+    assert.ok(url.searchParams.get('q').includes('"FC Porto"'));
+    assert.ok(url.searchParams.get('q').includes('site:ojogo.pt'));
+    xml = rss('FC Porto vence o clássico - O Jogo', 'https://news.google.com/rss/articles/testOJ', 'www.ojogo.pt', context);
   }
   if (url.hostname === 'maisfutebol.iol.pt') xml = rss('FC Porto em destaque', 'https://maisfutebol.iol.pt/fc-porto/test', '', context);
   return new Response(xml, { headers: { 'Content-Type': 'application/rss+xml' } });
@@ -299,7 +298,7 @@ await scenario('the Maisfutebol section remains usable when the RSS feeds are un
   assert.equal(result.status, 200);
   assert.equal(result.body.added, 1);
   assert.equal(result.body.failedSources.includes('Maisfutebol'), false);
-  assert.equal(result.body.failedSources.length, 6);
+  assert.equal(result.body.failedSources.length, 5);
   assert.equal((await list())[0].sourceExcerpt, context);
 }, { newsFeeds: (url) => url.hostname === 'maisfutebol.iol.pt' && url.pathname === '/fc-porto' ? htmlResponse(section())
   : url.hostname === 'maisfutebol.iol.pt' && url.pathname === maisPath ? htmlResponse(publicArticle()) : new Response('', { status: 503 }) });
@@ -455,9 +454,8 @@ await scenario('a draft can be regenerated explicitly without rewriting approved
 await scenario('Google metadata has a fixed authenticated fallback and still validates each publisher', async ({ api, list, sourceCalls }) => {
   const result = await api('/sync', { method: 'POST' });
   assert.equal(result.body.failedSources.includes('O Jogo'), false);
-  assert.equal(result.body.failedSources.includes('Jornal de Notícias'), false);
-  assert.deepEqual((await list()).map((item) => item.source), ['O Jogo', 'Jornal de Notícias']);
-  assert.equal(sourceCalls.filter((url) => url.startsWith('https://maispredictor.app/')).length, 2);
+  assert.deepEqual((await list()).map((item) => item.source), ['O Jogo']);
+  assert.equal(sourceCalls.filter((url) => url.startsWith('https://maispredictor.app/')).length, 1);
   const filtered = await api('?status=pending&source=O%20Jogo');
   assert.equal(filtered.body.items.length, 1);
   assert.equal(filtered.body.sources.find((item) => item.source === 'O Jogo').count, 1);
@@ -466,8 +464,8 @@ await scenario('Google metadata has a fixed authenticated fallback and still val
   if (url.hostname === 'news.google.com') { assert.equal(request.headers.get('x-hub-news-key'), null); return new Response('', { status: 403 }); }
   if (url.hostname === 'maispredictor.app') {
     assert.equal(request.headers.get('x-hub-news-key'), 'local-test-hub');
-    const ojogo = url.pathname.endsWith('/ojogo');
-    return new Response(rss('FC Porto em destaque - ' + (ojogo ? 'O Jogo' : 'Jornal de Notícias'), 'https://news.google.com/rss/articles/' + (ojogo ? 'ojogo-test' : 'jn-test'), ojogo ? 'www.ojogo.pt' : 'www.jn.pt'), { headers: { 'Content-Type': 'application/rss+xml' } });
+    assert.ok(url.pathname.endsWith('/ojogo'));
+    return new Response(rss('FC Porto em destaque - O Jogo', 'https://news.google.com/rss/articles/ojogo-test', 'www.ojogo.pt'), { headers: { 'Content-Type': 'application/rss+xml' } });
   }
   return emptyFeed();
 } });
@@ -503,5 +501,138 @@ await scenario('a developed adaptation keeps the allegations attributed and pres
   for (const name of ['Inbeom Hwang', 'Heung-min Son', 'Jae-sung Lee', 'Min-jae Kim', 'Hee-chan Hwang']) assert.ok(draft.summaryText.includes(name));
   assert.ok(draft.summaryText.includes('alegada'));
 });
+
+await scenario('48-hour retention removes only expired pending/rejected news and cascades drafts without resetting usage', async ({ add, api, db, list, newsCalls }) => {
+  const oldPending = await add('rtp', 'expired-pending', { publishedAt: new Date(start - 2 * day - minute).toISOString() });
+  const oldRejected = await add('rtp', 'expired-rejected', { publishedAt: new Date(start - 3 * day).toISOString() });
+  await api('', { method: 'PATCH', body: { id: oldRejected.id, revision: oldRejected.revision, status: 'rejected' } });
+  // Legacy SQLite timestamp formatting must have the same age as ISO timestamps.
+  await db.prepare('UPDATE hub_news SET published_at = ? WHERE id = ?')
+    .bind(new Date(start - 3 * day).toISOString().replace('T', ' ').replace('.000Z', ''), oldRejected.id).run();
+  const boundary = await add('rtp', 'exactly-48h', { publishedAt: new Date(start - 2 * day).toISOString() });
+  const recentRejected = await add('rtp', 'recent-rejected', { publishedAt: new Date(start - 2 * day + minute).toISOString() });
+  await api('', { method: 'PATCH', body: { id: recentRejected.id, revision: recentRejected.revision, status: 'rejected' } });
+  const approved = await add('rtp', 'old-approved', { publishedAt: new Date(start - 10 * day).toISOString() });
+  await api('', { method: 'PATCH', body: { id: approved.id, revision: approved.revision, status: 'approved' } });
+  for (const item of [oldPending, oldRejected, approved]) await db.prepare("INSERT INTO hub_news_summaries(news_id,input_hash,state) VALUES(?,'saved','draft')").bind(item.id).run();
+  const usageDay = new Date(start).toISOString().slice(0, 10);
+  await db.prepare('INSERT INTO hub_news_summary_usage(day,requests,input_tokens,output_tokens) VALUES(?,11,100,200)').bind(usageDay).run();
+  const result = await api('/sync', { method: 'POST' });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.removed, 2);
+  assert.deepEqual((await list()).map((item) => item.id), [boundary.id]);
+  assert.deepEqual((await list('rejected')).map((item) => item.id), [recentRejected.id]);
+  assert.deepEqual((await list('approved')).map((item) => item.id), [approved.id]);
+  assert.equal((await api('/article/' + approved.id)).status, 200);
+  assert.deepEqual((await db.prepare('SELECT news_id FROM hub_news_summaries').all()).results.map((item) => item.news_id), [approved.id]);
+  assert.deepEqual(await db.prepare('SELECT requests,input_tokens,output_tokens FROM hub_news_summary_usage WHERE day=?').bind(usageDay).first(), { requests: 11, input_tokens: 100, output_tokens: 200 });
+  assert.equal((await api('/sync', { method: 'POST' })).body.removed, 0, 'Cleanup is idempotent');
+  assert.equal(newsCalls.length, 0);
+});
+
+await scenario('expired feed items cannot reappear after cleanup or on a later sync', async ({ add, api, list, newsCalls }) => {
+  const expired = await add('rtp', 'expired-feed', { publishedAt: new Date(start - 3 * day).toISOString() });
+  const result = await api('/sync', { method: 'POST' });
+  assert.equal(result.body.removed, 1);
+  assert.equal(result.body.added, 1);
+  const current = await list();
+  assert.equal(current.length, 1);
+  assert.notEqual(current[0].url, expired.url);
+  assert.ok(current[0].url.endsWith('/retained-feed'));
+  assert.equal((await api('/sync', { method: 'POST' })).body.added, 0);
+  assert.equal((await list()).length, 1);
+  assert.equal(newsCalls.length, 0);
+}, { newsFeeds: (url) => url.hostname === 'www.rtp.pt'
+  ? new Response('<rss><channel>' + [
+    rss('FC Porto: notícia antiga', 'https://www.rtp.pt/noticias/fc-porto/teste-expired-feed', '', '', start - 3 * day),
+    rss('FC Porto: notícia recente', 'https://www.rtp.pt/noticias/fc-porto/retained-feed', '', '', start - day),
+  ].map((xml) => xml.replace(/^<rss><channel>|<\/channel><\/rss>$/g, '')).join('') + '</channel></rss>', { headers: { 'Content-Type': 'application/rss+xml' } })
+  : emptyFeed() });
+
+await scenario('scheduled cleanup still runs when all publishers are unavailable and generation is disabled', async ({ add, api, list, request, newsCalls }) => {
+  await add('rtp', 'outage-expired', { publishedAt: new Date(start - 3 * day).toISOString() });
+  const approved = await add('rtp', 'outage-approved', { publishedAt: new Date(start - 3 * day).toISOString() });
+  await api('', { method: 'PATCH', body: { id: approved.id, revision: approved.revision, status: 'approved' } });
+  assert.equal((await request('/__rehearsal/news', { method: 'POST' })).status, 200);
+  assert.equal((await list()).length, 0);
+  assert.equal((await list('approved'))[0].id, approved.id);
+  assert.equal(newsCalls.length, 0);
+}, { newsDisabled: true, newsFeeds: () => new Response('', { status: 503 }) });
+
+await scenario('retention waits for an active generation lease and removes the expired story once the lease ends', async ({ add, api, db, list, newsCalls }) => {
+  const item = await add('rtp', 'active-lease', { publishedAt: new Date(start - 3 * day).toISOString() });
+  await db.prepare("INSERT INTO hub_news_summaries(news_id,input_hash,state,lease_until) VALUES(?,'saved','processing',?)")
+    .bind(item.id, start + minute).run();
+  assert.equal((await api('/sync', { method: 'POST' })).body.removed, 0);
+  assert.equal((await list()).length, 1);
+  assert.equal((await api('/sync', { method: 'POST', now: start + 2 * minute })).body.removed, 1);
+  assert.equal((await list()).length, 0);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM hub_news_summaries').first()).count, 0);
+  assert.equal(newsCalls.length, 0);
+});
+
+await scenario('the direct publisher section cannot reimport stories older than the 48-hour window', async ({ api, list, newsCalls }) => {
+  const result = await api('/sync', { method: 'POST' });
+  assert.equal(result.body.added, 0);
+  assert.equal((await list()).length, 0);
+  assert.equal(newsCalls.length, 0);
+}, { newsFeeds: (url) => url.pathname === '/fc-porto' ? htmlResponse(section())
+  : url.pathname === maisPath ? htmlResponse(publicArticle(maisPath, { datePublished: new Date(start - 3 * day).toISOString() })) : emptyFeed() });
+
+await scenario('purged story IDs cannot be reused by a new article or a stale moderation request', async ({ add, api, list }) => {
+  const expired = await add('rtp', 'deleted-last-id', { publishedAt: new Date(start - 3 * day).toISOString() });
+  assert.equal((await api('/sync', { method: 'POST' })).body.removed, 1);
+  const fresh = await add('rtp', 'after-deletion');
+  assert.ok(fresh.id > expired.id);
+  assert.equal((await api('', { method: 'PATCH', body: { id: expired.id, revision: expired.revision, status: 'approved' } })).status, 404);
+  assert.equal((await list())[0].id, fresh.id);
+  assert.equal((await list('approved')).length, 0);
+});
+
+await scenario('O Jogo search results must explicitly identify Porto and JN is no longer fetched', async ({ api, list, sourceCalls, newsCalls }) => {
+  await api('/sync', { method: 'POST' });
+  assert.deepEqual((await list()).map((item) => item.title).sort(), ['FC Porto prepara jogo', 'Portistas em destaque']);
+  assert.equal(sourceCalls.some((value) => value.includes('jn.pt') || value.endsWith('/jn')), false);
+  assert.equal((await api()).body.sources.some((item) => item.source === 'Jornal de Notícias'), false);
+  assert.equal((await api('', { method: 'POST', body: { title: 'FC Porto', url: 'https://www.jn.pt/desporto/noticia', publishedAt: new Date(start).toISOString() } })).status, 400);
+  assert.equal(newsCalls.length, 0);
+}, { newsFeeds: (url) => url.hostname === 'news.google.com'
+  ? new Response('<rss><channel>' + ['Dois homens iranianos culpados de espionagem no Reino Unido', 'Quatro tendências de calças de ganga', 'Estádio do Bessa vendido', 'Porto tem novo hotel', 'FC Porto prepara jogo', 'Portistas em destaque']
+    .map((title, index) => rss(title + ' - O Jogo', 'https://news.google.com/rss/articles/relevance-' + index, 'www.ojogo.pt').replace(/^<rss><channel>|<\/channel><\/rss>$/g, '')).join('') + '</channel></rss>', { headers: { 'Content-Type': 'application/rss+xml' } })
+  : emptyFeed() });
+
+await scenario('cleanup removes imported JN and unrelated O Jogo metadata while preserving approvals and manual context', async ({ db, api, list, newsCalls }) => {
+  const examples = [
+    ['Jornal de Notícias', 'Dois homens iranianos culpados de espionagem', 'pending', 'feed'],
+    ['Jornal de Notícias', 'Uma notícia rejeitada', 'rejected', 'feed'],
+    ['O Jogo', 'Quatro tendências de calças de ganga', 'pending', 'feed'],
+    ['O Jogo', 'Estádio do Bessa vendido', 'rejected', 'feed'],
+    ['O Jogo', 'FC Porto prepara jogo', 'pending', 'feed'],
+    ['O Jogo', 'Um título revisto pelo editor', 'pending', 'manual'],
+    ['Jornal de Notícias', 'Notícia já aprovada', 'approved', 'feed'],
+  ];
+  for (const [index, [source, title, status, kind]] of examples.entries()) await db.prepare('INSERT INTO hub_news(title,url,source,published_at,status,context_kind) VALUES(?,?,?,?,?,?)')
+    .bind(title, 'https://news.google.com/rss/articles/cleanup-' + index, source, new Date(start).toISOString(), status, kind).run();
+  assert.equal((await api('/sync', { method: 'POST' })).body.removed, 4);
+  assert.deepEqual((await list()).map((item) => item.title).sort(), ['FC Porto prepara jogo', 'Um título revisto pelo editor']);
+  assert.equal((await list('rejected')).length, 0);
+  assert.equal((await list('approved'))[0].title, 'Notícia já aprovada');
+  assert.equal(newsCalls.length, 0);
+});
+
+await scenario('bulk imports allocate unique increasing IDs across batches and retain the sequence after all rows expire', async ({ api, db, add }) => {
+  assert.equal((await api('/sync', { method: 'POST' })).body.added, 35);
+  const ids = (await db.prepare('SELECT id FROM hub_news ORDER BY id').all()).results.map((item) => item.id);
+  assert.equal(ids.length, 35);
+  assert.equal(new Set(ids).size, 35);
+  assert.equal((await api('/sync', { method: 'POST' })).body.added, 0);
+  const expired = await api('/sync', { method: 'POST', now: start + 3 * day });
+  assert.equal(expired.body.removed, 35);
+  assert.equal(expired.body.added, 0);
+  assert.ok((await add('rtp', 'after-bulk-expiration')).id > Math.max(...ids));
+}, { newsFeeds: (url) => url.hostname === 'www.rtp.pt'
+  ? new Response('<rss><channel>' + Array.from({ length: 35 }, (_, index) =>
+    rss('FC Porto: notícia ' + index, 'https://www.rtp.pt/noticias/fc-porto/bulk-' + index, '').replace(/^<rss><channel>|<\/channel><\/rss>$/g, '')).join('') + '</channel></rss>', { headers: { 'Content-Type': 'application/rss+xml' } })
+  : emptyFeed() });
 
 console.log('\nNotícias verificadas em D1 descartável, com respostas simuladas da IA e sem pedidos pagos.');

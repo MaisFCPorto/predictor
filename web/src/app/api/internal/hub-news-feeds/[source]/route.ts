@@ -8,9 +8,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ sour
   const internal = !!key && request.headers.get('x-hub-news-key') === key;
   if (!internal && !(await canReadHub(request.headers.get('Authorization')))) return new Response(null, { status: 404, headers: privateHeaders });
   const { source } = await params;
-  if (source !== 'ojogo' && source !== 'jn') return new Response(null, { status: 404, headers: privateHeaders });
-  const publisher = source === 'ojogo' ? 'ojogo.pt' : 'jn.pt';
-  let target = `https://news.google.com/rss/search?q=${encodeURIComponent('FC Porto site:' + publisher + ' when:7d')}&hl=pt-PT&gl=PT&ceid=PT%3Apt-150`;
+  if (source !== 'ojogo') return new Response(null, { status: 404, headers: privateHeaders });
+  let target = `https://news.google.com/rss/search?q=${encodeURIComponent('"FC Porto" site:ojogo.pt when:2d')}&hl=pt-PT&gl=PT&ceid=PT%3Apt-150`;
   try {
     const signal = AbortSignal.timeout(6_000);
     let response: Response | undefined;

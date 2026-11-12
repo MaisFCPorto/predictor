@@ -111,7 +111,7 @@ async function setup(options = {}) {
       const sql = await readFile(new URL(file, root), 'utf8');
       await db.exec(sql.replace(/--[^\n]*/g, '').replace(/\s+/g, ' '));
     }
-    if (options.news) for (const file of ['migrations/017_hub_news.sql', 'migrations/018_hub_news_images.sql', 'migrations/023_hub_news_summaries.sql', 'migrations/024_hub_news_context_kind.sql']) {
+    if (options.news) for (const file of ['migrations/017_hub_news.sql', 'migrations/018_hub_news_images.sql', 'migrations/023_hub_news_summaries.sql', 'migrations/024_hub_news_context_kind.sql', 'migrations/025_hub_news_sequence.sql']) {
       await db.exec((await readFile(new URL(file, root), 'utf8')).replace(/--[^\n]*/g, '').replace(/\s+/g, ' '));
     }
     await db.batch([

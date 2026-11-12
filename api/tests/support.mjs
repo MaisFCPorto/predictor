@@ -50,6 +50,7 @@ function finishedFixture(id) {
 async function setup(options = {}) {
   const calls = [];
   const newsCalls = [];
+  const sourceCalls = [];
   let newsProvider = options.newsAI;
   let provider = options.provider ?? ((id) => finishedFixture(id));
   const worker = new Miniflare({
@@ -78,8 +79,9 @@ async function setup(options = {}) {
         return response instanceof Response ? response : Response.json(response);
       }
       if (options.news && url.origin !== 'https://serpapi.com') {
+        sourceCalls.push(url.href);
         const allowed = ['news.google.com', 'www.rtp.pt', 'www.abola.pt', 'www.record.pt', 'maisfutebol.iol.pt', 'www.zerozero.pt'];
-        assert.ok(allowed.includes(url.hostname), 'No article scraping or other services in news tests');
+        assert.ok(allowed.includes(url.hostname), 'Only configured news publishers are allowed in news tests');
         return options.newsFeeds ? options.newsFeeds(url) : new Response('<rss><channel></channel></rss>', { headers: { 'Content-Type': 'application/rss+xml' } });
       }
       assert.equal(url.origin, 'https://serpapi.com', 'No other outbound service is allowed in the rehearsal');
@@ -126,7 +128,7 @@ async function setup(options = {}) {
       .replace(/--[^\n]*/g, '').replace(/\s+/g, ' '));
   }
   const hubHeaders = { 'x-hub-news-key': 'local-test-hub', 'x-hub-user-id': 'test-admin' };
-  return { worker, db, calls, newsCalls, request, tick, hubHeaders, provider: (fn) => { provider = fn; }, newsProvider: (fn) => { newsProvider = fn; } };
+  return { worker, db, calls, newsCalls, sourceCalls, request, tick, hubHeaders, provider: (fn) => { provider = fn; }, newsProvider: (fn) => { newsProvider = fn; } };
 }
 
 

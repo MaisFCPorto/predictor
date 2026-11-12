@@ -266,4 +266,130 @@ await scenario('older articles are generated only on explicit request and stay i
   assert.equal((await api('/summary-settings')).body.usage.requests, 1);
 });
 
+const maisOrigin = 'https://maisfutebol.iol.pt';
+const maisPath = '/fc-porto/defesas/eleicao-dos-centrais';
+const htmlResponse = (html) => new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+const emptyFeed = () => new Response('<rss><channel></channel></rss>', { headers: { 'Content-Type': 'application/rss+xml' } });
+const section = (paths = [maisPath]) => `<div class="newsList"><ul>${paths.map((path) => `<li><div class="itemListaNoticias"><a href="${path}"><img data-src="https://img.iol.pt/image/id/test/300"></a><div class="newsTitle"><h2><a href="${path}">A eleição dos centrais</a></h2></div></div></li>`).join('')}</ul></div>`;
+const publicArticle = (path = maisPath, metadata = {}, body = context) => `<html><head><script type="application/ld+json">${JSON.stringify({ '@type': 'NewsArticle', mainEntityOfPage: { '@id': maisOrigin + path },
+  headline, datePublished: new Date(start).toISOString(), ...metadata })}</script></head><body><div class="articleBody"><body><p>${body}</p><div hidden><p>SECRET_HIDDEN factos privados 9999</p></div><div style="display: none"><p>SECRET_STYLE</p></div><div class="mcd-hidden-block"><p>SECRET_CSS</p></div><div class="pub-outer-wrapper"><p>ADVERTISING_TEXT</p></div><p><script>UNTRUSTED_SCRIPT</script></p></body></div><aside><p>RELATED_NEWS</p></aside></body></html>`;
+
+await scenario('Maisfutebol section discovers public articles, extracts their text and reuses it for one automatic draft', async ({ api, list, request, newsCalls, sourceCalls }) => {
+  const sync = await api('/sync', { method: 'POST' });
+  assert.equal(sync.status, 200);
+  assert.equal(sync.body.added, 1);
+  assert.equal(sync.body.articlesRead, 1);
+  const item = (await list())[0];
+  assert.equal(item.title, headline, 'The publisher metadata supplies the actual article title');
+  assert.equal(item.imageUrl, 'https://img.iol.pt/image/id/test/300');
+  assert.equal(item.sourceExcerpt, context);
+  await request('/__rehearsal/news', { method: 'POST' });
+  assert.equal((await list())[0].summaryState, 'draft');
+  assert.equal(newsCalls.length, 1);
+  assert.equal(JSON.parse(newsCalls[0].input).context, context);
+  await request('/__rehearsal/news', { method: 'POST' });
+  assert.equal(newsCalls.length, 1);
+  assert.equal(sourceCalls.filter((url) => url === maisOrigin + maisPath).length, 1, 'Stored context avoids another article read');
+}, { newsFeeds: (url) => url.pathname === '/fc-porto' ? htmlResponse(section())
+  : url.pathname === maisPath ? htmlResponse(publicArticle()) : emptyFeed() });
+
+await scenario('the Maisfutebol section remains usable when the RSS feeds are unavailable', async ({ api, list }) => {
+  const result = await api('/sync', { method: 'POST' });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.added, 1);
+  assert.equal(result.body.failedSources.includes('Maisfutebol'), false);
+  assert.equal(result.body.failedSources.length, 6);
+  assert.equal((await list())[0].sourceExcerpt, context);
+}, { newsFeeds: (url) => url.hostname === 'maisfutebol.iol.pt' && url.pathname === '/fc-porto' ? htmlResponse(section())
+  : url.hostname === 'maisfutebol.iol.pt' && url.pathname === maisPath ? htmlResponse(publicArticle()) : new Response('', { status: 503 }) });
+
+await scenario('public article reads fill short RSS context and keep the saved text on the next sync', async ({ add, api, list, sourceCalls, newsCalls }) => {
+  const path = '/noticias/fc-porto/teste-short-rss';
+  await add('mais', 'short-rss', { sourceExcerpt: 'Uma breve informação disponibilizada no RSS.' });
+  await api('/sync', { method: 'POST' });
+  assert.equal((await list())[0].sourceExcerpt, context);
+  await api('/sync', { method: 'POST' });
+  assert.equal(sourceCalls.filter((url) => url === maisOrigin + path).length, 1);
+  assert.equal(newsCalls.length, 0, 'Collecting factual context does not call the model');
+}, { newsFeeds: (url) => url.hostname === 'maisfutebol.iol.pt' && url.pathname === '/rss.xml'
+  ? new Response(rss('FC Porto em destaque', maisOrigin + '/noticias/fc-porto/teste-short-rss', '', 'Uma breve informação disponibilizada no RSS.'), { headers: { 'Content-Type': 'application/rss+xml' } })
+  : url.pathname === '/noticias/fc-porto/teste-short-rss' ? htmlResponse(publicArticle(url.pathname)) : emptyFeed() });
+
+let editingDb;
+await scenario('an editor change during a public article read is never overwritten', async ({ add, api, list, db }) => {
+  const item = await add('mais', 'concurrent', { sourceExcerpt: 'Breve informação inicial.' });
+  editingDb = db;
+  await api('/sync', { method: 'POST' });
+  assert.equal((await list())[0].id, item.id);
+  assert.equal((await list())[0].sourceExcerpt, context + ' Contexto confirmado pelo editor.');
+}, { newsFeeds: async (url) => {
+  if (url.hostname === 'maisfutebol.iol.pt' && url.pathname === '/rss.xml') return new Response(rss('FC Porto em destaque', maisOrigin + '/noticias/fc-porto/teste-concurrent', '', 'Breve informação inicial.'), { headers: { 'Content-Type': 'application/rss+xml' } });
+  if (url.pathname === '/noticias/fc-porto/teste-concurrent') {
+    await editingDb.prepare('UPDATE hub_news SET source_excerpt = ?, revision = revision + 1 WHERE url = ?').bind(context + ' Contexto confirmado pelo editor.', url.href).run();
+    return htmlResponse(publicArticle(url.pathname));
+  }
+  return emptyFeed();
+} });
+
+await scenario('article collection is limited to four reads per sync and does not revisit saved stories', async ({ api, list, sourceCalls }) => {
+  const first = await api('/sync', { method: 'POST' });
+  assert.equal(first.body.articlesRead, 4);
+  assert.equal((await list()).length, 4);
+  const second = await api('/sync', { method: 'POST' });
+  assert.equal(second.body.articlesRead, 3);
+  assert.equal((await list()).length, 7);
+  await api('/sync', { method: 'POST' });
+  assert.equal(sourceCalls.filter((url) => url.startsWith(maisOrigin + '/fc-porto/defesas/')).length, 7);
+}, { newsFeeds: (url) => url.pathname === '/fc-porto' ? htmlResponse(section(Array.from({ length: 7 }, (_, index) => '/fc-porto/defesas/artigo-' + index)))
+  : url.pathname.startsWith('/fc-porto/defesas/') ? htmlResponse(publicArticle(url.pathname)) : emptyFeed() });
+
+await scenario('external links and redirects cannot make the article reader contact another service', async ({ api, list, sourceCalls }) => {
+  await api('/sync', { method: 'POST' });
+  assert.equal((await list()).length, 0);
+  assert.equal(sourceCalls.some((url) => url.startsWith('https://untrusted.example') || url.includes('127.0.0.1')), false);
+}, { newsFeeds: (url) => url.pathname === '/fc-porto' ? htmlResponse(section(['https://untrusted.example/fc-porto/news/1', 'http://127.0.0.1/private/a', maisPath]))
+  : url.pathname === maisPath ? new Response(null, { status: 302, headers: { Location: 'https://untrusted.example/article' } }) : emptyFeed() });
+
+await scenario('restricted articles, unrelated canonical metadata and old or future stories are not imported as factual context', async ({ api, list, newsCalls }) => {
+  await api('/sync', { method: 'POST' });
+  assert.equal((await list()).length, 0);
+  assert.equal(newsCalls.length, 0);
+}, { newsFeeds: (url) => {
+  if (url.pathname === '/fc-porto') return htmlResponse(section(['restricted', 'unrelated', 'old', 'future'].map((name) => '/fc-porto/defesas/' + name)));
+  if (url.pathname.endsWith('/restricted')) return htmlResponse(publicArticle(url.pathname, { isAccessibleForFree: false }));
+  if (url.pathname.endsWith('/unrelated')) return htmlResponse(publicArticle(url.pathname, { mainEntityOfPage: { '@id': maisOrigin + '/outro/artigo/diferente' } }));
+  if (url.pathname.endsWith('/old')) return htmlResponse(publicArticle(url.pathname, { datePublished: new Date(start - 8 * day).toISOString() }));
+  if (url.pathname.endsWith('/future')) return htmlResponse(publicArticle(url.pathname, { datePublished: new Date(start + day).toISOString() }));
+  return emptyFeed();
+} });
+
+await scenario('an unavailable publisher or a title-only public article never triggers a paid summary', async ({ request, list, newsCalls }) => {
+  await request('/__rehearsal/news', { method: 'POST' });
+  assert.equal((await list()).length, 1);
+  assert.equal((await list())[0].sourceExcerpt, null);
+  assert.equal(newsCalls.length, 0);
+}, { newsFeeds: (url) => url.pathname === '/fc-porto' ? htmlResponse(section([maisPath, '/fc-porto/defesas/unavailable']))
+  : url.pathname === maisPath ? htmlResponse(publicArticle(maisPath, {}, ''))
+    : url.pathname.endsWith('/unavailable') ? new Response('', { status: 403 }) : emptyFeed() });
+
+await scenario('unreadable articles back off so they cannot starve the remaining section stories', async ({ api, list, sourceCalls }) => {
+  await api('/sync', { method: 'POST' });
+  assert.equal((await list()).length, 0);
+  await api('/sync', { method: 'POST' });
+  assert.equal((await list()).length, 1);
+  for (let index = 0; index < 4; index++) assert.equal(sourceCalls.filter((url) => url === maisOrigin + '/fc-porto/defesas/blocked-' + index).length, 1);
+}, { newsFeeds: (url) => url.pathname === '/fc-porto' ? htmlResponse(section([...Array.from({ length: 4 }, (_, index) => '/fc-porto/defesas/blocked-' + index), maisPath]))
+  : url.pathname.includes('/blocked-') ? new Response('', { status: 403 })
+    : url.pathname === maisPath ? htmlResponse(publicArticle()) : emptyFeed() });
+
+await scenario('the section headline is collected even when its title does not mention FC Porto', async ({ api, list }) => {
+  await api('/sync', { method: 'POST' });
+  const item = (await list())[0];
+  assert.equal(item.url, maisOrigin + maisPath);
+  assert.equal(item.sourceExcerpt, context);
+  assert.equal(item.imageUrl, 'https://img.iol.pt/image/id/lead/800');
+}, { newsFeeds: (url) => url.pathname === '/fc-porto'
+  ? htmlResponse(`<div class="newsList"><div class="fistTitle"><a href="${maisPath}"><div data-src="https://img.iol.pt/image/id/lead/800"></div><h1>Um destaque dos centrais</h1><h2>Descrição curta</h2></a></div></div>`)
+  : url.pathname === maisPath ? htmlResponse(publicArticle()) : emptyFeed() });
+
 console.log('\nNotícias verificadas em D1 descartável, com respostas simuladas da IA e sem pedidos pagos.');

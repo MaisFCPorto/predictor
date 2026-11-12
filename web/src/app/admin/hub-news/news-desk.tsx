@@ -141,7 +141,8 @@ export default function NewsDesk() {
         const images = result.imagesAdded === 1
           ? ' Imagem encontrada numa notícia já guardada.'
           : result.imagesAdded ? ` Imagens encontradas em ${result.imagesAdded} notícias já guardadas.` : '';
-        setNotice(`Sincronização concluída. ${count} por aprovar.${images}${failures}`);
+        const articles = result.articlesRead ? ` Texto recolhido em ${result.articlesRead} artigo${result.articlesRead === 1 ? '' : 's'} do Maisfutebol.` : '';
+        setNotice(`Sincronização concluída. ${count} por aprovar.${images}${articles}${failures}`);
       }
       reload();
       return true;

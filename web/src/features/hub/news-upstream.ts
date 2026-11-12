@@ -14,6 +14,6 @@ export function fetchHubNews(suffix: string, init?: { method: 'POST' | 'PATCH'; 
     headers,
     cache: 'no-store',
     redirect: 'error',
-    signal: AbortSignal.timeout(suffix === '/summaries' || suffix === '/sync' ? 30_000 : 12_000),
+    signal: AbortSignal.timeout(suffix === '/sync' ? 45_000 : suffix === '/summaries' ? 30_000 : 12_000),
   });
 }

@@ -33,7 +33,7 @@ async function requestNews(query = '', init: RequestInit = {}) {
 }
 
 export default function NewsDesk() {
-  const [query, setQuery] = useState<{ status: HubNewsStatus; page: number }>({ status: 'pending', page: 1 });
+  const [query, setQuery] = useState<{ status: HubNewsStatus; page: number; source: string }>({ status: 'pending', page: 1, source: '' });
   const [list, setList] = useState<ListState>({ phase: 'loading' });
   const [refresh, setRefresh] = useState(0);
   const [action, setAction] = useState<NewsAction['type'] | null>(null);
@@ -53,7 +53,7 @@ export default function NewsDesk() {
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
-    void requestNews(`?status=${query.status}&page=${query.page}`, { signal })
+    void requestNews(`?status=${query.status}&page=${query.page}${query.source ? '&source=' + encodeURIComponent(query.source) : ''}`, { signal })
       .then(async (response) => {
         if (signal.aborted) return;
         if (response.status === 404) {
@@ -78,7 +78,7 @@ export default function NewsDesk() {
   function navigate(status: HubNewsStatus, page: number) {
     setList({ phase: 'loading' });
     setNotice(null);
-    setQuery({ status, page });
+    setQuery((current) => ({ ...current, status, page }));
   }
 
   async function submit(command: NewsAction) {
@@ -109,12 +109,12 @@ export default function NewsDesk() {
       }
       if (command.type === 'summaries') {
         const result: { generated?: number; reason?: string } = await response.json();
-        setNotice(result.generated ? 'Resumo gerado e guardado para revisão.' : summaryMessages[result.reason ?? ''] ?? 'Não foi possível gerar o resumo.');
+        setNotice(result.generated ? 'Notícia adaptada e guardada para revisão.' : summaryMessages[result.reason ?? ''] ?? 'Não foi possível preparar a notícia.');
         reload();
         return response.ok;
       }
       if (response.status === 400 && (command.type === 'summary' || command.type === 'context')) {
-        setNotice(command.type === 'context' ? 'Confirma o contexto: máximo de 6 000 caracteres.' : 'Confirma o título e o resumo: entre 25 e 110 palavras, sem HTML nem links.');
+        setNotice(command.type === 'context' ? 'Confirma o contexto: máximo de 6 000 caracteres.' : 'Confirma a notícia: entre 90 e 350 palavras, em vários parágrafos, sem HTML nem links.');
         return false;
       }
       if (!response.ok) throw new Error('News action failed');
@@ -130,18 +130,21 @@ export default function NewsDesk() {
           : query.status === 'approved' ? 'Notícia retirada do hub.' : 'Notícia rejeitada.');
       } else if (command.type === 'add') {
         const result: HubNewsChanges = await response.json();
-        if (result.added) setQuery({ status: 'pending', page: 1 });
+        if (result.added) setQuery({ status: 'pending', page: 1, source: '' });
         setNotice(result.added ? 'Notícia adicionada aos pendentes.' : 'Imagem adicionada para aprovação.');
       } else {
         const result: HubNewsSync = await response.json();
         const count = result.added === 1 ? '1 notícia nova' : `${result.added} notícias novas`;
         const failures = result.failedSources.length
-          ? ` Fontes indisponíveis: ${result.failedSources.join(', ')}.`
+          ? ` Fontes indisponíveis: ${result.failedSources.map((source) => {
+            const code = result.failedSourceDetails?.find((item) => item.source === source)?.code;
+            return code ? `${source} (${code})` : source;
+          }).join(', ')}.`
           : '';
         const images = result.imagesAdded === 1
           ? ' Imagem encontrada numa notícia já guardada.'
           : result.imagesAdded ? ` Imagens encontradas em ${result.imagesAdded} notícias já guardadas.` : '';
-        const articles = result.articlesRead ? ` Texto recolhido em ${result.articlesRead} artigo${result.articlesRead === 1 ? '' : 's'} do Maisfutebol.` : '';
+        const articles = result.articlesRead ? ` Texto recolhido em ${result.articlesRead} artigo${result.articlesRead === 1 ? '' : 's'} das fontes.` : '';
         setNotice(`Sincronização concluída. ${count} por aprovar.${images}${articles}${failures}`);
       }
       reload();
@@ -190,7 +193,8 @@ export default function NewsDesk() {
   const ready = list.phase === 'ready';
   const disabled = !ready || action !== null;
   const activeTab = tabs.find((tab) => tab.status === query.status);
-  const canGenerate = !!summarySettings?.enabled && summarySettings.keyConfigured && summarySettings.usage.requests < summarySettings.dailyLimit;
+  const formatReady = summarySettings?.articleFormatVersion === 2;
+  const canGenerate = formatReady && !!summarySettings?.enabled && summarySettings.keyConfigured && summarySettings.usage.requests < summarySettings.dailyLimit;
 
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6" aria-busy={list.phase === 'loading' || action !== null}>
@@ -215,17 +219,26 @@ export default function NewsDesk() {
 
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-300/15 bg-sky-400/5 p-4" aria-label="Geração de resumos">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-sky-100">Resumos com revisão editorial</h2>
+          <h2 className="text-sm font-semibold text-sky-100">Notícias adaptadas com revisão editorial</h2>
           <p className="text-xs text-white/65">{summarySettings
-            ? !summarySettings.keyConfigured ? 'Falta configurar a chave OpenAI no Worker.'
+            ? !formatReady ? 'Atualiza o Worker e aplica a migração 24 para ativar as notícias desenvolvidas.'
+              : !summarySettings.keyConfigured ? 'Falta configurar a chave OpenAI no Worker.'
               : !summarySettings.enabled ? 'A geração automática está desligada.'
                 : `${summarySettings.usage.requests} de ${summarySettings.dailyLimit} pedidos de IA hoje (UTC). Modelo: ${summarySettings.model}.`
             : 'As opções de resumos ficam disponíveis depois da atualização do Worker e da BD.'}</p>
-          <p className="text-xs text-white/55">A geração corre após o sync. Títulos sem contexto suficiente mantêm a ligação à fonte. Nada é publicado sem aprovação.</p>
+          <p className="text-xs text-white/55">O artigo é lido antes da adaptação. A notícia preserva o contexto, as menções e os exemplos da fonte, em vários parágrafos. Nada é publicado sem aprovação.</p>
         </div>
         <button type="button" className="rounded-lg border border-sky-300/20 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-white/5 disabled:opacity-40"
-          disabled={disabled || !canGenerate} onClick={() => void submit({ type: 'summaries', payload: {} })}>{action === 'summaries' ? 'A gerar…' : 'Gerar próximo resumo'}</button>
+          disabled={disabled || !canGenerate} onClick={() => void submit({ type: 'summaries', payload: {} })}>{action === 'summaries' ? 'A gerar…' : 'Gerar próxima notícia'}</button>
       </section>
+      <label className="flex flex-wrap items-center gap-3 text-sm text-white/70">Fonte
+        <select aria-label="Filtrar por fonte" value={query.source} disabled={disabled || !ready || !list.result.sources}
+          className="rounded-lg border border-white/15 bg-slate-950 px-3 py-2 text-white"
+          onChange={(event) => { const source = event.target.value; setList({ phase: 'loading' }); setNotice(null); setQuery((current) => ({ ...current, source, page: 1 })); }}>
+          <option value="">Todas as fontes</option>
+          {ready && list.result.sources?.map((item) => <option key={item.source} value={item.source}>{item.source} · {item.count}</option>)}
+        </select>
+      </label>
 
       <details className="rounded-xl border border-white/10 bg-white/[.025] px-4 py-3">
         <summary className="cursor-pointer text-sm font-semibold text-sky-200">Adicionar notícia por ligação</summary>
@@ -305,14 +318,14 @@ export default function NewsDesk() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(article.status !== 'approved' || (article.imageUrl && !article.imageApproved)) && (
+                    {((article.status !== 'approved' && !['Maisfutebol', 'Record', 'A BOLA'].includes(article.source)) || (article.status === 'approved' && article.imageUrl && !article.imageApproved)) && (
                       <button
                         type="button"
                         disabled={disabled}
                         onClick={() => void submit({ type: 'decision', decision: { id: article.id, revision: article.revision, status: 'approved' } })}
                         className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-45"
                       >
-                        {article.status === 'approved' ? 'Aprovar imagem' : 'Aprovar'}
+                        {article.status === 'approved' ? 'Aprovar imagem' : 'Aprovar ligação'}
                       </button>
                     )}
                     {article.status !== 'rejected' && (
@@ -326,7 +339,7 @@ export default function NewsDesk() {
                       </button>
                     )}
                   </div>
-                  <SummaryEditor key={article.id + ':' + article.revision} article={article} disabled={disabled} canGenerate={canGenerate} onSubmit={submit} />
+                  <SummaryEditor key={article.id + ':' + article.revision} article={article} disabled={disabled || !formatReady} canGenerate={canGenerate} onSubmit={submit} />
                 </li>
               ))}
             </ul>

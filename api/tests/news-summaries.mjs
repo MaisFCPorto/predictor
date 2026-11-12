@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { setup, start, day, minute } from './support.mjs';
 
-const context = 'A Liga Portugal anunciou a escolha de Jan Bednarek para o prémio de melhor defesa referente a setembro e outubro. Os treinadores atribuíram ao jogador 27,19 por cento dos votos. Kiwior foi o segundo classificado. Durante o período avaliado, o FC Porto ganhou seis partidas do campeonato, com Bednarek no onze inicial em todas. O central também marcou frente ao Moreirense.';
-const headline = 'Defesa portista ocupa os primeiros lugares na votação da Liga';
-const copy = 'Bednarek recebeu a distinção de melhor defesa numa eleição em que Kiwior ficou na segunda posição. As escolhas foram feitas pelos treinadores da competição. O vencedor esteve no onze inicial em seis partidas do campeonato e contribuiu para as vitórias do FC Porto nesse período.';
+const context = "A Liga Portugal anunciou a escolha de Jan Bednarek para o prémio de melhor defesa referente a setembro e outubro. Os treinadores atribuíram ao jogador 27,19 por cento dos votos. Kiwior foi o segundo classificado. Durante o período avaliado, o FC Porto ganhou seis partidas do campeonato, com Bednarek no onze inicial em todas. O central também marcou frente ao Moreirense. A distinção foi atribuída com base na participação dos treinadores da competição, que escolheram os jogadores destacados neste período. O resultado colocou dois elementos da defesa portista nas primeiras posições da eleição. A organização explicou que a votação incidiu sobre os desempenhos individuais ao longo dos meses em análise, sem alterar os resultados alcançados pelas equipas no campeonato.";
+const headline = "Defesa portista ocupa os primeiros lugares na votação da Liga";
+const copy = "Jan Bednarek foi o jogador escolhido pelos treinadores para receber a distinção de melhor defesa da Liga. Na votação relativa a setembro e outubro, o central recolheu 27,19 por cento das preferências. Kiwior terminou imediatamente atrás, colocando a defesa portista em evidência nesta eleição.\n\nA escolha acompanhou um período de resultados positivos para os dragões. O FC Porto venceu seis encontros do campeonato e Bednarek começou todos como titular. O contributo do defesa também se fez sentir na frente de ataque, onde marcou no encontro com o Moreirense.\n\nO galardão resulta das escolhas feitas pelos técnicos da competição sobre os desempenhos individuais durante o período analisado. Os resultados da votação destacam, assim, dois companheiros da mesma equipa nas posições cimeiras.";
 const complete = (changes = {}) => ({ status: 'completed', usage: { input_tokens: 2000, output_tokens: 300 },
   output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ sufficient: true, headline, summary: copy, ...changes }) }] }] });
 const base = '/api/internal/hub-news';
@@ -53,7 +53,7 @@ await scenario('generate, edit, approve, read and revoke with one paid request a
   assert.equal(newsCalls[0].model, 'gpt-6-luna');
   assert.equal(newsCalls[0].reasoning.effort, 'none');
   assert.equal(newsCalls[0].store, false);
-  assert.equal(newsCalls[0].max_output_tokens, 1000);
+  assert.equal(newsCalls[0].max_output_tokens, 2000);
   assert.equal(newsCalls[0].text.format.strict, true);
   assert.equal(newsCalls[0].tools, undefined, 'No browsing or external actions by the model');
   const approved = (await list('approved'))[0];
@@ -147,6 +147,7 @@ await scenario('refusals, insufficient information, invented numbers and copied 
     [complete({ sufficient: false, headline: '', summary: '' }), 'insufficient'],
     [complete({ summary: copy + ' O jogador marcou 999 golos.' }), 'failed'],
     [complete({ summary: context }), 'failed'],
+    [complete({ summary: context.replace('. ', '.\n\n') }), 'failed'],
     [{ status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'No' }] }] }, 'failed'],
     [{ status: 'incomplete', output: [] }, 'failed'],
     [{ status: 'completed', output: [null] }, 'failed'],
@@ -303,9 +304,10 @@ await scenario('the Maisfutebol section remains usable when the RSS feeds are un
 }, { newsFeeds: (url) => url.hostname === 'maisfutebol.iol.pt' && url.pathname === '/fc-porto' ? htmlResponse(section())
   : url.hostname === 'maisfutebol.iol.pt' && url.pathname === maisPath ? htmlResponse(publicArticle()) : new Response('', { status: 503 }) });
 
-await scenario('public article reads fill short RSS context and keep the saved text on the next sync', async ({ add, api, list, sourceCalls, newsCalls }) => {
+await scenario('public article reads fill short RSS context and keep the saved text on the next sync', async ({ add, db, api, list, sourceCalls, newsCalls }) => {
   const path = '/noticias/fc-porto/teste-short-rss';
   await add('mais', 'short-rss', { sourceExcerpt: 'Uma breve informação disponibilizada no RSS.' });
+  await db.prepare("UPDATE hub_news SET context_kind = 'feed'").run();
   await api('/sync', { method: 'POST' });
   assert.equal((await list())[0].sourceExcerpt, context);
   await api('/sync', { method: 'POST' });
@@ -318,6 +320,7 @@ await scenario('public article reads fill short RSS context and keep the saved t
 let editingDb;
 await scenario('an editor change during a public article read is never overwritten', async ({ add, api, list, db }) => {
   const item = await add('mais', 'concurrent', { sourceExcerpt: 'Breve informação inicial.' });
+  await db.prepare("UPDATE hub_news SET context_kind = 'feed'").run();
   editingDb = db;
   await api('/sync', { method: 'POST' });
   assert.equal((await list())[0].id, item.id);
@@ -391,5 +394,114 @@ await scenario('the section headline is collected even when its title does not m
 }, { newsFeeds: (url) => url.pathname === '/fc-porto'
   ? htmlResponse(`<div class="newsList"><div class="fistTitle"><a href="${maisPath}"><div data-src="https://img.iol.pt/image/id/lead/800"></div><h1>Um destaque dos centrais</h1><h2>Descrição curta</h2></a></div></div>`)
   : url.pathname === maisPath ? htmlResponse(publicArticle()) : emptyFeed() });
+
+const recordPath = '/futebol/fc-porto/detalhe/exemplo-do-comunicado';
+const recordPage = () => `<html><script type="application/ld+json">${JSON.stringify({ '@type': 'NewsArticle', mainEntityOfPage: { '@id': 'https://www.record.pt' + recordPath }, headline, datePublished: new Date(start).toISOString(), isAccessibleForFree: true })}</script><div class="news-content"><p class="news-content__paragraph">${context}</p></div></html>`;
+await scenario('a Record RSS teaser is replaced by the original article before model generation', async ({ api, list, newsCalls }) => {
+  await api('/sync', { method: 'POST' });
+  const item = (await list())[0];
+  assert.equal(item.contextKind, 'article');
+  assert.equal(item.sourceExcerpt, context);
+  await api('/summaries', { method: 'POST', body: { id: item.id } });
+  assert.equal(newsCalls.length, 1);
+  assert.equal(JSON.parse(newsCalls[0].input).context, context);
+  assert.ok(newsCalls[0].instructions.includes('menções'));
+  assert.ok(newsCalls[0].instructions.includes('exemplos'));
+}, { newsFeeds: (url) => url.hostname === 'www.record.pt' && url.pathname === '/rss/'
+  ? new Response(rss('FC Porto: os defesas em destaque', 'https://www.record.pt' + recordPath, '', 'Médio do FC Porto subscreveu comunicado'), { headers: { 'Content-Type': 'application/rss+xml' } })
+  : url.hostname === 'www.record.pt' && url.pathname === recordPath ? htmlResponse(recordPage()) : emptyFeed() });
+
+await scenario('opening an article on demand reads its source before generating and stores the provenance', async ({ api, db, newsCalls }) => {
+  await db.prepare("INSERT INTO hub_news(title,url,source,published_at,source_excerpt,context_kind) VALUES(?,?,?,?,?,'feed')")
+    .bind(headline, 'https://www.record.pt' + recordPath, 'Record', new Date(start).toISOString(), 'Médio do FC Porto subscreveu comunicado').run();
+  const item = (await api()).body.items[0];
+  const result = await api('/summaries', { method: 'POST', body: { id: item.id } });
+  assert.equal(result.body.generated, 1);
+  assert.equal(newsCalls.length, 1);
+  assert.equal((await api()).body.items[0].contextKind, 'article');
+}, { newsFeeds: (url) => url.hostname === 'www.record.pt' && url.pathname === recordPath ? htmlResponse(recordPage()) : emptyFeed() });
+
+await scenario('feed descriptions alone never become article bodies, even when long enough', async ({ db, request, newsCalls }) => {
+  await db.prepare("INSERT INTO hub_news(title,url,source,published_at,source_excerpt,context_kind) VALUES(?,?,?,?,?,'feed')")
+    .bind(headline, 'https://www.rtp.pt/noticias/teste/long-feed', 'RTP Notícias', new Date(start).toISOString(), context).run();
+  await request('/__rehearsal/summaries');
+  assert.equal(newsCalls.length, 0);
+});
+
+await scenario('one-line teasers and single-paragraph responses fail article validation', async ({ add, api, newsProvider, list }) => {
+  const item = await add();
+  for (const body of ['Médio do FC Porto subscreveu comunicado', copy.replace(/\n/g, ' ')]) {
+    newsProvider(() => complete({ summary: body }));
+    const result = await api('/summaries', { method: 'POST', body: { id: item.id } });
+    assert.equal(result.body.generated, 0);
+    assert.equal((await list())[0].summaryState, 'failed');
+  }
+});
+
+await scenario('a draft can be regenerated explicitly without rewriting approved articles or escaping the daily ceiling', async ({ add, api, list, newsCalls }) => {
+  const item = await add();
+  await api('/summaries', { method: 'POST', body: { id: item.id } });
+  let draft = (await list())[0];
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id, regenerate: true, revision: draft.revision - 1 } })).status, 409);
+  await api('/summaries', { method: 'POST', body: { id: item.id, regenerate: true, revision: draft.revision } });
+  assert.equal(newsCalls.length, 2);
+  draft = (await list())[0];
+  await api('/summary', { method: 'PATCH', body: { id: item.id, revision: draft.revision, title: headline, text: copy, decision: 'approved' } });
+  const approved = (await list('approved'))[0];
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id, regenerate: true, revision: approved.revision } })).status, 409);
+  assert.equal(newsCalls.length, 2);
+});
+
+await scenario('Google metadata has a fixed authenticated fallback and still validates each publisher', async ({ api, list, sourceCalls }) => {
+  const result = await api('/sync', { method: 'POST' });
+  assert.equal(result.body.failedSources.includes('O Jogo'), false);
+  assert.equal(result.body.failedSources.includes('Jornal de Notícias'), false);
+  assert.deepEqual((await list()).map((item) => item.source), ['O Jogo', 'Jornal de Notícias']);
+  assert.equal(sourceCalls.filter((url) => url.startsWith('https://maispredictor.app/')).length, 2);
+  const filtered = await api('?status=pending&source=O%20Jogo');
+  assert.equal(filtered.body.items.length, 1);
+  assert.equal(filtered.body.sources.find((item) => item.source === 'O Jogo').count, 1);
+  assert.equal((await api('?source=not-a-source')).status, 400);
+}, { newsProxyOrigin: 'https://maispredictor.app', newsFeeds: (url, request) => {
+  if (url.hostname === 'news.google.com') { assert.equal(request.headers.get('x-hub-news-key'), null); return new Response('', { status: 403 }); }
+  if (url.hostname === 'maispredictor.app') {
+    assert.equal(request.headers.get('x-hub-news-key'), 'local-test-hub');
+    const ojogo = url.pathname.endsWith('/ojogo');
+    return new Response(rss('FC Porto em destaque - ' + (ojogo ? 'O Jogo' : 'Jornal de Notícias'), 'https://news.google.com/rss/articles/' + (ojogo ? 'ojogo-test' : 'jn-test'), ojogo ? 'www.ojogo.pt' : 'www.jn.pt'), { headers: { 'Content-Type': 'application/rss+xml' } });
+  }
+  return emptyFeed();
+} });
+
+await scenario('a configured foreign feed fallback never receives credentials', async ({ api, sourceCalls }) => {
+  const result = await api('/sync', { method: 'POST' });
+  assert.ok(result.body.failedSources.includes('O Jogo'));
+  assert.equal(sourceCalls.some((url) => url.includes('untrusted.example')), false);
+}, { newsProxyOrigin: 'https://untrusted.example', newsFeeds: (url) => url.hostname === 'news.google.com' ? new Response('', { status: 403 }) : emptyFeed() });
+
+await scenario('A BOLA article bodies include named headings and work with self-closing SVG icons', async ({ api, list }) => {
+  await api('/sync', { method: 'POST' });
+  const item = (await list())[0];
+  assert.equal(item.contextKind, 'article');
+  assert.ok(item.sourceExcerpt.includes('Jan Bednarek'));
+  assert.ok(item.sourceExcerpt.includes('Kiwior'));
+}, { newsFeeds: (url) => {
+  const articleUrl = 'https://www.abola.pt/noticias/fc-porto-exemplo';
+  if (url.hostname === 'www.abola.pt' && url.pathname === '/rss-articles.xml') return new Response(rss('FC Porto: a votação', articleUrl, '', 'Descrição curta'), { headers: { 'Content-Type': 'application/rss+xml' } });
+  if (url.href === articleUrl) return htmlResponse(`<html><svg aria-hidden="true"><path d="M0 0"/></svg><script type="application/ld+json">${JSON.stringify({ '@graph': [{ '@type': 'NewsArticle', headline, mainEntityOfPage: { '@id': articleUrl }, datePublished: new Date(start).toISOString(), isAccessibleForFree: 'true' }] })}</script><section id="article_body"><h2>Jan Bednarek e Kiwior</h2><p>${context}</p></section></html>`);
+  return emptyFeed();
+} });
+
+await scenario('a developed adaptation keeps the allegations attributed and preserves the named signatories', async ({ add, api, list, newsProvider }) => {
+  const facts = 'A seleção da Coreia do Sul foi tema de notícias sobre alegados problemas internos. Alguns relatos apontaram que jogadores mais experientes, associados à chamada geração 96, teriam ameaçado abandonar a equipa nacional se certas questões não fossem resolvidas. Os pormenores desses problemas não foram divulgados. Os jogadores envolvidos divulgaram depois uma posição conjunta para esclarecer o assunto e negar a intenção de abandonar a seleção. Assinam Heung-min Son, Jae-sung Lee, Min-jae Kim, Inbeom Hwang e Hee-chan Hwang. Inbeom Hwang joga no FC Porto. Os signatários lamentaram a preocupação criada entre a população e os adeptos. Explicaram que aproveitaram esta convocatória para conversar, ouvir os diferentes pontos de vista e esclarecer temas que ainda não tinham discutido suficientemente. O objetivo partilhado é a evolução do futebol sul-coreano, da federação e da seleção. Querem corresponder ao apoio recebido através de melhores exibições e resultados.';
+  const developed = 'Inbeom Hwang juntou-se a outras referências da Coreia do Sul num esclarecimento público sobre a situação vivida na seleção. Num comunicado conjunto, os internacionais negam ter colocado a possibilidade de abandonar a equipa nacional como forma de pressionar a resolução de problemas internos.\n\nA reação surgiu depois de notícias que associavam jogadores experientes, identificados como a geração 96, a uma alegada ameaça de saída. Os detalhes das questões referidas não foram tornados públicos. A posição dos jogadores é que houve uma discussão destinada a melhorar o funcionamento e o futuro do futebol sul-coreano.\n\nAssinam Heung-min Son, Jae-sung Lee, Min-jae Kim, Inbeom Hwang e Hee-chan Hwang. Os subscritores lamentam a preocupação causada aos adeptos e explicam que a conversa durante a convocatória serviu para ouvir e esclarecer posições. Defendem a evolução da federação e da seleção, com exibições e resultados que correspondam ao apoio do público.';
+  const item = await add('rtp', 'hwang-developed', { title: 'Hwang e colegas esclarecem polémica na seleção', sourceExcerpt: facts });
+  newsProvider(() => complete({ headline: 'Hwang junta-se ao desmentido dos internacionais sul-coreanos', summary: developed }));
+  const result = await api('/summaries', { method: 'POST', body: { id: item.id } });
+  assert.equal(result.body.generated, 1);
+  const draft = (await list())[0];
+  assert.equal(draft.summaryText.split(/\n\s*\n/).length, 3);
+  for (const name of ['Inbeom Hwang', 'Heung-min Son', 'Jae-sung Lee', 'Min-jae Kim', 'Hee-chan Hwang']) assert.ok(draft.summaryText.includes(name));
+  assert.ok(draft.summaryText.includes('alegada'));
+});
 
 console.log('\nNotícias verificadas em D1 descartável, com respostas simuladas da IA e sem pedidos pagos.');

@@ -64,6 +64,7 @@ async function setup(options = {}) {
         HUB_NEWS_SUMMARIES_ENABLED: options.newsDisabled ? 'false' : 'true',
         ...(options.newsMissingKey ? {} : { OPENAI_API_KEY: 'local-test-openai' }),
         HUB_NEWS_SUMMARY_DAILY_LIMIT: String(options.newsDailyLimit ?? 30),
+        ...(options.newsProxyOrigin ? { HUB_NEWS_FEED_ORIGIN: options.newsProxyOrigin } : {}),
       } : {}),
     },
     // Ephemeral, distinct for each run. No remote D1 binding or Cloudflare credentials.
@@ -80,9 +81,9 @@ async function setup(options = {}) {
       }
       if (options.news && url.origin !== 'https://serpapi.com') {
         sourceCalls.push(url.href);
-        const allowed = ['news.google.com', 'www.rtp.pt', 'www.abola.pt', 'www.record.pt', 'maisfutebol.iol.pt', 'www.zerozero.pt'];
+        const allowed = ['news.google.com', 'www.rtp.pt', 'www.abola.pt', 'www.record.pt', 'maisfutebol.iol.pt', 'www.zerozero.pt', 'maispredictor.app'];
         assert.ok(allowed.includes(url.hostname), 'Only configured news publishers are allowed in news tests');
-        return options.newsFeeds ? options.newsFeeds(url) : new Response('<rss><channel></channel></rss>', { headers: { 'Content-Type': 'application/rss+xml' } });
+        return options.newsFeeds ? options.newsFeeds(url, request) : new Response('<rss><channel></channel></rss>', { headers: { 'Content-Type': 'application/rss+xml' } });
       }
       assert.equal(url.origin, 'https://serpapi.com', 'No other outbound service is allowed in the rehearsal');
       assert.equal(url.searchParams.get('api_key'), 'local-test-provider');
@@ -110,7 +111,7 @@ async function setup(options = {}) {
       const sql = await readFile(new URL(file, root), 'utf8');
       await db.exec(sql.replace(/--[^\n]*/g, '').replace(/\s+/g, ' '));
     }
-    if (options.news) for (const file of ['migrations/017_hub_news.sql', 'migrations/018_hub_news_images.sql', 'migrations/023_hub_news_summaries.sql']) {
+    if (options.news) for (const file of ['migrations/017_hub_news.sql', 'migrations/018_hub_news_images.sql', 'migrations/023_hub_news_summaries.sql', 'migrations/024_hub_news_context_kind.sql']) {
       await db.exec((await readFile(new URL(file, root), 'utf8')).replace(/--[^\n]*/g, '').replace(/\s+/g, ' '));
     }
     await db.batch([

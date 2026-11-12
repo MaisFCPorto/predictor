@@ -2,6 +2,7 @@ import { canReadHub } from '@/features/hub/access';
 import { fetchHubNews } from '@/features/hub/news-upstream';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const privateHeaders = { 'Cache-Control': 'private, no-store', Vary: 'Authorization' };
 

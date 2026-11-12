@@ -10,8 +10,9 @@ armazenamento de respostas na OpenAI (`store: false`). Cada pedido tem um máxim
 de 1.000 tokens de saída e usa apenas o título e até 6.000 caracteres de contexto.
 
 O contexto vem da descrição do RSS ou dos factos acrescentados no backoffice.
-Um título isolado não é suficiente. Não se descarregam artigos integrais nem se
-contornam paywalls. Respostas incompletas, recusas, números ausentes do contexto
+Um título isolado não é suficiente. O Maisfutebol também fornece contexto por
+leitura dos parágrafos públicos do artigo. Não se publicam textos integrais nem
+se contornam paywalls. Respostas incompletas, recusas, números ausentes do contexto
 e trechos demasiado próximos da fonte ficam pendentes, sem publicação.
 
 O limite inicial é de 30 pedidos por dia UTC. Conta também pedidos que falhem e
@@ -46,6 +47,18 @@ mesma data. A geração por leitura automática desses artigos continua dependen
 de acesso autorizado ao texto; uma página própria não remove esse impedimento.
 
 O RSS direto do Maisfutebol foi verificado e mantém a descrição como contexto.
+A secção `https://maisfutebol.iol.pt/fc-porto` também é consultada para descobrir
+notícias que não aparecem no RSS geral ou não mencionam o clube no título.
+Em cada sincronização são lidos até quatro artigos públicos, com duas ligações
+em simultâneo. A identidade e a data da notícia são confirmadas nos metadados;
+o texto vem apenas dos parágrafos visíveis do corpo, até 6.000 caracteres.
+Conteúdo restrito, publicidade, elementos ocultos e scripts são excluídos. As
+ligações e os redirecionamentos ficam limitados ao domínio do Maisfutebol.
+O contexto suficiente já guardado é reutilizado e alterações editoriais são
+protegidas pela revisão. Falhas de leitura ficam em espera por seis horas no
+cache da localização Cloudflare, para permitir avançar para os restantes
+artigos. Estas consultas HTTP não consomem pedidos de IA nem SerpApi.
+
 Mantêm-se RTP, A BOLA, Record e zerozero. Dentro do mesmo dia, O Jogo tem
 prioridade, seguido de Jornal de Notícias e Maisfutebol; datas mais recentes
 continuam primeiro. A prioridade também se aplica à fila de geração. Não se

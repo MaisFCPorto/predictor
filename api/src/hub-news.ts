@@ -1,5 +1,6 @@
 import { SaxesParser } from 'saxes';
 import { cleanNewsContext } from './hub-news-summaries';
+import { collectMaisfutebolArticles } from './maisfutebol-articles';
 
 export const HUB_NEWS_CRON = '0 */3 * * *';
 
@@ -20,7 +21,7 @@ const bolaFeed: Feed = {
   imageHosts: ['sportal365images.com', 'www.abola.pt'],
 };
 const feeds: Feed[] = [
-  // Public headline feeds: no article extraction, paywall access or invented context.
+  // O Jogo and JN provide public headlines. Their full articles are not accessible here.
   { source: 'O Jogo', publisherHost: 'www.ojogo.pt', imageHosts: [],
     url: 'https://news.google.com/rss/search?q=FC%20Porto%20site%3Aojogo.pt%20when%3A7d&hl=pt-PT&gl=PT&ceid=PT%3Apt-150' },
   { source: 'Jornal de Notícias', publisherHost: 'www.jn.pt', imageHosts: [],
@@ -290,6 +291,11 @@ export async function syncHubNews(db: D1Database, now = Date.now()) {
     for (const article of result.value) articles.set(article.url, article);
   });
 
+  const direct = await collectMaisfutebolArticles(db, articles, now);
+  if (direct.categoryRead) {
+    const index = failedSources.indexOf('Maisfutebol');
+    if (index >= 0) failedSources.splice(index, 1);
+  }
   if (failedSources.length === feeds.length) throw new Error('All hub RSS feeds failed');
 
   const candidates = [...articles.values()]
@@ -298,6 +304,7 @@ export async function syncHubNews(db: D1Database, now = Date.now()) {
   await addBolaPreviews(db, candidates);
   return {
     found: candidates.length,
+    articlesRead: direct.articlesRead,
     ...await storeHubNews(db, candidates),
     failedSources,
   };

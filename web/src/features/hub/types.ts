@@ -26,7 +26,7 @@ export type HubSummaryArticle = {
 };
 export type HubNewsPage = { items: HubNewsItem[]; hasMore: boolean };
 export type HubNewsChanges = { added: number; imagesAdded: number };
-export type HubNewsSync = HubNewsChanges & { found: number; failedSources: string[] };
+export type HubNewsSync = HubNewsChanges & { found: number; failedSources: string[]; articlesRead?: number };
 
 export type Standing = {
   position: number;

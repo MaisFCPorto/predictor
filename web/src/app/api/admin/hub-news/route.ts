@@ -12,6 +12,21 @@ async function forward(request: Request) {
 
   try {
     const url = new URL(request.url);
+    const action = url.searchParams.get('action');
+    if (action && !['add', 'context', 'summary', 'summaries', 'settings'].includes(action)) {
+      return Response.json({ error: 'invalid_action' }, { status: 400, headers: privateHeaders });
+    }
+    if (action === 'context' || action === 'summary' || action === 'summaries' || action === 'settings') {
+      const method = action === 'settings' ? 'GET' : action === 'summaries' ? 'POST' : 'PATCH';
+      if (request.method !== method) return new Response(null, { status: 405, headers: privateHeaders });
+      const body = method === 'GET' ? undefined : await request.text();
+      if (body && body.length > 16_000) return Response.json({ error: 'invalid_request' }, { status: 400, headers: privateHeaders });
+      const upstream = await fetchHubNews(action === 'settings' ? '/summary-settings' : `/${action}`,
+        method === 'GET' ? undefined : { method, body });
+      if (!upstream.headers.get('content-type')?.includes('application/json')) throw new Error('Hub news Worker request failed');
+      return new Response(upstream.body, { status: upstream.status,
+        headers: { ...privateHeaders, 'Content-Type': 'application/json; charset=utf-8' } });
+    }
     const upstream = request.method === 'POST'
       ? url.searchParams.get('action') === 'add'
         ? await fetchHubNews('', { method: 'POST', body: await request.text() })

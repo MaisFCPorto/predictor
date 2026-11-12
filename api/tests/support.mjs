@@ -49,6 +49,8 @@ function finishedFixture(id) {
 
 async function setup(options = {}) {
   const calls = [];
+  const newsCalls = [];
+  let newsProvider = options.newsAI;
   let provider = options.provider ?? ((id) => finishedFixture(id));
   const worker = new Miniflare({
     modules: true, script: bundled.outputFiles[0].text, compatibilityDate: configuredDate,
@@ -57,11 +59,29 @@ async function setup(options = {}) {
       HUB_NEWS_KEY: 'local-test-hub', SERPAPI_API_KEY: 'local-test-provider',
       FOOTBALL_AUTOMATION_ENABLED: options.disabled ? 'false' : 'true',
       LOCK_MINUTES_BEFORE: String(options.lockMinutes ?? 0),
+      ...(options.news ? {
+        HUB_NEWS_SUMMARIES_ENABLED: options.newsDisabled ? 'false' : 'true',
+        ...(options.newsMissingKey ? {} : { OPENAI_API_KEY: 'local-test-openai' }),
+        HUB_NEWS_SUMMARY_DAILY_LIMIT: String(options.newsDailyLimit ?? 30),
+      } : {}),
     },
     // Ephemeral, distinct for each run. No remote D1 binding or Cloudflare credentials.
     d1Databases: { DB: crypto.randomUUID() },
     outboundService: async (request) => {
       const url = new URL(request.url);
+      if (options.news && url.origin === 'https://api.openai.com') {
+        assert.equal(request.headers.get('Authorization'), 'Bearer local-test-openai');
+        assert.equal(url.pathname, '/v1/responses');
+        const body = await request.json();
+        newsCalls.push(body);
+        const response = await newsProvider(body);
+        return response instanceof Response ? response : Response.json(response);
+      }
+      if (options.news && url.origin !== 'https://serpapi.com') {
+        const allowed = ['news.google.com', 'www.rtp.pt', 'www.abola.pt', 'www.record.pt', 'maisfutebol.iol.pt', 'www.zerozero.pt'];
+        assert.ok(allowed.includes(url.hostname), 'No article scraping or other services in news tests');
+        return options.newsFeeds ? options.newsFeeds(url) : new Response('<rss><channel></channel></rss>', { headers: { 'Content-Type': 'application/rss+xml' } });
+      }
       assert.equal(url.origin, 'https://serpapi.com', 'No other outbound service is allowed in the rehearsal');
       assert.equal(url.searchParams.get('api_key'), 'local-test-provider');
       calls.push(Object.fromEntries(url.searchParams));
@@ -88,6 +108,9 @@ async function setup(options = {}) {
       const sql = await readFile(new URL(file, root), 'utf8');
       await db.exec(sql.replace(/--[^\n]*/g, '').replace(/\s+/g, ' '));
     }
+    if (options.news) for (const file of ['migrations/017_hub_news.sql', 'migrations/018_hub_news_images.sql', 'migrations/023_hub_news_summaries.sql']) {
+      await db.exec((await readFile(new URL(file, root), 'utf8')).replace(/--[^\n]*/g, '').replace(/\s+/g, ' '));
+    }
     await db.batch([
       db.prepare("INSERT INTO seasons (id, name) VALUES ('test-season', 'Ensaio isolado')"),
       db.prepare("INSERT INTO matchdays (id, season_id, name, starts_at, ends_at) VALUES ('test-md', 'test-season', 'Ensaio', '2026-11-01', '2026-12-01')"),
@@ -103,7 +126,7 @@ async function setup(options = {}) {
       .replace(/--[^\n]*/g, '').replace(/\s+/g, ' '));
   }
   const hubHeaders = { 'x-hub-news-key': 'local-test-hub', 'x-hub-user-id': 'test-admin' };
-  return { worker, db, calls, request, tick, hubHeaders, provider: (fn) => { provider = fn; } };
+  return { worker, db, calls, newsCalls, request, tick, hubHeaders, provider: (fn) => { provider = fn; }, newsProvider: (fn) => { newsProvider = fn; } };
 }
 
 

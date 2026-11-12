@@ -4,10 +4,25 @@ export type HubArticle = {
   url: string;
   source: string;
   imageUrl: string | null;
+  summaryId?: number | null;
 };
 
 export type HubNewsStatus = 'pending' | 'approved' | 'rejected';
-export type HubNewsItem = HubArticle & { id: number; status: HubNewsStatus; revision: number; imageApproved: 0 | 1 };
+export type HubSummaryState = 'queued' | 'processing' | 'draft' | 'approved' | 'rejected' | 'failed' | 'insufficient';
+export type HubNewsItem = HubArticle & {
+  id: number; status: HubNewsStatus; revision: number; imageApproved: 0 | 1;
+  sourceExcerpt?: string | null; summaryState?: HubSummaryState | null;
+  summaryTitle?: string | null; summaryText?: string | null; summaryError?: string | null;
+  summaryGeneratedAt?: string | null;
+};
+export type HubSummarySettings = {
+  enabled: boolean; keyConfigured: boolean; model: string; dailyLimit: number;
+  usage: { requests: number; inputTokens: number; outputTokens: number };
+};
+export type HubSummaryArticle = {
+  id: number; title: string; summary: string; originalTitle: string; sourceUrl: string;
+  source: string; publishedAt: string; generatedAt: string | null; imageUrl: string | null;
+};
 export type HubNewsPage = { items: HubNewsItem[]; hasMore: boolean };
 export type HubNewsChanges = { added: number; imagesAdded: number };
 export type HubNewsSync = HubNewsChanges & { found: number; failedSources: string[] };

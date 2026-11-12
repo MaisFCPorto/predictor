@@ -12,6 +12,7 @@
 	},
 	"scripts": {
 		"test:football": "npm --prefix tests test",
+		"test:news": "node tests/news-summaries.mjs",
 		"dev": "wrangler dev",
 		"deploy": "wrangler deploy",
 		"migrate:local": "wrangler d1 migrations apply predictor-db --local",

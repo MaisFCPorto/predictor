@@ -1,0 +1,17 @@
+{
+  "name": "predictor-porto-ojogo-reader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "check": "node cli.mjs",
+    "test": "node --test reader.test.mjs",
+    "test:browser": "node --test browser.test.mjs"
+  },
+  "dependencies": {
+    "@mozilla/readability": "0.6.0",
+    "jsdom": "26.1.0",
+    "playwright": "1.65.0"
+  }
+}

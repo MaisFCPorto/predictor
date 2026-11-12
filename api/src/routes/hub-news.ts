@@ -1,13 +1,15 @@
 import { Hono } from 'hono';
-import { manualHubArticle, storeHubNews, syncHubNews, type HubNewsArticle } from '../hub-news';
+import { manualHubArticle, storeHubNews, syncHubNews, type HubNewsArticle, type NewsFeedEnv } from '../hub-news';
 import { cleanNewsContext, enoughNewsContext, runNewsSummaries, summarySettings, validSummaryCopy, type NewsSummaryEnv } from '../hub-news-summaries';
 import { newsOrder } from '../news-priority';
+import { readPublicNewsArticle } from '../news-article-reader';
 
-type Env = NewsSummaryEnv & { HUB_NEWS_KEY?: string };
+type Env = NewsSummaryEnv & NewsFeedEnv;
 type Status = 'pending' | 'approved' | 'rejected';
 type NewsItem = HubNewsArticle & { id: number; status: Status; revision: number; imageApproved: 0 | 1 };
 
 const PAGE_SIZE = 25;
+const sources = ['O Jogo', 'Jornal de Notícias', 'Maisfutebol', 'A BOLA', 'Record', 'RTP Notícias', 'zerozero', 'FC Porto'];
 const isStatus = (value: unknown): value is Status =>
   value === 'pending' || value === 'approved' || value === 'rejected';
 
@@ -37,21 +39,25 @@ hubNews.get('/published', async (c) => {
 hubNews.get('/', async (c) => {
   const status = c.req.query('status') ?? 'pending';
   const page = Number(c.req.query('page') ?? '1');
-  if (!isStatus(status) || !Number.isInteger(page) || page < 1 || page > 10_000) {
+  const source = c.req.query('source') ?? '';
+  if (!isStatus(status) || !Number.isInteger(page) || page < 1 || page > 10_000 || (source && !sources.includes(source))) {
     return c.json({ error: 'invalid_filter' }, 400);
   }
 
   const { results } = await c.env.DB.prepare(`
     SELECT n.id, title, url, source, published_at AS publishedAt, status, revision,
-           image_url AS imageUrl, image_approved AS imageApproved, source_excerpt AS sourceExcerpt,
+           image_url AS imageUrl, image_approved AS imageApproved, source_excerpt AS sourceExcerpt, context_kind AS contextKind,
            s.state AS summaryState, s.headline AS summaryTitle, s.body AS summaryText,
            s.last_error AS summaryError, s.generated_at AS summaryGeneratedAt
     FROM hub_news n LEFT JOIN hub_news_summaries s ON s.news_id = n.id
-    WHERE status = ?
+    WHERE status = ? AND (? = '' OR source = ?)
     ORDER BY ${newsOrder}
     LIMIT ? OFFSET ?
-  `).bind(status, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE).all<NewsItem>();
-  return c.json({ items: results.slice(0, PAGE_SIZE), hasMore: results.length > PAGE_SIZE });
+  `).bind(status, source, source, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE).all<NewsItem>();
+  const counts = await c.env.DB.prepare('SELECT source, COUNT(*) AS count FROM hub_news WHERE status = ? GROUP BY source')
+    .bind(status).all<{ source: string; count: number }>();
+  return c.json({ items: results.slice(0, PAGE_SIZE), hasMore: results.length > PAGE_SIZE,
+    sources: sources.map((name) => ({ source: name, count: counts.results.find((item) => item.source === name)?.count ?? 0 })) });
 });
 
 hubNews.get('/summary-settings', async (c) => c.json(await summarySettings(c.env)));
@@ -85,7 +91,7 @@ hubNews.patch('/context', async (c) => {
         headline = NULL, body = NULL, response_json = NULL, generated_at = NULL, approved_at = NULL,
         model = NULL, attempts = 0, lease_token = NULL, lease_until = 0, last_error = NULL`)
       .bind(enoughNewsContext(context) ? 'queued' : 'insufficient', token, change.id, change.revision),
-    c.env.DB.prepare(`UPDATE hub_news SET source_excerpt = ?, revision = revision + 1
+    c.env.DB.prepare(`UPDATE hub_news SET source_excerpt = ?, context_kind = 'manual', revision = revision + 1
       WHERE id = ? AND revision = ? AND EXISTS (SELECT 1 FROM hub_news_summaries WHERE news_id = ? AND edit_token = ?)`)
       .bind(context || null, change.id, change.revision, change.id, token),
   ]);
@@ -120,14 +126,35 @@ hubNews.post('/summaries', async (c) => {
   if (c.env.HUB_NEWS_SUMMARIES_ENABLED !== 'true' || !c.env.OPENAI_API_KEY?.trim()) {
     return c.json({ generated: 0, reason: c.env.HUB_NEWS_SUMMARIES_ENABLED === 'true' ? 'missing_key' : 'disabled' }, 503);
   }
-  const body = await c.req.json<{ id?: number }>().catch(() => ({} as { id?: number }));
-  if (!body || typeof body !== 'object' || (body.id !== undefined && (!Number.isSafeInteger(body.id) || body.id < 1))) return c.json({ error: 'invalid_article' }, 400);
+  const body = await c.req.json<{ id?: number; regenerate?: boolean; revision?: number }>().catch(() => ({} as { id?: number; regenerate?: boolean; revision?: number }));
+  if (!body || typeof body !== 'object' || (body.id !== undefined && (!Number.isSafeInteger(body.id) || body.id < 1)) ||
+      (body.regenerate !== undefined && typeof body.regenerate !== 'boolean') ||
+      (body.regenerate && (body.id === undefined || !Number.isSafeInteger(body.revision)))) return c.json({ error: 'invalid_article' }, 400);
   if (body.id !== undefined) {
-    const input = await c.env.DB.prepare(`SELECT n.title, n.source_excerpt AS context, s.state, s.attempts
+    let input = await c.env.DB.prepare(`SELECT n.title, n.url, n.source, n.revision, n.context_kind AS contextKind, n.source_excerpt AS context, s.state, s.attempts
       FROM hub_news n LEFT JOIN hub_news_summaries s ON s.news_id = n.id WHERE n.id = ?`).bind(body.id)
-      .first<{ title: string; context: string | null; state: string | null; attempts: number | null }>();
+      .first<{ title: string; url: string; source: string; revision: number; contextKind: string; context: string | null; state: string | null; attempts: number | null }>();
     if (!input) return c.json({ error: 'missing_article' }, 404);
+    if (body.regenerate && (body.revision !== input.revision || input.state !== 'draft')) return c.json({ error: 'outdated_article' }, 409);
+    if (input.contextKind === 'feed' || !enoughNewsContext(input.context ?? '', input.title)) {
+      if (['Maisfutebol', 'Record', 'A BOLA'].includes(input.source)) {
+        const article = await readPublicNewsArticle(input.url, input.source as 'Maisfutebol' | 'Record' | 'A BOLA', Date.now()).catch(() => null);
+        if (!article || !enoughNewsContext(article.sourceExcerpt ?? '', article.title)) return c.json({ generated: 0, reason: 'source_unavailable' });
+        const update = await c.env.DB.prepare(`UPDATE hub_news SET source_excerpt = ?, context_kind = 'article', revision = revision + 1 WHERE id = ? AND revision = ?`)
+          .bind(article.sourceExcerpt, body.id, input.revision).run();
+        if (update.meta.changes !== 1) return c.json({ error: 'outdated_article' }, 409);
+        input = { ...input, context: article.sourceExcerpt ?? null, contextKind: 'article', revision: input.revision + 1 };
+      } else return c.json({ generated: 0, reason: 'insufficient_context' });
+    }
     if (!enoughNewsContext(input.context ?? '', input.title)) return c.json({ generated: 0, reason: 'insufficient_context' });
+    if (body.regenerate) {
+      const settings = await summarySettings(c.env);
+      if (settings.usage.requests >= settings.dailyLimit) return c.json({ generated: 0, reason: 'daily_limit' });
+      if ((input.attempts ?? 0) >= 3) return c.json({ generated: 0, reason: 'attempt_limit' });
+      await c.env.DB.prepare(`UPDATE hub_news_summaries SET state = 'queued', response_json = NULL, last_error = NULL
+        WHERE news_id = ? AND state = 'draft' AND attempts < 3 AND EXISTS (SELECT 1 FROM hub_news WHERE id = ? AND revision = ?)`)
+        .bind(body.id, body.id, input.revision).run();
+    }
     if (input.state === 'failed' && (input.attempts ?? 0) >= 3) return c.json({ generated: 0, reason: 'attempt_limit' });
     await c.env.DB.prepare(`UPDATE hub_news_summaries SET state = 'queued',
         response_json = CASE WHEN last_error = 'storage_failed' THEN response_json END, last_error = NULL
@@ -179,7 +206,7 @@ hubNews.patch('/', async (c) => {
 
 hubNews.post('/sync', async (c) => {
   try {
-    return c.json(await syncHubNews(c.env.DB));
+    return c.json(await syncHubNews(c.env.DB, Date.now(), c.env));
   } catch (error) {
     console.error('Hub news sync failed', error);
     return c.json({ error: 'sync_failed' }, 502);

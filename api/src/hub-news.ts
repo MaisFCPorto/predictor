@@ -1,8 +1,9 @@
 import { SaxesParser } from 'saxes';
 import { cleanNewsContext } from './hub-news-summaries';
-import { collectMaisfutebolArticles } from './maisfutebol-articles';
+import { collectMaisfutebolArticles, collectLinkedArticles } from './news-article-reader';
 
 export const HUB_NEWS_CRON = '0 */3 * * *';
+export type NewsFeedEnv = { HUB_NEWS_KEY?: string; HUB_NEWS_FEED_ORIGIN?: string };
 
 type Feed = { source: string; url: string; imageHosts: readonly string[]; publisherHost?: string };
 type Item = Partial<Record<'title' | 'link' | 'pubDate' | 'description' | 'image' | 'publisher', string>>;
@@ -13,6 +14,7 @@ export type HubNewsArticle = {
   publishedAt: string;
   imageUrl: string | null;
   sourceExcerpt?: string | null;
+  contextKind?: 'legacy' | 'feed' | 'article' | 'manual';
 };
 
 const bolaFeed: Feed = {
@@ -142,6 +144,7 @@ export function manualHubArticle(input: unknown): HubNewsArticle | null {
     publishedAt: new Date(timestamp).toISOString(),
     imageUrl: imageUrl?.href ?? null,
     sourceExcerpt: cleanNewsContext(sourceExcerpt) || null,
+    contextKind: sourceExcerpt ? 'manual' : 'feed',
   };
 }
 
@@ -172,17 +175,49 @@ function articleFromItem(item: Item, feed: Feed, now: number): HubNewsArticle | 
     publishedAt: new Date(published).toISOString(),
     imageUrl,
     sourceExcerpt: feed.publisherHost ? null : cleanNewsContext(item.description) || null,
+    contextKind: 'feed',
   };
 }
 
-async function readFeed(feed: Feed, now: number) {
-  const response = await fetch(feed.url, {
-    headers: { Accept: 'application/rss+xml, application/xml, text/xml' },
-    redirect: 'manual',
-    signal: AbortSignal.timeout(7_000),
-  });
-  if (!response.ok) throw new Error(`RSS HTTP ${response.status}`);
+async function readFeed(feed: Feed, now: number, env?: NewsFeedEnv) {
+  let target = feed.url;
+  let response: Response | undefined;
+  const signal = AbortSignal.timeout(7_000);
+  try { for (let hop = 0; hop < 3; hop++) {
+    response = await fetch(target, { headers: { Accept: 'application/rss+xml, application/xml, text/xml', 'User-Agent': 'PredictorPorto-News/1.0' }, redirect: 'manual', signal });
+    if (![301, 302, 303, 307, 308].includes(response.status)) break;
+    const location = response.headers.get('Location');
+    const next = location ? parseHttpsUrl(location, target) : null;
+    await response.body?.cancel();
+    if (!next || next.origin !== new URL(feed.url).origin || hop === 2) throw new Error('RSS_REDIRECT_BLOCKED');
+    target = next.href;
+  }
+  if (!response?.ok) throw new Error(`RSS_HTTP_${response?.status ?? 0}`);
+  } catch (error) {
+    // The site's server is a second client of the same public metadata feed.
+    // This credential is sent only to our own fixed origin, never to Google or publishers.
+    if (!feed.publisherHost || env?.HUB_NEWS_FEED_ORIGIN !== 'https://maispredictor.app' || !env.HUB_NEWS_KEY?.trim()) throw error;
+    const source = feed.source === 'O Jogo' ? 'ojogo' : 'jn';
+    response = await fetch(`https://maispredictor.app/api/internal/hub-news-feeds/${source}`, {
+      headers: { 'x-hub-news-key': env.HUB_NEWS_KEY.trim(), Accept: 'application/rss+xml' }, redirect: 'manual', signal: AbortSignal.timeout(7_000),
+    });
+    if (!response.ok) throw new Error(`RSS_HTTP_${response.status}`);
+    target = 'https://maispredictor.app/';
+  }
 
+  try { return await parseFeedResponse(response, feed, now); }
+  catch (error) {
+    if (!feed.publisherHost || env?.HUB_NEWS_FEED_ORIGIN !== 'https://maispredictor.app' || !env.HUB_NEWS_KEY?.trim() || target.startsWith('https://maispredictor.app/')) throw error;
+    const source = feed.source === 'O Jogo' ? 'ojogo' : 'jn';
+    const fallback = await fetch(`https://maispredictor.app/api/internal/hub-news-feeds/${source}`, {
+      headers: { 'x-hub-news-key': env.HUB_NEWS_KEY.trim(), Accept: 'application/rss+xml' }, redirect: 'manual', signal: AbortSignal.timeout(7_000),
+    });
+    if (!fallback.ok) throw new Error(`RSS_HTTP_${fallback.status}`);
+    return parseFeedResponse(fallback, feed, now);
+  }
+}
+
+async function parseFeedResponse(response: Response, feed: Feed, now: number) {
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (bytes.length > 1_000_000) throw new Error('RSS response too large');
   const declaration = new TextDecoder().decode(bytes.subarray(0, 256));
@@ -253,16 +288,16 @@ async function addBolaPreviews(db: D1Database, articles: HubNewsArticle[]) {
 
 export async function storeHubNews(db: D1Database, articles: HubNewsArticle[]) {
   const statements: D1PreparedStatement[] = [];
-  for (let offset = 0; offset < articles.length; offset += 18) {
-    const batch = articles.slice(offset, offset + 18);
-    const values = batch.map(() => '(?, ?, ?, ?, ?)').join(', ');
+  for (let offset = 0; offset < articles.length; offset += 16) {
+    const batch = articles.slice(offset, offset + 16);
+    const values = batch.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
     statements.push(db.prepare(`
-      INSERT INTO hub_news (title, url, source, published_at, image_url)
+      INSERT INTO hub_news (title, url, source, published_at, image_url, context_kind)
       VALUES ${values}
       ON CONFLICT(url) DO UPDATE SET image_url = excluded.image_url, revision = hub_news.revision + 1
       WHERE hub_news.image_url IS NULL AND excluded.image_url IS NOT NULL
       RETURNING revision
-    `).bind(...batch.flatMap(({ title, url, source, publishedAt, imageUrl }) => [title, url, source, publishedAt, imageUrl])));
+    `).bind(...batch.flatMap(({ title, url, source, publishedAt, imageUrl, contextKind }) => [title, url, source, publishedAt, imageUrl, contextKind ?? 'feed'])));
   }
 
   const results = statements.length ? await db.batch<{ revision: number }>(statements) : [];
@@ -277,21 +312,28 @@ export async function storeHubNews(db: D1Database, articles: HubNewsArticle[]) {
   return { added, imagesAdded: changes.length - added };
 }
 
-export async function syncHubNews(db: D1Database, now = Date.now()) {
-  const responses = await Promise.allSettled(feeds.map((feed) => readFeed(feed, now)));
+export async function syncHubNews(db: D1Database, now = Date.now(), env?: NewsFeedEnv) {
+  const responses = await Promise.allSettled(feeds.map((feed) => readFeed(feed, now, env)));
   const articles = new Map<string, HubNewsArticle>();
   const failedSources: string[] = [];
+  const failedSourceDetails: { source: string; code: string }[] = [];
 
   responses.forEach((result, index) => {
     if (result.status === 'rejected') {
       failedSources.push(feeds[index].source);
+      const message = result.reason instanceof Error ? result.reason.message : '';
+      failedSourceDetails.push({ source: feeds[index].source, code: /^RSS_(?:HTTP_\d{3}|REDIRECT_BLOCKED)$/.test(message) ? message : 'RSS_UNAVAILABLE' });
       console.warn('Hub RSS feed failed', feeds[index].source, result.reason);
       return;
     }
     for (const article of result.value) articles.set(article.url, article);
   });
 
-  const direct = await collectMaisfutebolArticles(db, articles, now);
+  const [direct, record, bola] = await Promise.all([
+    collectMaisfutebolArticles(db, articles, now),
+    collectLinkedArticles(db, articles, now, 'Record'),
+    collectLinkedArticles(db, articles, now, 'A BOLA'),
+  ]);
   if (direct.categoryRead) {
     const index = failedSources.indexOf('Maisfutebol');
     if (index >= 0) failedSources.splice(index, 1);
@@ -304,8 +346,9 @@ export async function syncHubNews(db: D1Database, now = Date.now()) {
   await addBolaPreviews(db, candidates);
   return {
     found: candidates.length,
-    articlesRead: direct.articlesRead,
+    articlesRead: direct.articlesRead + record.articlesRead + bola.articlesRead,
     ...await storeHubNews(db, candidates),
     failedSources,
+    failedSourceDetails: failedSourceDetails.filter((item) => failedSources.includes(item.source)),
   };
 }

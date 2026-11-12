@@ -4,16 +4,16 @@ import { cleanNewsContext, enoughNewsContext } from './hub-news-summaries';
 const origin = 'https://maisfutebol.iol.pt';
 const sectionUrl = origin + '/fc-porto';
 const maxArticles = 4;
-const maxBytes = 512_000;
+const maxBytes = 1_200_000;
 type Candidate = { url: string; title: string; imageUrl: string | null };
-type Stored = { url: string; sourceExcerpt: string | null; revision: number };
+type Stored = { url: string; sourceExcerpt: string | null; revision: number; contextKind: string };
 
-function publicUrl(value: unknown, article = true) {
+function publicUrl(value: unknown, article = true, publisherOrigin = origin) {
   if (typeof value !== 'string' || value.length > 2048) return null;
   try {
-    const url = new URL(value, origin);
-    if (url.origin !== origin || url.username || url.password || url.port ||
-        (article && (url.pathname.split('/').filter(Boolean).length < 3 || /\.(?:xml|json|js|css|pdf|png|jpe?g|mp4)$/i.test(url.pathname)))) return null;
+    const url = new URL(value, publisherOrigin);
+    if (url.origin !== publisherOrigin || url.username || url.password || url.port ||
+        (article && (url.pathname.split('/').filter(Boolean).length < (publisherOrigin === 'https://www.abola.pt' ? 2 : 3) || /\.(?:xml|json|js|css|pdf|png|jpe?g|mp4)$/i.test(url.pathname)))) return null;
     url.hash = '';
     url.pathname = url.pathname.replace(/\/+$/, '') || '/';
     for (const parameter of [...url.searchParams.keys()]) {
@@ -24,16 +24,16 @@ function publicUrl(value: unknown, article = true) {
   } catch { return null; }
 }
 
-function imageUrl(value: unknown) {
+function imageUrl(value: unknown, hosts = ['img.iol.pt']) {
   if (typeof value !== 'string' || value.length > 2048) return null;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.hostname === 'img.iol.pt' && !url.username && !url.password && !url.port ? url.href : null;
+    return url.protocol === 'https:' && hosts.includes(url.hostname) && !url.username && !url.password && !url.port ? url.href : null;
   } catch { return null; }
 }
 
 // Fixed publisher only. No cookies, authentication, browser scripts or external redirects.
-async function readHtml(input: string) {
+async function readHtml(input: string, publisherOrigin = origin) {
   let url = input;
   const signal = AbortSignal.timeout(4_000);
   for (let hop = 0; hop < 3; hop++) {
@@ -41,7 +41,7 @@ async function readHtml(input: string) {
       headers: { Accept: 'text/html', 'User-Agent': 'PredictorPorto-News/1.0' } });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('Location');
-      const next = location ? publicUrl(new URL(location, url).href, false) : null;
+      const next = location ? publicUrl(new URL(location, url).href, false, publisherOrigin) : null;
       await response.body?.cancel();
       if (!next || hop === 2) throw new Error('unavailable');
       url = next;
@@ -104,8 +104,11 @@ async function listing(html: string) {
   return [...new Map(items.map((item) => [item.url, item])).values()].slice(0, 12);
 }
 
-async function article(input: string, now: number): Promise<HubNewsArticle | null> {
-  const { html, url } = await readHtml(input);
+export async function readPublicNewsArticle(input: string, source: 'Maisfutebol' | 'Record' | 'A BOLA', now: number): Promise<HubNewsArticle | null> {
+  const publisherOrigin = source === 'Record' ? 'https://www.record.pt' : source === 'A BOLA' ? 'https://www.abola.pt' : origin;
+  const canonical = publicUrl(input, true, publisherOrigin);
+  if (!canonical) return null;
+  const { html, url } = await readHtml(canonical, publisherOrigin);
   const scripts: string[] = [];
   const paragraphs: { text: string }[] = [];
   let script: { text: string } | null = null, paragraph: { text: string } | null = null;
@@ -113,9 +116,11 @@ async function article(input: string, now: number): Promise<HubNewsArticle | nul
   const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
   const parser = new HTMLRewriter()
     .on('*', { element(element) {
-      if (voidTags.has(element.tagName)) return;
+      if (element.namespaceURI !== 'http://www.w3.org/1999/xhtml') return;
+      if (voidTags.has(element.tagName)) { if (element.tagName === 'br' && paragraph) paragraph.text += ' '; return; }
       const classes = (element.getAttribute('class') ?? '').split(/\s+/);
-      const body = classes.includes('articleBody');
+      const body = source === 'Record' ? classes.includes('news-content') : source === 'A BOLA'
+        ? element.getAttribute('id') === 'article_body' : classes.includes('articleBody');
       if (body) articleDepth++;
       const hidden = element.getAttribute('hidden') !== null || element.getAttribute('aria-hidden') === 'true' ||
         /display\s*:\s*none|visibility\s*:\s*hidden/i.test(element.getAttribute('style') ?? '') ||
@@ -124,8 +129,9 @@ async function article(input: string, now: number): Promise<HubNewsArticle | nul
       if (hidden) blocked++;
       const data = element.tagName === 'script' && element.getAttribute('type') === 'application/ld+json' ? { text: '' } : null;
       if (data) script = data;
-      const copy = element.tagName === 'p' && articleDepth > 0 && !blocked ? { text: '' } : null;
+      const copy = ['p', 'h2', 'h3', 'li', 'blockquote'].includes(element.tagName) && articleDepth > 0 && !blocked && !paragraph ? { text: '' } : null;
       if (copy) { paragraph = copy; paragraphs.push(copy); }
+      if (!hidden && !body && !data && !copy) return;
       // One end handler per element: HTMLRewriter replaces a previously registered handler.
       element.onEndTag(() => {
         if (hidden) blocked--;
@@ -138,7 +144,7 @@ async function article(input: string, now: number): Promise<HubNewsArticle | nul
     .on('script[type="application/ld+json"]', {
       text(chunk) { if (script && script.text.length <= 100_000) script.text += chunk.text; },
     })
-    .on('p', {
+    .onDocument({
       text(chunk) { if (articleDepth > 0 && !blocked && paragraph && paragraph.text.length < 12_000) paragraph.text += chunk.text; },
     });
   await parser.transform(new Response(html)).text();
@@ -151,15 +157,16 @@ async function article(input: string, now: number): Promise<HubNewsArticle | nul
     } catch { /* An invalid metadata block is never source text. */ }
   }
   const metadata = objects.find((item) => item && (Array.isArray(item['@type']) ? item['@type'].includes('NewsArticle') : item['@type'] === 'NewsArticle') &&
-    publicUrl(typeof item.mainEntityOfPage === 'string' ? item.mainEntityOfPage : item.mainEntityOfPage?.['@id'] ?? item.url) === url);
+    publicUrl(typeof item.mainEntityOfPage === 'string' ? item.mainEntityOfPage : item.mainEntityOfPage?.['@id'] ?? item.url, true, publisherOrigin) === url);
   if (!metadata || metadata.isAccessibleForFree === false || String(metadata.isAccessibleForFree).toLowerCase() === 'false') return null;
   const title = cleanNewsContext(metadata.headline);
   const published = Date.parse(metadata.datePublished);
   if (!title || title.length > 400 || !Number.isFinite(published) || published < now - 7 * 86_400_000 || published > now + 3_600_000) return null;
   const image = Array.isArray(metadata.image) ? metadata.image[0] : metadata.image;
-  return { title, url, source: 'Maisfutebol', publishedAt: new Date(published).toISOString(),
-    imageUrl: imageUrl(typeof image === 'string' ? image : image?.url),
-    sourceExcerpt: cleanNewsContext(paragraphs.map((item) => item.text).join(' ')) || null };
+  return { title, url, source, publishedAt: new Date(published).toISOString(),
+    imageUrl: imageUrl(typeof image === 'string' ? image : image?.url, source === 'Record' ? ['cdn.record.pt'] : source === 'A BOLA' ? ['sportal365images.com', 'www.abola.pt'] : ['img.iol.pt']),
+    sourceExcerpt: cleanNewsContext(paragraphs.map((item) => item.text).join(' ')) || null,
+    contextKind: 'article' };
 }
 
 export async function collectMaisfutebolArticles(db: D1Database, articles: Map<string, HubNewsArticle>, now: number) {
@@ -170,11 +177,17 @@ export async function collectMaisfutebolArticles(db: D1Database, articles: Map<s
     candidates = await listing(page.html);
     categoryRead = candidates.length > 0;
   } catch { /* The direct RSS remains usable when the section is unavailable. */ }
-  const rssItems = [...articles.values()].filter((item) => item.source === 'Maisfutebol');
-  candidates.push(...rssItems.filter((item) => !enoughNewsContext(item.sourceExcerpt ?? '', item.title)));
-  candidates = [...new Map(candidates.map((item) => [item.url, item])).values()].filter((item) => publicUrl(item.url));
-  if (!candidates.length) return { categoryRead, articlesRead: 0 };
-  const { results } = await db.prepare(`SELECT url, source_excerpt AS sourceExcerpt, revision FROM hub_news
+  return { categoryRead, ...await collectLinkedArticles(db, articles, now, 'Maisfutebol', candidates) };
+}
+
+export async function collectLinkedArticles(db: D1Database, articles: Map<string, HubNewsArticle>, now: number,
+  source: 'Maisfutebol' | 'Record' | 'A BOLA', candidates: Candidate[] = []) {
+  const publisherOrigin = source === 'Record' ? 'https://www.record.pt' : source === 'A BOLA' ? 'https://www.abola.pt' : origin;
+  const rssItems = [...articles.values()].filter((item) => item.source === source);
+  candidates.push(...rssItems);
+  candidates = [...new Map(candidates.map((item) => [item.url, item])).values()].filter((item) => publicUrl(item.url, true, publisherOrigin));
+  if (!candidates.length) return { articlesRead: 0 };
+  const { results } = await db.prepare(`SELECT url, source_excerpt AS sourceExcerpt, revision, context_kind AS contextKind FROM hub_news
     WHERE url IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(candidates.map((item) => item.url))).all<Stored>();
   const known = new Map(results.map((item) => [item.url, item]));
   let cache: Cache | null = null;
@@ -183,7 +196,8 @@ export async function collectMaisfutebolArticles(db: D1Database, articles: Map<s
   for (const item of candidates) {
     const stored = known.get(item.url);
     const incoming = articles.get(item.url);
-    if (enoughNewsContext(stored?.sourceExcerpt ?? incoming?.sourceExcerpt ?? '', incoming?.title ?? item.title)) continue;
+    if (stored?.contextKind === 'manual' || (stored?.contextKind !== 'feed' && enoughNewsContext(stored?.sourceExcerpt ?? '', incoming?.title ?? item.title))) continue;
+    if (!stored && incoming?.contextKind === 'article') continue;
     if (stored && (stored.sourceExcerpt ?? '') !== (incoming?.sourceExcerpt ?? '')) continue;
     try {
       const response = await cache?.match(item.url);
@@ -200,7 +214,7 @@ export async function collectMaisfutebolArticles(db: D1Database, articles: Map<s
   let articlesRead = 0;
   // Two connections at a time; four article reads at most in each news run.
   for (let offset = 0; offset < due.length; offset += 2) {
-    const responses = await Promise.allSettled(due.slice(offset, offset + 2).map((item) => article(item.url, now)));
+    const responses = await Promise.allSettled(due.slice(offset, offset + 2).map((item) => readPublicNewsArticle(item.url, source, now)));
     for (let index = 0; index < responses.length; index++) {
       const response = responses[index];
       const candidate = due[offset + index];
@@ -211,7 +225,7 @@ export async function collectMaisfutebolArticles(db: D1Database, articles: Map<s
       value.imageUrl ??= candidate.imageUrl;
       const stored = known.get(candidate.url);
       if (stored && enoughNewsContext(value.sourceExcerpt ?? '', value.title)) {
-        await db.prepare(`UPDATE hub_news SET source_excerpt = ?, revision = revision + 1
+        await db.prepare(`UPDATE hub_news SET source_excerpt = ?, context_kind = 'article', revision = revision + 1
           WHERE url = ? AND revision = ? AND COALESCE(source_excerpt, '') = ?`)
           .bind(value.sourceExcerpt, stored.url, stored.revision, stored.sourceExcerpt ?? '').run();
       }
@@ -219,5 +233,5 @@ export async function collectMaisfutebolArticles(db: D1Database, articles: Map<s
       articlesRead++;
     }
   }
-  return { categoryRead, articlesRead };
+  return { articlesRead };
 }

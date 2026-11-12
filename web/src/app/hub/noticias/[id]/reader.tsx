@@ -53,7 +53,7 @@ export default function NewsReader({ id }: { id: number }) {
         <NewsImage src={state.article.imageUrl} size="lead" className="relative aspect-[16/9] w-full overflow-hidden bg-white/5 [&_img]:object-cover" />
         <div className="space-y-6 p-5 sm:p-8">
           <header className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-sky-200">{state.article.summary ? 'Síntese +FCPorto' : 'Atualidade +FCPorto'}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-sky-200">{state.article.summary ? 'Notícia +FCPorto' : 'Atualidade +FCPorto'}</p>
             <h1 className="break-words text-2xl font-bold leading-tight tracking-tight sm:text-4xl">{state.article.title}</h1>
             <p className="text-sm text-white/60">Fonte: {state.article.source} · <time dateTime={state.article.publishedAt}>{formatHubNewsDate(state.article.publishedAt)}</time></p>
           </header>
@@ -63,7 +63,7 @@ export default function NewsReader({ id }: { id: number }) {
               : <p className="text-sm text-white/65">Ainda não há um resumo editorial disponível para esta notícia. Podes consultar a publicação original na fonte indicada abaixo.</p>}
           </div>
           <footer className="space-y-4 border-t border-white/10 pt-5">
-            {state.article.summary && <p className="text-xs leading-relaxed text-white/55">Resumo com apoio de IA e revisão editorial do +FCPorto, com base na publicação de {state.article.source}.</p>}
+            {state.article.summary && <p className="text-xs leading-relaxed text-white/55">Texto adaptado com apoio de IA e revisão editorial do +FCPorto, com base na publicação de {state.article.source}.</p>}
             <a href={state.article.sourceUrl} target="_blank" rel="noopener noreferrer"
               className="inline-flex rounded-xl border border-sky-300/25 bg-sky-400/10 px-4 py-3 text-sm font-semibold text-sky-100 hover:bg-sky-400/20">
               Ler publicação original ↗

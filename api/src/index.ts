@@ -1317,7 +1317,7 @@ export default {
   async scheduled(controller: ScheduledController, env: Env) {
     if (controller.cron === HUB_NEWS_CRON) {
       try {
-        const result = await syncHubNews(env.DB, controller.scheduledTime);
+        const result = await syncHubNews(env.DB, controller.scheduledTime, env);
         console.info('Hub news sync', result);
       } catch {
         console.warn('Hub news sources unavailable');

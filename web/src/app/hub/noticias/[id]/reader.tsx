@@ -44,7 +44,7 @@ export default function NewsReader({ id }: { id: number }) {
         <Link href="/auth" className="inline-block rounded-xl bg-blue-600 px-4 py-2 font-semibold">Entrar</Link>
       </div>}
       {(state.phase === 'missing' || state.phase === 'failed') && <div className="mt-8 space-y-3" role="status">
-        <h1 className="text-2xl font-bold">Resumo indisponível</h1>
+        <h1 className="text-2xl font-bold">Notícia indisponível</h1>
         <p className="text-sm text-white/65">{state.phase === 'missing'
           ? 'Esta notícia pode estar em revisão ou já não estar disponível.'
           : 'Não foi possível carregar a notícia. Tenta novamente dentro de momentos.'}</p>
@@ -53,15 +53,17 @@ export default function NewsReader({ id }: { id: number }) {
         <NewsImage src={state.article.imageUrl} size="lead" className="relative aspect-[16/9] w-full overflow-hidden bg-white/5 [&_img]:object-cover" />
         <div className="space-y-6 p-5 sm:p-8">
           <header className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-sky-200">Síntese +FCPorto</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-sky-200">{state.article.summary ? 'Síntese +FCPorto' : 'Atualidade +FCPorto'}</p>
             <h1 className="break-words text-2xl font-bold leading-tight tracking-tight sm:text-4xl">{state.article.title}</h1>
             <p className="text-sm text-white/60">Fonte: {state.article.source} · <time dateTime={state.article.publishedAt}>{formatHubNewsDate(state.article.publishedAt)}</time></p>
           </header>
           <div className="space-y-4 text-base leading-relaxed text-white/90 sm:text-lg">
-            {state.article.summary.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+            {state.article.summary
+              ? state.article.summary.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)
+              : <p className="text-sm text-white/65">Ainda não há um resumo editorial disponível para esta notícia. Podes consultar a publicação original na fonte indicada abaixo.</p>}
           </div>
           <footer className="space-y-4 border-t border-white/10 pt-5">
-            <p className="text-xs leading-relaxed text-white/55">Resumo com apoio de IA e revisão editorial do +FCPorto, com base na publicação de {state.article.source}.</p>
+            {state.article.summary && <p className="text-xs leading-relaxed text-white/55">Resumo com apoio de IA e revisão editorial do +FCPorto, com base na publicação de {state.article.source}.</p>}
             <a href={state.article.sourceUrl} target="_blank" rel="noopener noreferrer"
               className="inline-flex rounded-xl border border-sky-300/25 bg-sky-400/10 px-4 py-3 text-sm font-semibold text-sky-100 hover:bg-sky-400/20">
               Ler publicação original ↗

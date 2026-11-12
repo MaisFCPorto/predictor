@@ -4,6 +4,7 @@ export type HubArticle = {
   url: string;
   source: string;
   imageUrl: string | null;
+  articleId?: number | null;
   summaryId?: number | null;
 };
 
@@ -20,7 +21,7 @@ export type HubSummarySettings = {
   usage: { requests: number; inputTokens: number; outputTokens: number };
 };
 export type HubSummaryArticle = {
-  id: number; title: string; summary: string; originalTitle: string; sourceUrl: string;
+  id: number; title: string; summary: string | null; originalTitle: string; sourceUrl: string;
   source: string; publishedAt: string; generatedAt: string | null; imageUrl: string | null;
 };
 export type HubNewsPage = { items: HubNewsItem[]; hasMore: boolean };

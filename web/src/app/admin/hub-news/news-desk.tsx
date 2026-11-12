@@ -297,7 +297,10 @@ export default function NewsDesk() {
                         {article.source} · <time dateTime={article.publishedAt}>{formatHubNewsDate(article.publishedAt)}</time>
                       </p>
                       <h2 className="font-semibold">{article.title}</h2>
-                      <a href={article.url} target="_blank" rel="noreferrer" className="text-xs text-sky-200 hover:underline">Ler na fonte ↗</a>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-sky-200">
+                        <a href={article.url} target="_blank" rel="noopener noreferrer" className="hover:underline">Ler na fonte ↗</a>
+                        {article.status === 'approved' && <Link href={'/hub/noticias/' + article.id} className="hover:underline">Ver no Hub</Link>}
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">

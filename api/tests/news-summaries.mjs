@@ -71,13 +71,45 @@ await scenario('a context change invalidates the published summary and stale edi
   const approved = (await list('approved'))[0];
   const change = { id: approved.id, revision: approved.revision, context: context + ' A publicação foi confirmada pela organização da prova.' };
   assert.equal((await api('/context', { method: 'PATCH', body: change })).status, 200);
-  assert.equal((await api('/article/' + approved.id)).status, 404);
+  const page = (await api('/article/' + approved.id)).body;
+  assert.equal(page.title, approved.title);
+  assert.equal(page.summary, null, 'The approved story keeps its own page without exposing the withdrawn summary');
+  assert.equal(page.generatedAt, null);
+  assert.equal(JSON.stringify(page).includes(context), false);
   assert.equal((await api('/published')).body[0].summaryId, null);
   await api('/summaries', { method: 'POST', body: { id: approved.id } });
   assert.equal((await list('approved'))[0].summaryState, 'draft');
   assert.equal((await api('/context', { method: 'PATCH', body: change })).status, 409);
   assert.equal((await list('approved'))[0].summaryState, 'draft');
   assert.equal(newsCalls.length, 2);
+});
+
+await scenario('all approved stories have an internal page while draft summaries and source context stay private', async ({ add, api, list, newsCalls }) => {
+  const item = await add('ojogo', 'headline-only', { sourceExcerpt: '' });
+  assert.equal((await api('/article/' + item.id)).status, 404, 'Pending stories remain private');
+  assert.equal((await api('', { method: 'PATCH', body: { id: item.id, revision: item.revision, status: 'approved' } })).status, 200);
+  const page = await api('/article/' + item.id);
+  assert.equal(page.status, 200);
+  assert.equal(page.body.title, item.title);
+  assert.equal(page.body.summary, null);
+  assert.equal(page.body.sourceUrl, item.url);
+  assert.equal(page.body.generatedAt, null);
+  assert.equal(page.body.sourceExcerpt, undefined);
+  assert.equal((await api('/published')).body[0].articleId, item.id);
+  assert.equal((await api('/published')).body[0].summaryId, null);
+  assert.equal(newsCalls.length, 0, 'Opening a story does not request or charge a summary');
+  let current = (await list('approved'))[0];
+  await api('/context', { method: 'PATCH', body: { id: item.id, revision: current.revision, context } });
+  await api('/summaries', { method: 'POST', body: { id: item.id } });
+  const draftPage = (await api('/article/' + item.id)).body;
+  assert.equal(draftPage.summary, null);
+  assert.equal(draftPage.title, item.title);
+  assert.equal(draftPage.generatedAt, null);
+  assert.equal(JSON.stringify(draftPage).includes(headline), false);
+  assert.equal(JSON.stringify(draftPage).includes(context), false);
+  current = (await list('approved'))[0];
+  await api('', { method: 'PATCH', body: { id: item.id, revision: current.revision, status: 'rejected' } });
+  assert.equal((await api('/article/' + item.id)).status, 404, 'Withdrawing the story also withdraws its internal page');
 });
 
 await scenario('simultaneous requests share the article lease and daily budget', async ({ add, api, newsCalls }) => {

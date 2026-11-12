@@ -28,8 +28,11 @@ transação. Guardar como rascunho ou retirar o resumo mantém a ligação à fo
 a notícia continuar aprovada. Alterar o contexto retira o resumo para nova
 revisão. Decisões sobre versões antigas são recusadas.
 
-Depois da aprovação, o título abre `/hub/noticias/<id>`, com fonte e ligação
-original. As visitas não fazem pedidos à IA. O acesso beta atual do Hub mantém-se.
+Todas as notícias aprovadas abrem `/hub/noticias/<id>`, com fonte e ligação
+original. A página apresenta o resumo apenas depois da sua aprovação. Enquanto
+não existir um resumo aprovado, mostra o título, a data, a fonte e uma indicação
+de que o resumo não está disponível. Nunca expõe contexto nem rascunhos. As
+visitas não fazem pedidos à IA. O acesso beta atual do Hub mantém-se.
 
 ## Fontes
 
@@ -37,7 +40,10 @@ O Jogo e Jornal de Notícias são recolhidos através dos seus títulos público
 no Google Notícias, validando o domínio do editor em cada item. Acesso direto
 aos sites e aos antigos feeds falhou na verificação de 12/11/2026. Estes feeds
 de títulos não fornecem contexto para resumos: acrescentar factos verificados
-no backoffice ou fornecer futuramente um feed autorizado com descrições.
+no backoffice ou fornecer futuramente um feed autorizado com descrições. Os
+pedidos diretos aos dois jornais foram novamente recusados com HTTP 403 na
+mesma data. A geração por leitura automática desses artigos continua dependente
+de acesso autorizado ao texto; uma página própria não remove esse impedimento.
 
 O RSS direto do Maisfutebol foi verificado e mantém a descrição como contexto.
 Mantêm-se RTP, A BOLA, Record e zerozero. Dentro do mesmo dia, O Jogo tem

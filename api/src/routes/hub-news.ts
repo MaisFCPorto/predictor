@@ -22,7 +22,7 @@ hubNews.use('*', async (c, next) => {
 
 hubNews.get('/published', async (c) => {
   const { results } = await c.env.DB.prepare(`
-    SELECT CASE WHEN s.state = 'approved' THEN s.headline ELSE n.title END AS title,
+    SELECT n.id AS articleId, CASE WHEN s.state = 'approved' THEN s.headline ELSE n.title END AS title,
            url, source, published_at AS publishedAt,
            CASE WHEN image_approved = 1 THEN image_url END AS imageUrl,
            CASE WHEN s.state = 'approved' THEN n.id END AS summaryId
@@ -60,11 +60,13 @@ hubNews.get('/article/:id', async (c) => {
   const id = Number(c.req.param('id'));
   if (!Number.isSafeInteger(id) || id < 1) return c.json({ error: 'missing_article' }, 404);
   const article = await c.env.DB.prepare(`
-    SELECT n.id, s.headline AS title, s.body AS summary, n.title AS originalTitle, n.url AS sourceUrl,
-           n.source, n.published_at AS publishedAt, s.generated_at AS generatedAt,
+    SELECT n.id, CASE WHEN s.state = 'approved' THEN s.headline ELSE n.title END AS title,
+           CASE WHEN s.state = 'approved' THEN s.body END AS summary,
+           n.title AS originalTitle, n.url AS sourceUrl, n.source, n.published_at AS publishedAt,
+           CASE WHEN s.state = 'approved' THEN s.generated_at END AS generatedAt,
            CASE WHEN n.image_approved = 1 THEN n.image_url END AS imageUrl
-    FROM hub_news n JOIN hub_news_summaries s ON s.news_id = n.id
-    WHERE n.id = ? AND n.status = 'approved' AND s.state = 'approved'
+    FROM hub_news n LEFT JOIN hub_news_summaries s ON s.news_id = n.id
+    WHERE n.id = ? AND n.status = 'approved'
   `).bind(id).first();
   return article ? c.json(article) : c.json({ error: 'missing_article' }, 404);
 });

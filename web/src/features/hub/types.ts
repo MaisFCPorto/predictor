@@ -16,9 +16,12 @@ export type HubNewsItem = HubArticle & {
   contextKind?: 'legacy' | 'feed' | 'article' | 'manual';
   summaryTitle?: string | null; summaryText?: string | null; summaryError?: string | null;
   summaryGeneratedAt?: string | null;
+  summaryRecovered?: boolean; summaryIssue?: string | null; summaryAttempts?: number | null;
 };
 export type HubSummarySettings = {
   enabled: boolean; keyConfigured: boolean; model: string; dailyLimit: number; articleFormatVersion?: number;
+  automaticEnabled?: boolean;
+  queue?: { ready: number; needsReview: number };
   usage: { requests: number; inputTokens: number; outputTokens: number };
 };
 export type HubSummaryArticle = {

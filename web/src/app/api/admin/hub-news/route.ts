@@ -18,7 +18,7 @@ async function forward(request: Request) {
       return Response.json({ error: 'invalid_action' }, { status: 400, headers: privateHeaders });
     }
     if (action === 'context' || action === 'summary' || action === 'summaries' || action === 'settings') {
-      const method = action === 'settings' ? 'GET' : action === 'summaries' ? 'POST' : 'PATCH';
+      const method = action === 'settings' ? request.method === 'PATCH' ? 'PATCH' : 'GET' : action === 'summaries' ? 'POST' : 'PATCH';
       if (request.method !== method) return new Response(null, { status: 405, headers: privateHeaders });
       const body = method === 'GET' ? undefined : await request.text();
       if (body && body.length > 16_000) return Response.json({ error: 'invalid_request' }, { status: 400, headers: privateHeaders });

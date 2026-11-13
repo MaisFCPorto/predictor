@@ -427,14 +427,21 @@ await scenario('feed descriptions alone never become article bodies, even when l
   assert.equal(newsCalls.length, 0);
 });
 
-await scenario('one-line teasers and single-paragraph responses fail article validation', async ({ add, api, newsProvider, list }) => {
+await scenario('short teasers stay blocked and paragraph formatting is repaired without another provider call', async ({ add, api, newsProvider, list, newsCalls }) => {
   const item = await add();
-  for (const body of ['Médio do FC Porto subscreveu comunicado', copy.replace(/\n/g, ' ')]) {
-    newsProvider(() => complete({ summary: body }));
-    const result = await api('/summaries', { method: 'POST', body: { id: item.id } });
-    assert.equal(result.body.generated, 0);
-    assert.equal((await list())[0].summaryState, 'failed');
-  }
+  newsProvider(() => complete({ summary: 'Médio do FC Porto subscreveu comunicado' }));
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id } })).body.generated, 0);
+  let current = (await list())[0];
+  assert.equal(current.summaryState, 'failed');
+  assert.equal(current.summaryIssue, 'text_too_short');
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id } })).body.reason, 'saved_response_available');
+  assert.equal(newsCalls.length, 1);
+  newsProvider(() => complete({ summary: copy.replace(/\n/g, ' ') }));
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id, revision: current.revision, regenerate: true } })).body.generated, 1);
+  current = (await list())[0];
+  assert.equal(current.summaryState, 'draft');
+  assert.equal(current.summaryText.split('\n\n').length, 2);
+  assert.equal(newsCalls.length, 2);
 });
 
 await scenario('a draft can be regenerated explicitly without rewriting approved articles or escaping the daily ceiling', async ({ add, api, list, newsCalls }) => {
@@ -634,5 +641,130 @@ await scenario('bulk imports allocate unique increasing IDs across batches and r
   ? new Response('<rss><channel>' + Array.from({ length: 35 }, (_, index) =>
     rss('FC Porto: notícia ' + index, 'https://www.rtp.pt/noticias/fc-porto/bulk-' + index, '').replace(/^<rss><channel>|<\/channel><\/rss>$/g, '')).join('') + '</channel></rss>', { headers: { 'Content-Type': 'application/rss+xml' } })
   : emptyFeed() });
+
+await scenario('a rejected model copy remains editable, cannot be published unchanged, and can be repaired without another paid call', async ({ add, api, list, newsProvider, newsCalls }) => {
+  const item = await add();
+  newsProvider(() => complete({ summary: context }));
+  await api('/summaries', { method: 'POST', body: { id: item.id } });
+  let current = (await list())[0];
+  assert.equal(current.summaryState, 'failed');
+  assert.equal(current.summaryError, 'too_similar');
+  assert.equal(current.summaryRecovered, true);
+  assert.ok(current.summaryText.includes('A Liga Portugal anunciou'));
+  assert.equal(current.summaryAttempts, 1);
+  assert.equal(current.savedResponse, undefined, 'Raw provider responses stay private even in the admin DTO');
+  const unchanged = await api('/summary', { method: 'PATCH', body: { id: item.id, revision: current.revision, title: current.summaryTitle, text: current.summaryText, decision: 'approved' } });
+  assert.equal(unchanged.status, 400);
+  assert.equal(unchanged.body.reason, 'too_similar');
+  assert.equal((await api('/article/' + item.id)).status, 404);
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id } })).body.reason, 'saved_response_available');
+  assert.equal(newsCalls.length, 1, 'A generic retry does not discard an already paid reviewable answer');
+  assert.equal((await api('/summary', { method: 'PATCH', body: { id: item.id, revision: current.revision, title: headline, text: copy, decision: 'draft' } })).status, 200);
+  current = (await list())[0];
+  assert.equal(current.summaryState, 'draft');
+  assert.equal((await api('/summary', { method: 'PATCH', body: { id: item.id, revision: current.revision, title: headline, text: copy, decision: 'approved' } })).status, 200);
+  assert.equal((await api('/article/' + item.id)).body.summary, copy);
+  assert.equal(newsCalls.length, 1);
+  assert.equal((await api('/summary-settings')).body.usage.requests, 1);
+});
+
+await scenario('an unfinished editorial correction can be saved privately and unsupported numbers still block publication', async ({ add, api, list, newsProvider, newsCalls }) => {
+  const item = await add();
+  newsProvider(() => complete({ summary: copy + ' O jogador marcou 999 golos.' }));
+  await api('/summaries', { method: 'POST', body: { id: item.id } });
+  let current = (await list())[0];
+  assert.equal(current.summaryIssue, 'unsupported_numbers');
+  const edited = current.summaryText + ' A informação está em revisão.';
+  const saved = await api('/summary', { method: 'PATCH', body: { id: item.id, revision: current.revision, title: headline, text: edited, decision: 'draft' } });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.reviewRequired, true);
+  current = (await list())[0];
+  assert.equal(current.summaryState, 'failed');
+  assert.equal(current.summaryText, edited, 'The editor correction is not replaced by the original saved model response');
+  assert.equal((await api('/summary', { method: 'PATCH', body: { id: item.id, revision: current.revision, title: headline, text: edited, decision: 'approved' } })).body.reason, 'unsupported_numbers');
+  assert.equal((await api('/published')).body.length, 0);
+  assert.equal(newsCalls.length, 1);
+});
+
+await scenario('historical failed responses can be recovered read-only and published after a local formatting repair at the daily ceiling', async ({ add, api, list, db, newsCalls }) => {
+  const item = await add();
+  await api('/summaries', { method: 'POST', body: { id: item.id } });
+  const literal = complete({ summary: copy.replaceAll('\n', '\\n') });
+  await db.prepare("UPDATE hub_news_summaries SET state='failed',last_error='invalid_response',headline=NULL,body=NULL,response_json=? WHERE news_id=?")
+    .bind(JSON.stringify(literal), item.id).run();
+  let current = (await list())[0];
+  assert.equal(current.summaryRecovered, true);
+  assert.equal(current.summaryText, copy);
+  assert.equal(current.summaryIssue, null);
+  assert.equal(newsCalls.length, 1);
+  assert.equal((await api('/summary', { method: 'PATCH', body: { id: item.id, revision: current.revision, title: current.summaryTitle, text: current.summaryText, decision: 'approved' } })).status, 200);
+  assert.equal((await api('/article/' + item.id)).body.summary, copy);
+  assert.equal(newsCalls.length, 1);
+}, { newsDailyLimit: 1 });
+
+await scenario('explicit regeneration of a failed copy is revision checked and counts exactly one new provider request', async ({ add, api, list, newsProvider, newsCalls }) => {
+  const item = await add();
+  newsProvider(() => complete({ summary: context }));
+  await api('/summaries', { method: 'POST', body: { id: item.id } });
+  const current = (await list())[0];
+  newsProvider(() => complete());
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id, revision: current.revision - 1, regenerate: true } })).status, 409);
+  assert.equal(newsCalls.length, 1);
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id, revision: current.revision, regenerate: true } })).body.generated, 1);
+  assert.equal(newsCalls.length, 2);
+  assert.equal((await list())[0].summaryError, null);
+});
+
+await scenario('a cached storage failure can be recovered after the daily request ceiling without a second model call', async ({ add, db, api, list, newsCalls }) => {
+  const item = await add();
+  await db.exec("CREATE TRIGGER fail_draft BEFORE UPDATE OF state ON hub_news_summaries WHEN NEW.state='draft' BEGIN SELECT RAISE(ABORT,'test'); END;");
+  await api('/summaries', { method: 'POST', body: { id: item.id } });
+  assert.equal((await list())[0].summaryError, 'storage_failed');
+  await db.exec('DROP TRIGGER fail_draft');
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id } })).body.generated, 1);
+  assert.equal(newsCalls.length, 1);
+  assert.equal((await api('/summary-settings')).body.usage.requests, 1);
+}, { newsDailyLimit: 1 });
+
+await scenario('automatic generation can be paused while source collection and explicit generation remain available', async ({ add, api, request, newsCalls, sourceCalls, list }) => {
+  const item = await add();
+  assert.equal((await api('/summary-settings')).body.automaticEnabled, true);
+  assert.equal((await api('/summary-settings', { method: 'PATCH', body: { automaticEnabled: false } })).status, 200);
+  assert.equal((await request('/__rehearsal/news', { method: 'POST' })).status, 200);
+  assert.ok(sourceCalls.length > 0);
+  assert.equal(newsCalls.length, 0);
+  assert.equal((await list())[0].summaryState, null);
+  assert.equal((await api('/summaries', { method: 'POST', body: { id: item.id } })).body.generated, 1);
+  assert.equal(newsCalls.length, 1);
+  const settings = (await api('/summary-settings')).body;
+  assert.equal(settings.automaticEnabled, false);
+  assert.equal(settings.queue.ready, 1);
+  await add('rtp', 'second-paused');
+  assert.equal((await api('/summary-settings', { method: 'PATCH', body: { automaticEnabled: true } })).status, 200);
+  await request('/__rehearsal/news', { method: 'POST' });
+  assert.equal(newsCalls.length, 2);
+});
+
+await scenario('pausing during an automatic batch prevents the next provider request', async ({ add, api, request, db, newsProvider, newsCalls }) => {
+  for (let index = 0; index < 3; index++) await add('rtp', 'mid-batch-' + index);
+  newsProvider(async () => {
+    await db.prepare("INSERT INTO app_settings(key,value) VALUES('hub_news_summary_automatic','false') ON CONFLICT(key) DO UPDATE SET value='false'").run();
+    return complete();
+  });
+  await request('/__rehearsal/news', { method: 'POST' });
+  assert.equal(newsCalls.length, 1);
+  assert.equal((await api('/summary-settings')).body.automaticEnabled, false);
+});
+
+await scenario('summary controls are authenticated, boolean-only, and count pending review states explicitly', async ({ add, api, request, newsProvider }) => {
+  assert.equal((await request(base + '/summary-settings', { method: 'PATCH', body: { automaticEnabled: false } })).status, 404);
+  assert.equal((await api('/summary-settings', { method: 'PATCH', body: { automaticEnabled: 'false' } })).status, 400);
+  const ready = await add('rtp', 'count-ready');
+  await api('/summaries', { method: 'POST', body: { id: ready.id } });
+  const failed = await add('rtp', 'count-failed');
+  newsProvider(() => complete({ summary: context }));
+  await api('/summaries', { method: 'POST', body: { id: failed.id } });
+  assert.deepEqual((await api('/summary-settings')).body.queue, { ready: 1, needsReview: 1 });
+});
 
 console.log('\nNotícias verificadas em D1 descartável, com respostas simuladas da IA e sem pedidos pagos.');

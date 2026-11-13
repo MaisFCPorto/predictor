@@ -14,6 +14,7 @@ type NewsAction =
   | { type: 'sync' }
   | { type: 'decision'; decision: Decision }
   | { type: 'add'; article: Omit<HubArticle, 'source'> & { sourceExcerpt?: string | null } }
+  | { type: 'settings'; payload: { automaticEnabled: boolean } }
   | SummaryCommand;
 
 const tabs: { status: HubNewsStatus; label: string; empty: string }[] = [
@@ -87,7 +88,7 @@ export default function NewsDesk() {
     setNotice(null);
 
     try {
-      const response = command.type === 'context' || command.type === 'summary' || command.type === 'summaries'
+      const response = command.type === 'context' || command.type === 'summary' || command.type === 'summaries' || command.type === 'settings'
         ? await requestNews('?action=' + command.type, { method: command.type === 'summaries' ? 'POST' : 'PATCH', body: JSON.stringify(command.payload) })
         : command.type === 'add'
         ? await requestNews('?action=add', { method: 'POST', body: JSON.stringify(command.article) })
@@ -114,16 +115,22 @@ export default function NewsDesk() {
         return response.ok;
       }
       if (response.status === 400 && (command.type === 'summary' || command.type === 'context')) {
-        setNotice(command.type === 'context' ? 'Confirma o contexto: máximo de 6 000 caracteres.' : 'Confirma a notícia: entre 90 e 350 palavras, em vários parágrafos, sem HTML nem links.');
+        const result: { reason?: string } = await response.json().catch(() => ({}));
+        setNotice(command.type === 'context' ? 'Confirma o contexto: máximo de 6 000 caracteres.'
+          : summaryMessages[result.reason ?? ''] ?? 'Confirma a notícia: entre 90 e 350 palavras, em vários parágrafos, sem HTML nem links.');
         return false;
       }
       if (!response.ok) throw new Error('News action failed');
 
-      if (command.type === 'context') {
+      if (command.type === 'settings') {
+        setNotice(command.payload.automaticEnabled ? 'Geração automática retomada.' : 'Geração automática pausada. A recolha de notícias continua e podes gerar uma notícia manualmente.');
+      } else if (command.type === 'context') {
         setNotice('Contexto guardado. O resumo será gerado para nova revisão.');
       } else if (command.type === 'summary') {
+        const result: { reviewRequired?: boolean } = await response.json();
         setNotice(command.payload.decision === 'approved' ? 'Notícia e resumo publicados no Hub.'
-          : command.payload.decision === 'draft' ? 'Rascunho guardado para revisão.' : 'Resumo retirado. A ligação à fonte mantém-se se a notícia estiver aprovada.');
+          : command.payload.decision === 'draft' ? result.reviewRequired ? 'Texto guardado. Continua a precisar de revisão antes da publicação.' : 'Rascunho guardado para revisão.'
+            : 'Resumo retirado. A ligação à fonte mantém-se se a notícia estiver aprovada.');
       } else if (command.type === 'decision') {
         setNotice(command.decision.status === 'approved'
           ? query.status === 'approved' ? 'Imagem aprovada e disponível no hub.' : 'Notícia aprovada e disponível no hub.'
@@ -225,13 +232,24 @@ export default function NewsDesk() {
           <p className="text-xs text-white/65">{summarySettings
             ? !formatReady ? 'Atualiza o Worker e aplica as migrações pendentes para ativar as notícias desenvolvidas.'
               : !summarySettings.keyConfigured ? 'Falta configurar a chave OpenAI no Worker.'
-              : !summarySettings.enabled ? 'A geração automática está desligada.'
+              : !summarySettings.enabled ? 'A geração de IA está desligada no Worker.'
                 : `${summarySettings.usage.requests} de ${summarySettings.dailyLimit} pedidos de IA hoje (UTC). Modelo: ${summarySettings.model}.`
             : 'As opções de resumos ficam disponíveis depois da atualização do Worker e da BD.'}</p>
           <p className="text-xs text-white/55">O artigo é lido antes da adaptação. A notícia preserva o contexto, as menções e os exemplos da fonte, em vários parágrafos. Nada é publicado sem aprovação.</p>
+          {summarySettings?.enabled && <p className="text-xs text-white/65">{summarySettings.automaticEnabled === false
+            ? 'Geração automática pausada. Os pedidos manuais continuam disponíveis.'
+            : 'A geração automática pode fazer até 4 pedidos a cada 3 horas, mesmo sem cliques. Tentativas que falhem também contam para o limite.'}</p>}
+          {summarySettings?.queue && <p className="text-xs text-sky-100">Nos pendentes: {summarySettings.queue.ready} rascunhos para revisão · {summarySettings.queue.needsReview} respostas a precisar de atenção.</p>}
         </div>
-        <button type="button" className="rounded-lg border border-sky-300/20 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-white/5 disabled:opacity-40"
-          disabled={disabled || !canGenerate} onClick={() => void submit({ type: 'summaries', payload: {} })}>{action === 'summaries' ? 'A gerar…' : 'Gerar próxima notícia'}</button>
+        <div className="flex flex-wrap gap-2">
+          {typeof summarySettings?.automaticEnabled === 'boolean' && <button type="button"
+            className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold hover:bg-white/5 disabled:opacity-40"
+            disabled={disabled || !formatReady} onClick={() => void submit({ type: 'settings', payload: { automaticEnabled: !summarySettings.automaticEnabled } })}>
+            {summarySettings.automaticEnabled ? 'Pausar geração automática' : 'Retomar geração automática'}
+          </button>}
+          <button type="button" className="rounded-lg border border-sky-300/20 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-white/5 disabled:opacity-40"
+            disabled={disabled || !canGenerate} onClick={() => void submit({ type: 'summaries', payload: {} })}>{action === 'summaries' ? 'A gerar…' : 'Gerar próxima notícia'}</button>
+        </div>
       </section>
       <label className="flex flex-wrap items-center gap-3 text-sm text-white/70">Fonte
         <select aria-label="Filtrar por fonte" value={query.source} disabled={disabled || !ready || !list.result.sources}

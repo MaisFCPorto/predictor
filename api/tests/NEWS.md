@@ -14,7 +14,19 @@ IDs crescentes: uma notícia nova não reutiliza o ID de uma eliminada, mantendo
 seguras as ligações antigas e decisões de moderação de versões já removidas.
 
 Depois de guardar as novidades, prepara até quatro resumos de notícias com
-contexto suficiente. Usa a
+contexto suficiente. Por isso podem existir até quatro pedidos a cada três
+horas sem cliques no backoffice. O contador diário inclui tentativas falhadas,
+não apenas notícias publicadas. O backoffice mostra também os rascunhos e as
+respostas com erro que ainda estão nos pendentes.
+
+O botão **Pausar geração automática** guarda a preferência em `app_settings`
+(`hub_news_summary_automatic`). A recolha e limpeza continuam; a geração por
+pedido manual mantém-se disponível. O botão de retoma reativa o cron de IA.
+Uma execução verifica a pausa antes de cada novo pedido, permitindo terminar o
+pedido que já estiver em curso. A ausência desta preferência mantém o modo
+automático existente. Não é necessária uma nova migração para esta preferência.
+
+Usa a
 Responses API da OpenAI, modelo `gpt-6-luna`, sem ferramentas de pesquisa e sem
 armazenamento de respostas na OpenAI (`store: false`). Cada pedido tem um máximo
 de 2.000 tokens de saída e usa apenas o título e até 6.000 caracteres de contexto.
@@ -24,12 +36,32 @@ São necessários pelo menos 90 termos e 500 caracteres de contexto. O formato n
 se contornam paywalls. Respostas incompletas, recusas, números ausentes do contexto
 e trechos demasiado próximos da fonte ficam pendentes, sem publicação.
 
+A validação continua a bloquear números sem correspondência e sequências de
+20 palavras iguais à fonte. Respostas completas que contenham texto são
+preservadas no backoffice quando falham esta validação, incluindo respostas
+históricas já guardadas. O texto pode ser corrigido e guardado sem nova chamada
+à IA. O rascunho em revisão permanece privado; a publicação volta a verificar
+as mesmas regras. Uma correção ainda com problemas pode ser guardada como
+pendente de atenção. Os erros de formato mostram o motivo concreto, como
+comprimento do título, número de palavras ou parágrafos.
+
+Separadores de parágrafo escapados e texto desenvolvido num único parágrafo
+são normalizados localmente, sem alterar os factos nem fazer outro pedido.
+O prompt reforça a paráfrase de títulos extensos de estudos e a preservação da
+forma dos números da fonte. Recusas, respostas incompletas e JSON ilegível não
+são convertidos em rascunhos válidos.
+
 O limite inicial é de 30 pedidos por dia UTC. Conta também pedidos que falhem e
 repetições manuais, com um máximo de três tentativas por notícia/contexto. A
 configuração admite entre 1 e 100 pedidos/dia. Pedidos simultâneos usam leases e
 reservas de quota transacionais. Uma resposta já guardada é reutilizada se a
 gravação do rascunho falhar. Pedidos interrompidos sem resposta guardada exigem
 repetição explícita para não duplicar automaticamente um possível consumo.
+Uma repetição genérica de uma resposta já guardada para revisão devolve
+`saved_response_available`, sem consumir quota. Uma nova versão tem de ser
+pedida explicitamente, com revisão e limite de tentativas verificados. A
+recuperação de uma resposta guardada após falha de gravação funciona também
+quando a quota diária já se esgotou.
 
 Nenhum resumo é publicado pela IA. Em **Notícias do hub**, abrir o painel de
 resumo, verificar o contexto, editar se necessário e escolher **Publicar notícia
@@ -126,3 +158,7 @@ rascunhos associados, consumo diário, reservas ativas, falhas de fontes e
 reimportação por RSS ou pela secção direta do editor. Também se verificam a não
 reutilização de IDs eliminados, a rejeição de decisões antigas, o filtro de
 relevância de O Jogo e a remoção do Jornal de Notícias.
+Também se verificam a recuperação histórica de respostas sem nova chamada,
+a reparação local de parágrafos, a publicação com quota esgotada após edição,
+a rejeição de texto ainda demasiado próximo ou com números não reconhecidos,
+e a pausa automática durante uma execução sem bloquear pedidos manuais.

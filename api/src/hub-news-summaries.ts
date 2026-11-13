@@ -56,16 +56,43 @@ async function fingerprint(input: Input) {
 
 function words(text: string) { return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []; }
 
-export function validSummaryCopy(headline: unknown, body: unknown) {
-  return typeof headline === 'string' && typeof body === 'string' &&
-    headline.trim().length >= 8 && headline.trim().length <= 180 &&
-    body.trim().length >= 450 && body.trim().length <= 4500 &&
-    words(body).length >= 90 && words(body).length <= 350 &&
-    body.trim().split(/\n\s*\n/).filter(Boolean).length >= 2 &&
-    !/[<>]|https?:\/\/|\]\(/i.test(headline + body);
+export function normalizeSummaryCopy(headline: string, summary: string) {
+  let body = summary.replace(/\\r\\n|\\n|\\r/g, '\n').replace(/\r\n?/g, '\n').trim();
+  if (!/\n\s*\n/.test(body)) {
+    const sentences = body.split(/(?<=[.!?])\s+(?=[\p{Lu}«“])/u);
+    if (sentences.length >= 2) {
+      const middle = Math.ceil(sentences.length / 2);
+      body = sentences.slice(0, middle).join(' ') + '\n\n' + sentences.slice(middle).join(' ');
+    }
+  }
+  return { headline: headline.trim(), summary: body };
 }
 
-function parseSummary(response: any, input: Input): { sufficient: boolean; headline: string; summary: string } {
+export function summaryCopyIssue(headline: unknown, body: unknown, sourceTitle = '', context = ''): string | null {
+  if (typeof headline !== 'string' || headline.trim().length < 8 || headline.trim().length > 180) return 'headline_length';
+  if (typeof body !== 'string') return 'invalid_response';
+  if (/[<>]|https?:\/\/|\]\(/i.test(headline + body)) return 'unsafe_text';
+  if (body.trim().length < 450 || words(body).length < 90) return 'text_too_short';
+  if (body.trim().length > 4500 || words(body).length > 350) return 'text_too_long';
+  if (body.trim().split(/\n\s*\n/).filter(Boolean).length < 2) return 'missing_paragraphs';
+  if (!sourceTitle && !context) return null;
+  const source = sourceTitle + ' ' + context;
+  const sourceNumbers = new Set((source.match(/\d+(?:[.,:/-]\d+)*/g) ?? []).map((n) => n.replace(/\D/g, '')));
+  if (([headline, body].join(' ').match(/\d+(?:[.,:/-]\d+)*/g) ?? [])
+    .some((n) => !sourceNumbers.has(n.replace(/\D/g, '')))) return 'unsupported_numbers';
+  const sourceWords = words(source).join(' ');
+  const generatedWords = words(body);
+  for (let index = 0; index <= generatedWords.length - 20; index++) {
+    if (sourceWords.includes(generatedWords.slice(index, index + 20).join(' '))) return 'too_similar';
+  }
+  return null;
+}
+
+export function validSummaryCopy(headline: unknown, body: unknown) {
+  return summaryCopyIssue(headline, body) === null;
+}
+
+function decodeSummaryResponse(response: any) {
   if (response?.status !== 'completed') throw new Error('incomplete_response');
   if (!Array.isArray(response.output)) throw new Error('invalid_response');
   const parts = response.output.filter((item: any) => item?.type === 'message').flatMap((item: any) => Array.isArray(item.content) ? item.content : []);
@@ -73,18 +100,27 @@ function parseSummary(response: any, input: Input): { sufficient: boolean; headl
   let result: any;
   try { result = JSON.parse(parts.filter((part: any) => part?.type === 'output_text').map((part: any) => part.text).join('')); }
   catch { throw new Error('invalid_response'); }
+  return result;
+}
+
+export function savedSummaryCopy(responseJson: string | null | undefined) {
+  if (!responseJson || responseJson.length > 100_000) return null;
+  try {
+    const result = decodeSummaryResponse(JSON.parse(responseJson));
+    if (result?.sufficient !== true || typeof result.headline !== 'string' || typeof result.summary !== 'string' ||
+        result.headline.length > 1000 || result.summary.length > 12_000) return null;
+    return normalizeSummaryCopy(result.headline, result.summary);
+  } catch { return null; }
+}
+
+function parseSummary(response: any, input: Input): { sufficient: boolean; headline: string; summary: string } {
+  const result = decodeSummaryResponse(response);
   if (result?.sufficient === false) return { sufficient: false, headline: '', summary: '' };
-  if (result?.sufficient !== true || !validSummaryCopy(result.headline, result.summary)) throw new Error('invalid_response');
-  const source = input.title + ' ' + input.sourceExcerpt;
-  const sourceNumbers = new Set((source.match(/\d+(?:[.,:/-]\d+)*/g) ?? []).map((n) => n.replace(/\D/g, '')));
-  if (([result.headline, result.summary].join(' ').match(/\d+(?:[.,:/-]\d+)*/g) ?? [])
-    .some((n: string) => !sourceNumbers.has(n.replace(/\D/g, '')))) throw new Error('unsupported_numbers');
-  const sourceWords = words(source).join(' ');
-  const generatedWords = words(result.summary);
-  for (let index = 0; index <= generatedWords.length - 20; index++) {
-    if (sourceWords.includes(generatedWords.slice(index, index + 20).join(' '))) throw new Error('too_similar');
-  }
-  return { sufficient: true, headline: result.headline.trim(), summary: result.summary.trim() };
+  if (result?.sufficient !== true || typeof result.headline !== 'string' || typeof result.summary !== 'string') throw new Error('invalid_response');
+  const copy = normalizeSummaryCopy(result.headline, result.summary);
+  const issue = summaryCopyIssue(copy.headline, copy.summary, input.title, input.sourceExcerpt);
+  if (issue) throw new Error(['unsupported_numbers', 'too_similar'].includes(issue) ? issue : 'invalid_response');
+  return { sufficient: true, ...copy };
 }
 
 async function generateSummary(key: string, input: Input) {
@@ -101,6 +137,9 @@ async function generateSummary(key: string, input: Input) {
         'Se o original for breve, usa dois ou três parágrafos e 90 a 140 palavras, sem acrescentar factos para cumprir tamanho. Nunca devolvas apenas uma chamada ou subtítulo. ' +
         'Explica o acontecimento, o contexto, a posição dos envolvidos e os detalhes relevantes. Preserva nomes, menções a pessoas, clubes e entidades, exemplos e episódios concretos presentes no original. ' +
         'As declarações devem ser atribuídas a quem as fez; privilegia discurso indireto. Podes usar uma única expressão citada, de até dez palavras, se for relevante. ' +
+        'Não transcrevas títulos extensos de estudos ou teses: explica o tema por palavras tuas. Evita sequências de palavras iguais às do original. ' +
+        'Mantém a forma e a precisão dos números da fonte, sem converter números por extenso em algarismos ou introduzir datas da publicação no texto. ' +
+        'Separa os parágrafos do campo summary com duas quebras de linha. ' +
         'Não inventes exemplos, declarações, ligações ao FC Porto ou consequências. Reorganiza os factos por palavras tuas, sem copiar frases. Não uses HTML, links nem listas. ' +
         'Não te baseies em conhecimento anterior nem uses a data da publicação como data de um evento. ' +
         'Se os dados não forem suficientes, devolve sufficient=false e os dois textos vazios.',
@@ -146,14 +185,24 @@ async function queueSummaries(db: D1Database, now: number, requestedId?: number)
 export async function summarySettings(env: NewsSummaryEnv, now = Date.now()) {
   const usage = await env.DB.prepare('SELECT requests, input_tokens AS inputTokens, output_tokens AS outputTokens FROM hub_news_summary_usage WHERE day = ?')
     .bind(new Date(now).toISOString().slice(0, 10)).first<{ requests: number; inputTokens: number; outputTokens: number }>();
+  const counts = await env.DB.prepare(`SELECT s.state, COUNT(*) AS count FROM hub_news_summaries s
+    JOIN hub_news n ON n.id = s.news_id WHERE n.status = 'pending' GROUP BY s.state`).all<{ state: string; count: number }>();
   return { enabled: env.HUB_NEWS_SUMMARIES_ENABLED === 'true', keyConfigured: !!env.OPENAI_API_KEY?.trim(),
+    automaticEnabled: await automaticSummariesEnabled(env.DB),
+    queue: { ready: counts.results.find((item) => item.state === 'draft')?.count ?? 0,
+      needsReview: counts.results.find((item) => item.state === 'failed')?.count ?? 0 },
     model: NEWS_SUMMARY_MODEL, articleFormatVersion: 2, dailyLimit: summaryDailyLimit(env), usage: usage ?? { requests: 0, inputTokens: 0, outputTokens: 0 } };
 }
 
-export async function runNewsSummaries(env: NewsSummaryEnv, now = Date.now(), requestedId?: number, batchSize = perRun) {
+async function automaticSummariesEnabled(db: D1Database) {
+  return (await db.prepare("SELECT value FROM app_settings WHERE key = 'hub_news_summary_automatic'").first<{ value: string }>())?.value !== 'false';
+}
+
+export async function runNewsSummaries(env: NewsSummaryEnv, now = Date.now(), requestedId?: number, batchSize = perRun, mode: 'automatic' | 'manual' = 'automatic') {
   if (env.HUB_NEWS_SUMMARIES_ENABLED !== 'true') return { generated: 0, reason: 'disabled' };
   if (!env.OPENAI_API_KEY?.trim()) return { generated: 0, reason: 'missing_key' };
   const db = env.DB;
+  if (mode === 'automatic' && !await automaticSummariesEnabled(db)) return { generated: 0, reason: 'automatic_paused' };
   await queueSummaries(db, now, requestedId);
   // An interrupted request may already have been charged. Require an explicit retry.
   await db.prepare(`UPDATE hub_news_summaries SET state = 'failed', last_error = 'interrupted', lease_token = NULL, lease_until = 0
@@ -163,6 +212,7 @@ export async function runNewsSummaries(env: NewsSummaryEnv, now = Date.now(), re
   let generated = 0;
   let reason = 'not_due';
   for (let index = 0; index < (requestedId ? 1 : Math.min(perRun, Math.max(1, batchSize))); index++) {
+    if (mode === 'automatic' && !await automaticSummariesEnabled(db)) { reason = 'automatic_paused'; break; }
     const token = crypto.randomUUID();
     const results = await db.batch([
       db.prepare(`UPDATE hub_news_summaries SET state = 'processing', lease_token = ?, lease_until = ?,
@@ -172,7 +222,7 @@ export async function runNewsSummaries(env: NewsSummaryEnv, now = Date.now(), re
           WHERE n.status <> 'rejected' AND n.context_kind <> 'feed' AND (n.published_at >= ? OR n.id = ?) AND s.lease_until <= ?
             AND (? IS NULL OR s.news_id = ?) AND (
               (s.state = 'queued' AND s.attempts < 3 AND (SELECT requests FROM hub_news_summary_usage WHERE day = ?) < ?)
-              OR (s.response_json IS NOT NULL AND (s.state = 'processing' OR (s.state = 'failed' AND s.last_error = 'storage_failed')))
+              OR (s.response_json IS NOT NULL AND (s.state IN ('queued', 'processing') OR (s.state = 'failed' AND s.last_error = 'storage_failed')))
             )
           ORDER BY ${newsOrder} LIMIT 1
         ) RETURNING *`)
@@ -187,11 +237,13 @@ export async function runNewsSummaries(env: NewsSummaryEnv, now = Date.now(), re
       break;
     }
     let saved = !!job.response_json;
+    let preview = savedSummaryCopy(job.response_json);
     try {
       const input = await db.prepare(`SELECT id, title, url, source, published_at AS publishedAt, source_excerpt AS sourceExcerpt
         FROM hub_news WHERE id = ?`).bind(job.news_id).first<Input>();
       if (!input || await fingerprint(input) !== job.input_hash) throw new Error('input_changed');
       const response = job.response_json ? JSON.parse(job.response_json) : await generateSummary(env.OPENAI_API_KEY.trim(), input);
+      preview = savedSummaryCopy(JSON.stringify(response));
       if (!saved) {
         const usageNumber = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
         const stored = await db.batch([
@@ -220,8 +272,9 @@ export async function runNewsSummaries(env: NewsSummaryEnv, now = Date.now(), re
       const known = ['invalid_key', 'provider_limit', 'provider_error', 'invalid_response', 'incomplete_response',
         'refused', 'unsupported_numbers', 'too_similar', 'input_changed'];
       reason = known.includes(code) ? code : saved ? 'storage_failed' : 'request_failed';
-      await db.prepare(`UPDATE hub_news_summaries SET state = 'failed', last_error = ?, lease_token = NULL, lease_until = 0
-        WHERE news_id = ? AND lease_token = ?`).bind(reason, job.news_id, token).run();
+      await db.prepare(`UPDATE hub_news_summaries SET state = 'failed', last_error = ?, lease_token = NULL, lease_until = 0,
+        headline = COALESCE(?, headline), body = COALESCE(?, body)
+        WHERE news_id = ? AND lease_token = ?`).bind(reason, preview?.headline ?? null, preview?.summary ?? null, job.news_id, token).run();
       if (reason === 'invalid_key' || reason === 'provider_limit') break;
     }
   }

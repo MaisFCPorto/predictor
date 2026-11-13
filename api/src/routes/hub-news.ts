@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { manualHubArticle, storeHubNews, syncHubNews, type HubNewsArticle, type NewsFeedEnv } from '../hub-news';
-import { cleanNewsContext, enoughNewsContext, runNewsSummaries, summarySettings, validSummaryCopy, type NewsSummaryEnv } from '../hub-news-summaries';
+import { cleanNewsContext, enoughNewsContext, normalizeSummaryCopy, runNewsSummaries, savedSummaryCopy, summaryCopyIssue, summarySettings, validSummaryCopy, type NewsSummaryEnv } from '../hub-news-summaries';
 import { newsOrder } from '../news-priority';
 import { readPublicNewsArticle } from '../news-article-reader';
 
@@ -48,19 +48,39 @@ hubNews.get('/', async (c) => {
     SELECT n.id, title, url, source, published_at AS publishedAt, status, revision,
            image_url AS imageUrl, image_approved AS imageApproved, source_excerpt AS sourceExcerpt, context_kind AS contextKind,
            s.state AS summaryState, s.headline AS summaryTitle, s.body AS summaryText,
-           s.last_error AS summaryError, s.generated_at AS summaryGeneratedAt
+           s.last_error AS summaryError, s.generated_at AS summaryGeneratedAt,
+           s.response_json AS savedResponse, s.attempts AS summaryAttempts
     FROM hub_news n LEFT JOIN hub_news_summaries s ON s.news_id = n.id
     WHERE status = ? AND (? = '' OR source = ?)
     ORDER BY ${newsOrder}
     LIMIT ? OFFSET ?
-  `).bind(status, source, source, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE).all<NewsItem>();
+  `).bind(status, source, source, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE).all<NewsItem & {
+    summaryState: string | null; summaryTitle: string | null; summaryText: string | null; savedResponse: string | null;
+  }>();
   const counts = await c.env.DB.prepare('SELECT source, COUNT(*) AS count FROM hub_news WHERE status = ? GROUP BY source')
     .bind(status).all<{ source: string; count: number }>();
-  return c.json({ items: results.slice(0, PAGE_SIZE), hasMore: results.length > PAGE_SIZE,
+  const items = results.slice(0, PAGE_SIZE).map(({ savedResponse, ...item }) => {
+    const cached = item.summaryState === 'failed' ? savedSummaryCopy(savedResponse) : null;
+    const summaryTitle = item.summaryTitle ?? cached?.headline ?? null;
+    const summaryText = item.summaryText ?? cached?.summary ?? null;
+    return { ...item, summaryTitle, summaryText,
+      summaryRecovered: item.summaryState === 'failed' && !!summaryText,
+      summaryIssue: item.summaryState === 'failed' && summaryText
+        ? summaryCopyIssue(summaryTitle, summaryText, item.title, item.sourceExcerpt ?? '') : null };
+  });
+  return c.json({ items, hasMore: results.length > PAGE_SIZE,
     sources: sources.map((name) => ({ source: name, count: counts.results.find((item) => item.source === name)?.count ?? 0 })) });
 });
 
 hubNews.get('/summary-settings', async (c) => c.json(await summarySettings(c.env)));
+
+hubNews.patch('/summary-settings', async (c) => {
+  const change = await c.req.json<{ automaticEnabled?: boolean }>().catch(() => null);
+  if (!change || typeof change.automaticEnabled !== 'boolean') return c.json({ error: 'invalid_settings' }, 400);
+  await c.env.DB.prepare(`INSERT INTO app_settings (key, value) VALUES ('hub_news_summary_automatic', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value`).bind(String(change.automaticEnabled)).run();
+  return c.json({ ok: true, automaticEnabled: change.automaticEnabled });
+});
 
 hubNews.get('/article/:id', async (c) => {
   const id = Number(c.req.param('id'));
@@ -103,23 +123,36 @@ hubNews.patch('/summary', async (c) => {
   if (!change || !Number.isSafeInteger(change.id) || (change.id ?? 0) < 1 ||
       !Number.isSafeInteger(change.revision) || (change.revision ?? -1) < 0 ||
       !['draft', 'approved', 'rejected'].includes(change.decision ?? '') ||
-      (change.decision !== 'rejected' && !validSummaryCopy(change.title, change.text))) return c.json({ error: 'invalid_summary' }, 400);
+      (change.decision !== 'rejected' && (typeof change.title !== 'string' || typeof change.text !== 'string'))) return c.json({ error: 'invalid_summary' }, 400);
+  let copy: { headline: string; summary: string } | null = null;
+  let issue: string | null = null;
+  if (change.decision !== 'rejected') {
+    const input = await c.env.DB.prepare('SELECT title, source_excerpt AS context, revision FROM hub_news WHERE id = ?')
+      .bind(change.id).first<{ title: string; context: string | null; revision: number }>();
+    if (!input) return c.json({ error: 'missing_article' }, 404);
+    if (input.revision !== change.revision) return c.json({ error: 'outdated_article' }, 409);
+    copy = normalizeSummaryCopy(change.title!, change.text!);
+    issue = summaryCopyIssue(copy.headline, copy.summary, input.title, input.context ?? '');
+    if (!validSummaryCopy(copy.headline, copy.summary) || (change.decision === 'approved' && issue)) {
+      return c.json({ error: 'invalid_summary', reason: issue ?? 'invalid_response' }, 400);
+    }
+  }
+  const state = change.decision === 'draft' && issue ? 'failed' : change.decision;
   const token = crypto.randomUUID();
   const results = await c.env.DB.batch([
     c.env.DB.prepare(`UPDATE hub_news_summaries SET state = ?, headline = COALESCE(?, headline), body = COALESCE(?, body),
-      approved_at = ?, last_error = NULL, edit_token = ?, lease_token = NULL, lease_until = 0
+      approved_at = ?, last_error = ?, edit_token = ?, lease_token = NULL, lease_until = 0
       WHERE news_id = ? AND state IN ('draft', 'approved', 'rejected', 'failed', 'insufficient') AND input_hash <> ''
         AND EXISTS (SELECT 1 FROM hub_news WHERE id = ? AND revision = ?)`)
-      .bind(change.decision, change.decision === 'rejected' ? null : change.title!.trim(),
-        change.decision === 'rejected' ? null : change.text!.trim(),
-        change.decision === 'approved' ? new Date().toISOString() : null, token, change.id, change.id, change.revision),
+      .bind(state, copy?.headline ?? null, copy?.summary ?? null,
+        change.decision === 'approved' ? new Date().toISOString() : null, issue, token, change.id, change.id, change.revision),
     c.env.DB.prepare(`UPDATE hub_news SET revision = revision + 1,
       status = CASE WHEN ? = 'approved' THEN 'approved' ELSE status END,
       image_approved = CASE WHEN ? = 'approved' AND image_url IS NOT NULL THEN 1 ELSE image_approved END
       WHERE id = ? AND revision = ? AND EXISTS (SELECT 1 FROM hub_news_summaries WHERE news_id = ? AND edit_token = ?)`)
       .bind(change.decision, change.decision, change.id, change.revision, change.id, token),
   ]);
-  return results[1].meta.changes === 1 ? c.json({ ok: true }) : c.json({ error: 'outdated_article' }, 409);
+  return results[1].meta.changes === 1 ? c.json({ ok: true, reviewRequired: !!issue, reason: issue }) : c.json({ error: 'outdated_article' }, 409);
 });
 
 hubNews.post('/summaries', async (c) => {
@@ -131,11 +164,15 @@ hubNews.post('/summaries', async (c) => {
       (body.regenerate !== undefined && typeof body.regenerate !== 'boolean') ||
       (body.regenerate && (body.id === undefined || !Number.isSafeInteger(body.revision)))) return c.json({ error: 'invalid_article' }, 400);
   if (body.id !== undefined) {
-    let input = await c.env.DB.prepare(`SELECT n.title, n.url, n.source, n.revision, n.context_kind AS contextKind, n.source_excerpt AS context, s.state, s.attempts
+    let input = await c.env.DB.prepare(`SELECT n.title, n.url, n.source, n.revision, n.context_kind AS contextKind, n.source_excerpt AS context, s.state, s.attempts,
+        s.response_json AS savedResponse, s.last_error AS lastError
       FROM hub_news n LEFT JOIN hub_news_summaries s ON s.news_id = n.id WHERE n.id = ?`).bind(body.id)
-      .first<{ title: string; url: string; source: string; revision: number; contextKind: string; context: string | null; state: string | null; attempts: number | null }>();
+      .first<{ title: string; url: string; source: string; revision: number; contextKind: string; context: string | null; state: string | null; attempts: number | null; savedResponse: string | null; lastError: string | null }>();
     if (!input) return c.json({ error: 'missing_article' }, 404);
-    if (body.regenerate && (body.revision !== input.revision || input.state !== 'draft')) return c.json({ error: 'outdated_article' }, 409);
+    if (body.regenerate && (body.revision !== input.revision || !['draft', 'failed'].includes(input.state ?? ''))) return c.json({ error: 'outdated_article' }, 409);
+    if (!body.regenerate && input.state === 'failed' && input.lastError !== 'storage_failed' && savedSummaryCopy(input.savedResponse)) {
+      return c.json({ generated: 0, reason: 'saved_response_available' });
+    }
     if (input.contextKind === 'feed' || !enoughNewsContext(input.context ?? '', input.title)) {
       if (['Maisfutebol', 'Record', 'A BOLA'].includes(input.source)) {
         const article = await readPublicNewsArticle(input.url, input.source as 'Maisfutebol' | 'Record' | 'A BOLA', Date.now()).catch(() => null);
@@ -151,16 +188,18 @@ hubNews.post('/summaries', async (c) => {
       const settings = await summarySettings(c.env);
       if (settings.usage.requests >= settings.dailyLimit) return c.json({ generated: 0, reason: 'daily_limit' });
       if ((input.attempts ?? 0) >= 3) return c.json({ generated: 0, reason: 'attempt_limit' });
-      await c.env.DB.prepare(`UPDATE hub_news_summaries SET state = 'queued', response_json = NULL, last_error = NULL
-        WHERE news_id = ? AND state = 'draft' AND attempts < 3 AND EXISTS (SELECT 1 FROM hub_news WHERE id = ? AND revision = ?)`)
+      const update = await c.env.DB.prepare(`UPDATE hub_news_summaries SET state = 'queued', response_json = NULL, last_error = NULL,
+          headline = NULL, body = NULL, generated_at = NULL
+        WHERE news_id = ? AND state IN ('draft', 'failed') AND attempts < 3 AND EXISTS (SELECT 1 FROM hub_news WHERE id = ? AND revision = ?)`)
         .bind(body.id, body.id, input.revision).run();
+      if (update.meta.changes !== 1) return c.json({ error: 'outdated_article' }, 409);
     }
     if (input.state === 'failed' && (input.attempts ?? 0) >= 3) return c.json({ generated: 0, reason: 'attempt_limit' });
     await c.env.DB.prepare(`UPDATE hub_news_summaries SET state = 'queued',
         response_json = CASE WHEN last_error = 'storage_failed' THEN response_json END, last_error = NULL
       WHERE news_id = ? AND state = 'failed' AND attempts < 3 AND lease_until <= ?`).bind(body.id, Date.now()).run();
   }
-  const result = await runNewsSummaries(c.env, Date.now(), body.id, 1);
+  const result = await runNewsSummaries(c.env, Date.now(), body.id, 1, 'manual');
   return c.json(result, result.reason === 'disabled' || result.reason === 'missing_key' ? 503 : 200);
 });
 
